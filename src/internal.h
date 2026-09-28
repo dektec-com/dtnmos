@@ -41,6 +41,10 @@ void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
     DTNMOS_PRINTF(2, 3);
 void dtnmos_buffer_free(dtnmos_buffer* buffer);
 
+// Appends a string literal, whose length the compiler knows.
+#define DTNMOS_APPEND_LITERAL(buffer, literal) \
+  dtnmos_buffer_append((buffer), (literal), sizeof(literal) - 1)
+
 // A piece of text that is not null terminated.
 typedef struct dtnmos_span
 {

@@ -46,7 +46,7 @@ static void separate(fmtp_writer* writer)
   }
   else
   {
-    dtnmos_buffer_append(writer->buffer, "; ", 2);
+    DTNMOS_APPEND_LITERAL(writer->buffer, "; ");
   }
 }
 
@@ -102,7 +102,7 @@ static void end_fmtp(fmtp_writer* writer)
 {
   if (writer->count > 0)
   {
-    dtnmos_buffer_append(writer->buffer, "\r\n", 2);
+    DTNMOS_APPEND_LITERAL(writer->buffer, "\r\n");
   }
 }
 
@@ -189,9 +189,9 @@ static void write_audio(dtnmos_buffer* buffer, const dtnmos_flow* flow)
   end_fmtp(&writer);
   if (audio->packet_time_ns != 0)
   {
-    dtnmos_buffer_append(buffer, "a=ptime:", 8);
+    DTNMOS_APPEND_LITERAL(buffer, "a=ptime:");
     write_milliseconds(buffer, audio->packet_time_ns);
-    dtnmos_buffer_append(buffer, "\r\n", 2);
+    DTNMOS_APPEND_LITERAL(buffer, "\r\n");
   }
 }
 
@@ -328,7 +328,7 @@ dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow*
   dtnmos_buffer buffer;
   memset(&buffer, 0, sizeof(buffer));
   const char* origin = dtnmos_string_get(&session->origin_ip);
-  dtnmos_buffer_append(&buffer, "v=0\r\n", 5);
+  DTNMOS_APPEND_LITERAL(&buffer, "v=0\r\n");
   dtnmos_buffer_printf(
       &buffer, "o=- %llu %llu IN %s %s\r\n", (unsigned long long)session->session_id,
       (unsigned long long)session->session_version, address_type(origin), origin);
@@ -336,7 +336,7 @@ dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow*
   dtnmos_buffer_printf(
       &buffer, "s=%s\r\n",
       dtnmos_string_length(&session->name) > 0 ? dtnmos_string_get(&session->name) : " ");
-  dtnmos_buffer_append(&buffer, "t=0 0\r\n", 7);
+  DTNMOS_APPEND_LITERAL(&buffer, "t=0 0\r\n");
   for (size_t i = 0; with_mid && i < count; ++i)
   {
     if (flows[i].leg == 1)

@@ -4,11 +4,19 @@
 
 @PACKAGE_INIT@
 
-# A static dtnmos with its transport on libcurl links libcurl into its consumers.
+# A static dtnmos links what it is built with into its consumers: libcurl, civetweb and the
+# threads of the platform.
+include(CMakeFindDependencyMacro)
 set(DTNMOS_WITH_CURL @DTNMOS_WITH_CURL@)
+set(DTNMOS_WITH_SERVER @DTNMOS_WITH_SERVER@)
 if(DTNMOS_WITH_CURL)
-  include(CMakeFindDependencyMacro)
   find_dependency(CURL)
+endif()
+if(DTNMOS_WITH_SERVER)
+  find_dependency(civetweb CONFIG)
+endif()
+if(NOT WIN32)
+  find_dependency(Threads)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/dtnmos-targets.cmake")

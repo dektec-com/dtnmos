@@ -12,4 +12,5 @@ URL: @PROJECT_HOMEPAGE_URL@
 Version: @PROJECT_VERSION@
 @DTNMOS_PC_REQUIRES@
 Libs: -L${libdir} -ldtnmos
+Libs.private: @DTNMOS_PC_LIBS_PRIVATE@
 Cflags: -I${includedir} @DTNMOS_PC_CFLAGS@

@@ -2,14 +2,15 @@
 
 A small C library that reads and writes the SDP of SMPTE ST 2110 flows: ST 2110-20
 uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary data. It
-also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP. It is the NMOS
-support of gst-dektec, and is meant to be used by other projects as well, such as CDTAPI
-and FFmpeg; the node that registers senders and receivers follows (plan
-[0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
+also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP. And it is an NMOS
+node that registers senders and receivers with a registry (IS-04) and serves its Node API.
+It is the NMOS support of gst-dektec, and is meant to be used by other projects as well,
+such as CDTAPI and FFmpeg (plan [0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
 - No dependencies. HTTP goes through a function the caller passes in; with
-  `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `dtnmos_curl_http()`.
+  `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `dtnmos_curl_http()`, and with
+  `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `dtnmos_node_serve()`.
 - BSD-3-Clause.
 
 ## Building
@@ -137,3 +138,34 @@ if (dtnmos_query_create(&config, &query, &error) == DTNMOS_OK)
 An HTTP function of its own receives a `dtnmos_http_request` and fills the response with
 `dtnmos_http_response_set_status()`, `_add_header()` and `_set_body()`; it returns
 `DTNMOS_OK` whenever the server answered, whatever the status.
+
+## Being a node
+
+A node holds devices, and senders and receivers on them. `dtnmos_node_poll()` registers
+what is new, deletes what was removed and sends heartbeats; `dtnmos_node_handle()` answers
+a request to the Node API or the transport file of a sender. A program with a loop and an
+HTTP server of its own calls both; with the server of the library, `dtnmos_node_serve()`
+does both on threads of its own:
+
+```c
+#include <dtnmos/node.h>
+
+dtnmos_node_config config = {0};
+config.size = sizeof(config);
+dtnmos_id_from_name(&my_namespace, "my node", &config.id, NULL);
+config.label = "my node";
+config.registration_url = "http://registry.local";
+config.http = dtnmos_curl_http;
+dtnmos_node* node = NULL;
+if (dtnmos_node_create(&config, &node, NULL) == DTNMOS_OK)
+{
+  dtnmos_device_config device = {sizeof(device)};
+  dtnmos_id_from_name(&config.id, "card 1", &device.id, NULL);
+  device.label = "card 1";
+  dtnmos_node_add_device(node, &device, NULL);
+  // dtnmos_node_add_sender() with the flow it sends, dtnmos_node_add_receiver() ...
+  dtnmos_node_serve(node, NULL);
+  // ... until the program ends, which deletes what the node registered:
+  dtnmos_node_destroy(node);
+}
+```

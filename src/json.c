@@ -129,7 +129,7 @@ static dtnmos_result read_string(reader* r, char** text, size_t* length)
 {
   dtnmos_buffer buffer;
   memset(&buffer, 0, sizeof(buffer));
-  dtnmos_buffer_append(&buffer, "", 0);
+  DTNMOS_APPEND_LITERAL(&buffer, "");
   while (r->position < r->length)
   {
     const char c = r->text[r->position++];
@@ -476,25 +476,25 @@ const char* dtnmos_json_member_text(const dtnmos_json* value, const char* key)
 
 void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
 {
-  dtnmos_buffer_append(buffer, "\"", 1);
+  DTNMOS_APPEND_LITERAL(buffer, "\"");
   for (const char* c = text == NULL ? "" : text; *c != '\0'; ++c)
   {
     switch (*c)
     {
       case '"':
-        dtnmos_buffer_append(buffer, "\\\"", 2);
+        DTNMOS_APPEND_LITERAL(buffer, "\\\"");
         break;
       case '\\':
-        dtnmos_buffer_append(buffer, "\\\\", 2);
+        DTNMOS_APPEND_LITERAL(buffer, "\\\\");
         break;
       case '\n':
-        dtnmos_buffer_append(buffer, "\\n", 2);
+        DTNMOS_APPEND_LITERAL(buffer, "\\n");
         break;
       case '\r':
-        dtnmos_buffer_append(buffer, "\\r", 2);
+        DTNMOS_APPEND_LITERAL(buffer, "\\r");
         break;
       case '\t':
-        dtnmos_buffer_append(buffer, "\\t", 2);
+        DTNMOS_APPEND_LITERAL(buffer, "\\t");
         break;
       default:
         if ((unsigned char)*c < 0x20)
@@ -508,5 +508,5 @@ void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
         break;
     }
   }
-  dtnmos_buffer_append(buffer, "\"", 1);
+  DTNMOS_APPEND_LITERAL(buffer, "\"");
 }

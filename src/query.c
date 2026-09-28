@@ -143,7 +143,7 @@ dtnmos_result dtnmos_query_create(const dtnmos_query_config* config, dtnmos_quer
   dtnmos_buffer base;
   memset(&base, 0, sizeof(base));
   dtnmos_buffer_append(&base, config->registry_url, length);
-  dtnmos_buffer_append(&base, "/x-nmos/query/v1.3/", 19);
+  DTNMOS_APPEND_LITERAL(&base, "/x-nmos/query/v1.3/");
   if (base.failed)
   {
     dtnmos_buffer_free(&base);
@@ -624,7 +624,7 @@ dtnmos_result dtnmos_query_find_sender(dtnmos_query* query, const char* id_or_la
   // of a basic query in ways of its own.
   dtnmos_buffer parameters;
   memset(&parameters, 0, sizeof(parameters));
-  dtnmos_buffer_append(&parameters, "label=", 6);
+  DTNMOS_APPEND_LITERAL(&parameters, "label=");
   append_encoded(&parameters, id_or_label);
   char* url = parameters.failed ? NULL : make_url(query, "senders", parameters.data);
   dtnmos_buffer_free(&parameters);
