@@ -35,7 +35,8 @@ if(DTNMOS_INSTALL)
       "${CMAKE_CTEST_COMMAND}" --build-and-test "${CMAKE_CURRENT_SOURCE_DIR}/package"
       "${_package_dir}/build" --build-generator "${CMAKE_GENERATOR}" --build-options
       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
-      "-DCMAKE_PREFIX_PATH=${_package_dir}/prefix" --test-command dtnmos-package-test)
+      "-DCMAKE_PREFIX_PATH=${_package_dir}/prefix" "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
+      "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" --test-command dtnmos-package-test)
   set_tests_properties(dtnmos.package.install PROPERTIES FIXTURES_SETUP dtnmos-package)
   set_tests_properties(dtnmos.package.find-package PROPERTIES FIXTURES_REQUIRED dtnmos-package)
 endif()

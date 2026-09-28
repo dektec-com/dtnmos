@@ -70,9 +70,11 @@ int print_flows(const char* text)
 Writing one takes the session and flows the caller fills:
 
 ```c
-dtnmos_session session = {sizeof(session)};
+dtnmos_session session = {0};
+session.size = sizeof(session);
 dtnmos_string_set_text(&session.origin_ip, "192.168.1.10");
-dtnmos_flow flow = {sizeof(flow)};
+dtnmos_flow flow = {0};
+flow.size = sizeof(flow);
 flow.media = DTNMOS_MEDIA_AUDIO;
 dtnmos_string_set_text(&flow.destination_ip, "239.0.0.2");
 flow.destination_port = 5004;

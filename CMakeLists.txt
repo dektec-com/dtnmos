@@ -22,6 +22,11 @@ option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_INSTALL "Install the dtnmos library, headers, CMake package and pkg-config file"
        ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+# The flags of the sanitizers the library is built with, which the package test builds its
+# consumer with as well; a project that builds dtnmos with sanitizers sets them.
+set(DTNMOS_SANITIZER_FLAGS
+    ""
+    CACHE STRING "Sanitizer flags of the consumer the package test builds")
 
 # dtnmos_set_warnings(<target>) enables the warning level of dtnmos on <target>.
 function(dtnmos_set_warnings target)

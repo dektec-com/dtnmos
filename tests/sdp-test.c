@@ -411,12 +411,14 @@ void sdp_writes_what_it_reads_back(void)
 
 void sdp_writes_an_audio_sender(void)
 {
-  dtnmos_session session = {sizeof(session)};
+  dtnmos_session session = {0};
+  session.size = sizeof(session);
   dtnmos_string_set_text(&session.name, "dt2110audiosink");
   dtnmos_string_set_text(&session.origin_ip, "192.168.39.68");
   session.session_id = 42;
   session.session_version = 1;
-  dtnmos_flow flow = {sizeof(flow)};
+  dtnmos_flow flow = {0};
+  flow.size = sizeof(flow);
   flow.media = DTNMOS_MEDIA_AUDIO;
   dtnmos_string_set_text(&flow.destination_ip, "239.0.0.2");
   flow.destination_port = 5004;
@@ -448,9 +450,12 @@ void sdp_writes_an_audio_sender(void)
 
 void sdp_refuses_to_write_an_incomplete_flow(void)
 {
-  dtnmos_session session = {sizeof(session)};
+  dtnmos_session session = {0};
+  session.size = sizeof(session);
   dtnmos_string_set_text(&session.origin_ip, "10.0.0.1");
-  dtnmos_flow flows[2] = {{sizeof(dtnmos_flow)}, {sizeof(dtnmos_flow)}};
+  dtnmos_flow flows[2] = {{0}, {0}};
+  flows[0].size = sizeof(flows[0]);
+  flows[1].size = sizeof(flows[1]);
   flows[0].media = DTNMOS_MEDIA_OTHER;
   dtnmos_string text = {0};
   dtnmos_error error = {DTNMOS_OK, ""};
@@ -467,7 +472,8 @@ void sdp_refuses_to_write_an_incomplete_flow(void)
   flows[0].leg = 0;
   REQUIRE(dtnmos_sdp_write(&session, flows, 2, &text, &error) == DTNMOS_OK);
   CHECK(strstr(dtnmos_string_get(&text), "a=group:DUP primary0 secondary1\r\n") != NULL);
-  dtnmos_session empty = {sizeof(empty)};
+  dtnmos_session empty = {0};
+  empty.size = sizeof(empty);
   CHECK(dtnmos_sdp_write(&empty, flows, 1, &text, &error) == DTNMOS_E_INVALID_ARGUMENT);
   dtnmos_string_clear(&text);
   dtnmos_flow_clear(&flows[0]);
