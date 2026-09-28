@@ -4,5 +4,12 @@
 
 @PACKAGE_INIT@
 
+# A static dtnmos with its transport on libcurl links libcurl into its consumers.
+set(DTNMOS_WITH_CURL @DTNMOS_WITH_CURL@)
+if(DTNMOS_WITH_CURL)
+  include(CMakeFindDependencyMacro)
+  find_dependency(CURL)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/dtnmos-targets.cmake")
 check_required_components(dtnmos)

@@ -3,8 +3,7 @@
 // The checks of the dtnmos tests: a test is a function that checks with the macros below,
 // so that the tests need nothing but a C compiler.
 
-#ifndef DTNMOS_TESTS_CHECK_H
-#define DTNMOS_TESTS_CHECK_H
+#pragma once
 
 #include <stdio.h>
 #include <string.h>
@@ -58,5 +57,3 @@ void check_report(const char* file, int line, const char* expression);
       check_report(__FILE__, __LINE__, #actual " == " #expected);        \
     }                                                                    \
   } while (0)
-
-#endif  // DTNMOS_TESTS_CHECK_H

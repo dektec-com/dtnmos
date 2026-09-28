@@ -3,8 +3,10 @@
 # The dtnmos tests, one ctest per test function of tests.h, and the tests that install dtnmos
 # and use it through find_package.
 
-add_executable(dtnmos_tests main.c common-test.c sdp-test.c)
+add_executable(dtnmos_tests main.c common-test.c query-test.c sdp-test.c)
 target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
+# The tests of the JSON parser reach the internal headers of the library.
+target_include_directories(dtnmos_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
 if(MSVC)
   target_compile_definitions(dtnmos_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
@@ -26,6 +28,11 @@ endforeach()
 # The package tests install dtnmos into the build tree and build a consumer of it.
 if(DTNMOS_INSTALL)
   set(_package_dir "${PROJECT_BINARY_DIR}/package-test")
+  # A dtnmos with libcurl or civetweb finds them where the build found them.
+  set(_package_prefix_path "${_package_dir}/prefix")
+  if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    string(APPEND _package_prefix_path "$<SEMICOLON>${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+  endif()
   add_test(NAME dtnmos.package.install
            COMMAND "${CMAKE_COMMAND}" --install "${PROJECT_BINARY_DIR}" --prefix
                    "${_package_dir}/prefix" --config "$<CONFIG>")
@@ -35,7 +42,7 @@ if(DTNMOS_INSTALL)
       "${CMAKE_CTEST_COMMAND}" --build-and-test "${CMAKE_CURRENT_SOURCE_DIR}/package"
       "${_package_dir}/build" --build-generator "${CMAKE_GENERATOR}" --build-options
       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
-      "-DCMAKE_PREFIX_PATH=${_package_dir}/prefix" "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
+      "-DCMAKE_PREFIX_PATH=${_package_prefix_path}" "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
       "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" --test-command dtnmos-package-test)
   set_tests_properties(dtnmos.package.install PROPERTIES FIXTURES_SETUP dtnmos-package)
   set_tests_properties(dtnmos.package.find-package PROPERTIES FIXTURES_REQUIRED dtnmos-package)

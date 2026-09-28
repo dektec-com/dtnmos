@@ -3,8 +3,7 @@
 // What the sources of dtnmos share and do not export: reporting a failure, a growing text
 // buffer, reading numbers and tokens out of text, and SHA-1 for name-based UUIDs.
 
-#ifndef DTNMOS_INTERNAL_H
-#define DTNMOS_INTERNAL_H
+#pragma once
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -85,5 +84,3 @@ typedef struct dtnmos_sha1
 void dtnmos_sha1_init(dtnmos_sha1* sha1);
 void dtnmos_sha1_update(dtnmos_sha1* sha1, const void* data, size_t length);
 void dtnmos_sha1_final(dtnmos_sha1* sha1, uint8_t digest[20]);
-
-#endif  // DTNMOS_INTERNAL_H

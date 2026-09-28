@@ -22,6 +22,7 @@ option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_INSTALL "Install the dtnmos library, headers, CMake package and pkg-config file"
        ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+option(DTNMOS_WITH_CURL "Build the HTTP transport on libcurl, dtnmos_curl_http()" OFF)
 # The flags of the sanitizers the library is built with, which the package test builds its
 # consumer with as well; a project that builds dtnmos with sanitizers sets them.
 set(DTNMOS_SANITIZER_FLAGS
@@ -46,7 +47,11 @@ endfunction()
 add_library(
   dtnmos
   src/common.c
+  src/curl.c
   src/flow.c
+  src/http.c
+  src/json.c
+  src/query.c
   src/sdp-parse.c
   src/sdp-write.c
   src/sha1.c
@@ -64,6 +69,11 @@ if(BUILD_SHARED_LIBS)
 endif()
 set_target_properties(dtnmos PROPERTIES VERSION ${PROJECT_VERSION}
                                         SOVERSION ${PROJECT_VERSION_MAJOR})
+if(DTNMOS_WITH_CURL)
+  find_package(CURL REQUIRED)
+  target_link_libraries(dtnmos PRIVATE CURL::libcurl)
+  target_compile_definitions(dtnmos PRIVATE DTNMOS_WITH_CURL)
+endif()
 if(MSVC)
   # snprintf and the string functions of the C library are what dtnmos means to use.
   target_compile_definitions(dtnmos PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -98,6 +108,11 @@ if(DTNMOS_INSTALL)
     set(DTNMOS_PC_CFLAGS "-DDTNMOS_SHARED")
   else()
     set(DTNMOS_PC_CFLAGS "")
+  endif()
+  if(DTNMOS_WITH_CURL)
+    set(DTNMOS_PC_REQUIRES "Requires.private: libcurl")
+  else()
+    set(DTNMOS_PC_REQUIRES "")
   endif()
   configure_file(cmake/dtnmos.pc.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc" @ONLY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc"
