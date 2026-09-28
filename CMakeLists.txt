@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# dtnmos, a C library that reads and writes the SDP of SMPTE ST 2110 flows and speaks NMOS.
+# It builds, tests and installs on its own, without dependencies, or as a subdirectory of a
+# project that sets the DTNMOS_* options before add_subdirectory().
+cmake_minimum_required(VERSION 3.25)
+
+project(
+  dtnmos
+  VERSION 0.1.0
+  DESCRIPTION "SDP of SMPTE ST 2110 flows, and NMOS"
+  HOMEPAGE_URL "https://github.com/dektec-com/gst-dektec"
+  LANGUAGES C)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+include(GNUInstallDirs)
+
+option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
+option(DTNMOS_INSTALL "Install the dtnmos library, headers, CMake package and pkg-config file"
+       ${PROJECT_IS_TOP_LEVEL})
+option(DTNMOS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+
+# dtnmos_set_warnings(<target>) enables the warning level of dtnmos on <target>.
+function(dtnmos_set_warnings target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /utf-8)
+    if(DTNMOS_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE /WX)
+    endif()
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
+    if(DTNMOS_WARNINGS_AS_ERRORS)
+      target_compile_options(${target} PRIVATE -Werror)
+    endif()
+  endif()
+endfunction()
+
+add_library(
+  dtnmos
+  src/common.c
+  src/flow.c
+  src/sdp-parse.c
+  src/sdp-write.c
+  src/sha1.c
+  src/string.c
+  src/text.c)
+add_library(dtnmos::dtnmos ALIAS dtnmos)
+target_include_directories(
+  dtnmos PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+target_compile_features(dtnmos PRIVATE c_std_11)
+target_compile_definitions(dtnmos PRIVATE DTNMOS_BUILDING)
+if(BUILD_SHARED_LIBS)
+  target_compile_definitions(dtnmos PUBLIC DTNMOS_SHARED)
+  set_target_properties(dtnmos PROPERTIES C_VISIBILITY_PRESET hidden)
+endif()
+set_target_properties(dtnmos PROPERTIES VERSION ${PROJECT_VERSION}
+                                        SOVERSION ${PROJECT_VERSION_MAJOR})
+if(MSVC)
+  # snprintf and the string functions of the C library are what dtnmos means to use.
+  target_compile_definitions(dtnmos PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+dtnmos_set_warnings(dtnmos)
+
+if(DTNMOS_INSTALL)
+  include(CMakePackageConfigHelpers)
+  set(_dtnmos_package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/dtnmos")
+  install(
+    TARGETS dtnmos
+    EXPORT dtnmos-targets
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+  install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+  install(
+    EXPORT dtnmos-targets
+    NAMESPACE dtnmos::
+    DESTINATION "${_dtnmos_package_dir}")
+  configure_package_config_file(
+    cmake/dtnmos-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
+    INSTALL_DESTINATION "${_dtnmos_package_dir}")
+  write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
+                                   COMPATIBILITY SameMinorVersion)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
+                "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
+          DESTINATION "${_dtnmos_package_dir}")
+
+  # The pkg-config file, which projects that do not use CMake read, such as FFmpeg.
+  if(BUILD_SHARED_LIBS)
+    set(DTNMOS_PC_CFLAGS "-DDTNMOS_SHARED")
+  else()
+    set(DTNMOS_PC_CFLAGS "")
+  endif()
+  configure_file(cmake/dtnmos.pc.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc" @ONLY)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc"
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+endif()
+
+if(DTNMOS_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(tests)
+endif()

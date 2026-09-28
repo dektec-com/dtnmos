@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Template of the dtnmos CMake package configuration: imports its target.
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/dtnmos-targets.cmake")
+check_required_components(dtnmos)
