@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# node-test.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Tests of the node against a registry that an HTTP function of the test records: its
-// resources registered parents first, the heartbeat that registers them again when the
-// registry has lost them, what a removal and the end of the node delete, the answers of
-// its Node API and transport files, and, when the library has its server and libcurl, the
-// node serving itself over HTTP.
+// dtnmos - Tests of the node against a registry that an HTTP function of the test records
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/node.h"
 
@@ -31,6 +31,8 @@ typedef struct fake_registration
     int heartbeat_status;
 } fake_registration;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result record_http(void* user, const dtnmos_http_request* request,
                                  dtnmos_http_response* response, dtnmos_error* error)
 {
@@ -72,7 +74,10 @@ static dtnmos_result record_http(void* user, const dtnmos_http_request* request,
 #define SENDER_ID "aaaaaaaa-0000-4000-8000-000000000003"
 #define RECEIVER_ID "aaaaaaaa-0000-4000-8000-000000000004"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_node -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Makes a node with a device, a video sender and an audio receiver.
+//
 static dtnmos_node* make_node(fake_registration* registry, const char* host,
                               uint16_t port, dtnmos_http_fn http)
 {
@@ -121,6 +126,8 @@ static dtnmos_node* make_node(fake_registration* registry, const char* host,
     return node;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.- node_registers_parents_before_children -.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void node_registers_parents_before_children(void)
 {
     fake_registration registry;
@@ -156,6 +163,8 @@ void node_registers_parents_before_children(void)
     dtnmos_node_destroy(node);
 }
 
+// .-.-.-.-.-.-.-.-.- node_registers_again_when_the_registry_lost_it -.-.-.-.-.-.-.-.-.-.-
+//
 void node_registers_again_when_the_registry_lost_it(void)
 {
     fake_registration registry;
@@ -182,6 +191,8 @@ void node_registers_again_when_the_registry_lost_it(void)
     dtnmos_node_destroy(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.- node_deletes_what_is_removed_and_what_it_had -.-.-.-.-.-.-.-.-.-.-
+//
 void node_deletes_what_is_removed_and_what_it_had(void)
 {
     fake_registration registry;
@@ -212,7 +223,10 @@ void node_deletes_what_is_removed_and_what_it_had(void)
     CHECK(strstr(registry.requests[kept + 2].url, "resource/nodes/" NODE_ID) != NULL);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ask -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Asks the node for path and returns the response, which the caller frees.
+//
 static dtnmos_http_response* ask(dtnmos_node* node, const char* method, const char* path)
 {
     dtnmos_http_request request;
@@ -226,6 +240,8 @@ static dtnmos_http_response* ask(dtnmos_node* node, const char* method, const ch
     return response;
 }
 
+// .-.-.-.-.-.-.-.-.-.- node_answers_its_node_api_and_transport_files -.-.-.-.-.-.-.-.-.-.
+//
 void node_answers_its_node_api_and_transport_files(void)
 {
     fake_registration registry;
@@ -293,6 +309,8 @@ void node_answers_its_node_api_and_transport_files(void)
     dtnmos_node_destroy(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- node_serves_itself_over_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void node_serves_itself_over_http(void)
 {
     if (!dtnmos_has_server() || !dtnmos_has_curl())

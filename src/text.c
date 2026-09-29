@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# text.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Reading text: spans, numbers, rates and times; and writing it into a growing buffer.
+// dtnmos - Reading text
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +12,8 @@
 
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_append -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_buffer_append(dtnmos_buffer* buffer, const char* text, size_t length)
 {
     if (buffer->failed)
@@ -35,6 +41,8 @@ void dtnmos_buffer_append(dtnmos_buffer* buffer, const char* text, size_t length
     buffer->data[buffer->length] = '\0';
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_printf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
 {
     char local[256];
@@ -65,18 +73,24 @@ void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
     free(text);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_buffer_free(dtnmos_buffer* buffer)
 {
     free(buffer->data);
     memset(buffer, 0, sizeof(*buffer));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_span dtnmos_span_of(const char* text)
 {
     dtnmos_span span = {text, text == NULL ? 0 : strlen(text)};
     return span;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_trim -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_span dtnmos_span_trim(dtnmos_span span)
 {
     while (span.length > 0 && (span.data[0] == ' ' || span.data[0] == '\t'))
@@ -92,11 +106,15 @@ dtnmos_span dtnmos_span_trim(dtnmos_span span)
     return span;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- lower -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static char lower(char c)
 {
     return c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_equals -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_span_equals(dtnmos_span span, const char* text, int fold)
 {
     const size_t length = strlen(text);
@@ -116,12 +134,16 @@ int dtnmos_span_equals(dtnmos_span span, const char* text, int fold)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_starts_with -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_span_starts_with(dtnmos_span span, const char* prefix)
 {
     const size_t length = strlen(prefix);
     return span.length >= length && memcmp(span.data, prefix, length) == 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_split -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_span dtnmos_span_split(dtnmos_span span, char separator, dtnmos_span* head)
 {
     const char* found =
@@ -138,6 +160,8 @@ dtnmos_span dtnmos_span_split(dtnmos_span span, char separator, dtnmos_span* hea
     return rest;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_u64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_parse_u64(dtnmos_span span, uint64_t maximum, uint64_t* value)
 {
     if (span.length == 0)
@@ -163,6 +187,8 @@ int dtnmos_parse_u64(dtnmos_span span, uint64_t maximum, uint64_t* value)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_u32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_parse_u32(dtnmos_span span, uint32_t maximum, uint32_t* value)
 {
     uint64_t result = 0;
@@ -174,6 +200,8 @@ int dtnmos_parse_u32(dtnmos_span span, uint32_t maximum, uint32_t* value)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_rate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_parse_rate(dtnmos_span span, uint32_t* numerator, uint32_t* denominator)
 {
     dtnmos_span head;
@@ -193,6 +221,8 @@ int dtnmos_parse_rate(dtnmos_span span, uint32_t* numerator, uint32_t* denominat
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_milliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds)
 {
     dtnmos_span whole;
@@ -224,6 +254,8 @@ int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_byte -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_parse_byte(dtnmos_span span, uint8_t* value)
 {
     if (span.length > 2 && span.data[0] == '0' &&

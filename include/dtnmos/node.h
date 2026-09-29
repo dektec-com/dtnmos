@@ -1,17 +1,12 @@
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# node.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
+//
+// dtnmos - dtnmos
+//
 // SPDX-License-Identifier: BSD-3-Clause
-//
-// dtnmos: an NMOS node of senders and receivers (AMWA IS-04 v1.3 and IS-05 v1.1). The
-// node registers itself, a device per card, and its senders and receivers with the
-// Registration API of a registry, keeps them registered with heartbeats, and answers the
-// Node API and the Connection API, through which a controller connects its receivers and
-// moves its senders.
-//
-// The core starts no threads: dtnmos_node_poll() registers and sends heartbeats when the
-// caller calls it, and dtnmos_node_handle() answers a request the caller's own HTTP
-// server received. dtnmos_node_serve() does both on threads of its own, with a server on
-// civetweb, when the library is built with DTNMOS_WITH_SERVER.
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/dtnmos.h"
 #include "dtnmos/http.h"

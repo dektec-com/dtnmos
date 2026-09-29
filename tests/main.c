@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# main.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Runs the dtnmos tests: all of them, or the one named on the command line, as ctest runs
-// each of them.
+// dtnmos - Runs the dtnmos tests
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +14,8 @@
 
 int check_failures = 0;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- check_report -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void check_report(const char* file, int line, const char* expression)
 {
     printf("  %s:%d: failed: %s\n", file, line, expression);
@@ -29,6 +34,8 @@ static const test tests[] = {
 #undef DTNMOS_TEST
 };
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- main -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int main(int argc, char** argv)
 {
     const char* only = argc > 1 ? argv[1] : NULL;

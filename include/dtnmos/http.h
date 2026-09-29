@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# http.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos: HTTP as the library needs it. A client request goes through a function the
-// caller passes in, so that a program with an HTTP stack of its own, such as FFmpeg, uses
-// that; the library brings one on libcurl when it is built with DTNMOS_WITH_CURL. A
-// response is filled through functions, so that it owns what it holds.
+// dtnmos - dtnmos
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/dtnmos.h"
 

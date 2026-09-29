@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# query.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// The Query API of an NMOS registry (IS-04 v1.3): GET requests for senders and flows,
-// with their paging followed through the Link headers of the answers, and the SDP of a
-// sender fetched from its manifest_href.
+// dtnmos - The Query API of an NMOS registry (IS-04 v1.3)
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/query.h"
 
@@ -35,6 +37,8 @@ struct dtnmos_sender_list
     size_t count;
 };
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_info_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_sender_info_clear(dtnmos_sender_info* sender)
 {
     if (sender == NULL)
@@ -48,6 +52,8 @@ void dtnmos_sender_info_clear(dtnmos_sender_info* sender)
     memset(sender, 0, sizeof(*sender));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_info_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_sender_info_copy(dtnmos_sender_info* target,
                                       const dtnmos_sender_info* source)
 {
@@ -78,17 +84,23 @@ dtnmos_result dtnmos_sender_info_copy(dtnmos_sender_info* target,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_list_count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 size_t dtnmos_sender_list_count(const dtnmos_sender_list* list)
 {
     return list == NULL ? 0 : list->count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_list_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const dtnmos_sender_info* dtnmos_sender_list_at(const dtnmos_sender_list* list,
                                                 size_t index)
 {
     return list == NULL || index >= list->count ? NULL : &list->senders[index];
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_list_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_sender_list_free(dtnmos_sender_list* list)
 {
     if (list == NULL)
@@ -103,6 +115,8 @@ void dtnmos_sender_list_free(dtnmos_sender_list* list)
     free(list);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static char* copy_text(const char* text, size_t length)
 {
     char* copy = malloc(length + 1);
@@ -114,6 +128,8 @@ static char* copy_text(const char* text, size_t length)
     return copy;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_query_create(const dtnmos_query_config* config, dtnmos_query** query,
                                   dtnmos_error* error)
 {
@@ -160,6 +176,8 @@ dtnmos_result dtnmos_query_create(const dtnmos_query_config* config, dtnmos_quer
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_query_destroy(dtnmos_query* query)
 {
     if (query == NULL)
@@ -170,6 +188,8 @@ void dtnmos_query_destroy(dtnmos_query* query)
     free(query);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- log_message -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void log_message(dtnmos_query* query, dtnmos_log_level level, const char* message)
 {
     if (query->log != NULL)
@@ -178,8 +198,11 @@ static void log_message(dtnmos_query* query, dtnmos_log_level level, const char*
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- get -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Performs a GET of url into response; fails unless the answer is 200, with
 // DTNMOS_E_NOT_FOUND for 404.
+//
 static dtnmos_result get(dtnmos_query* query, const char* url,
                          dtnmos_http_response* response, dtnmos_error* error)
 {
@@ -215,8 +238,11 @@ static dtnmos_result get(dtnmos_query* query, const char* url,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- get_json -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Performs a GET of url and parses its JSON; the caller frees json and, when next is not
 // null, *next, the URL of the next page from the Link header, or null.
+//
 static dtnmos_result get_json(dtnmos_query* query, const char* url, dtnmos_json** json,
                               char** next, dtnmos_error* error)
 {
@@ -295,7 +321,10 @@ static dtnmos_result get_json(dtnmos_query* query, const char* url, dtnmos_json*
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Builds base + path, and a query of the paging limit.
+//
 static char* make_url(const dtnmos_query* query, const char* path, const char* parameters)
 {
     dtnmos_buffer url;
@@ -319,6 +348,8 @@ typedef struct pages
     size_t capacity;
 } pages;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_pages -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void free_pages(pages* p)
 {
     for (size_t i = 0; i < p->count; ++i)
@@ -329,7 +360,10 @@ static void free_pages(pages* p)
     memset(p, 0, sizeof(*p));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- get_pages -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Fetches every page of the list at url, each an array, into p.
+//
 static dtnmos_result get_pages(dtnmos_query* query, char* url, pages* p,
                                dtnmos_error* error)
 {
@@ -384,7 +418,10 @@ static dtnmos_result get_pages(dtnmos_query* query, char* url, pages* p,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- media_of_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Returns the media of a flow resource of IS-04, from its format and media type.
+//
 static dtnmos_media media_of_flow(const dtnmos_json* flow)
 {
     const char* format = dtnmos_json_member_text(flow, "format");
@@ -411,6 +448,8 @@ static dtnmos_media media_of_flow(const dtnmos_json* flow)
     return DTNMOS_MEDIA_OTHER;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_id -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void copy_id(dtnmos_id* id, const char* text)
 {
     memset(id, 0, sizeof(*id));
@@ -420,7 +459,10 @@ static void copy_id(dtnmos_id* id, const char* text)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Fills sender from a sender resource of IS-04; its media stays for the caller.
+//
 static dtnmos_result read_sender(const dtnmos_json* resource, dtnmos_sender_info* sender)
 {
     memset(sender, 0, sizeof(*sender));
@@ -446,6 +488,8 @@ static dtnmos_result read_sender(const dtnmos_json* resource, dtnmos_sender_info
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_senders -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_query_senders(dtnmos_query* query, dtnmos_sender_list** list,
                                    dtnmos_error* error)
 {
@@ -525,7 +569,10 @@ dtnmos_result dtnmos_query_senders(dtnmos_query* query, dtnmos_sender_list** lis
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_uuid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether text has the form of a UUID.
+//
 static int is_uuid(const char* text)
 {
     if (strlen(text) != 36)
@@ -546,7 +593,10 @@ static int is_uuid(const char* text)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- append_encoded -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Appends text to a URL, encoded as RFC 3986 asks of a query value.
+//
 static void append_encoded(dtnmos_buffer* url, const char* text)
 {
     for (const unsigned char* c = (const unsigned char*)text; *c != '\0'; ++c)
@@ -563,8 +613,11 @@ static void append_encoded(dtnmos_buffer* url, const char* text)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_media -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Sets the media of sender from its flow, which it fetches; a flow that cannot be fetched
 // leaves DTNMOS_MEDIA_OTHER.
+//
 static void read_media(dtnmos_query* query, dtnmos_sender_info* sender)
 {
     if (sender->flow_id.text[0] == '\0')
@@ -584,6 +637,8 @@ static void read_media(dtnmos_query* query, dtnmos_sender_info* sender)
     dtnmos_buffer_free(&url);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_find_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_query_find_sender(dtnmos_query* query, const char* id_or_label,
                                        dtnmos_sender_info* sender, dtnmos_error* error)
 {
@@ -685,6 +740,8 @@ dtnmos_result dtnmos_query_find_sender(dtnmos_query* query, const char* id_or_la
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_sender_manifest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_query_sender_manifest(dtnmos_query* query,
                                            const dtnmos_sender_info* sender,
                                            dtnmos_string* text, dtnmos_error* error)
@@ -725,6 +782,8 @@ dtnmos_result dtnmos_query_sender_manifest(dtnmos_query* query,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_sender_sdp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_query_sender_sdp(dtnmos_query* query,
                                       const dtnmos_sender_info* sender, dtnmos_sdp** sdp,
                                       dtnmos_error* error)

@@ -1,13 +1,18 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* string.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos_string: a string whose short texts live in the struct and longer ones on the
-// heap.
+// dtnmos - dtnmos_string
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_get -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const char* dtnmos_string_get(const dtnmos_string* string)
 {
     if (string == NULL)
@@ -17,11 +22,15 @@ const char* dtnmos_string_get(const dtnmos_string* string)
     return string->heap != NULL ? string->heap : string->local;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_length -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 size_t dtnmos_string_length(const dtnmos_string* string)
 {
     return string == NULL ? 0 : string->length;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_string_set(dtnmos_string* string, const char* text, size_t length)
 {
     if (string == NULL || (text == NULL && length > 0))
@@ -58,11 +67,15 @@ dtnmos_result dtnmos_string_set(dtnmos_string* string, const char* text, size_t 
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_string_set_text(dtnmos_string* string, const char* text)
 {
     return dtnmos_string_set(string, text, text == NULL ? 0 : strlen(text));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_string_copy(dtnmos_string* target, const dtnmos_string* source)
 {
     if (target == NULL)
@@ -77,6 +90,8 @@ dtnmos_result dtnmos_string_copy(dtnmos_string* target, const dtnmos_string* sou
                              dtnmos_string_length(source));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_string_clear(dtnmos_string* string)
 {
     if (string == NULL)
@@ -87,6 +102,8 @@ void dtnmos_string_clear(dtnmos_string* string)
     memset(string, 0, sizeof(*string));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set_span -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_string_set_span(dtnmos_string* string, dtnmos_span span)
 {
     return dtnmos_string_set(string, span.data, span.length);

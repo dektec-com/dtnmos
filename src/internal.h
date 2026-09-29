@@ -1,9 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# internal.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// What the sources of dtnmos share and do not export: reporting a failure, a growing text
-// buffer, reading numbers and tokens out of text, and SHA-1 for name-based UUIDs.
+// dtnmos - What the sources of dtnmos share and do not export
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdarg.h>
 #include <stddef.h>

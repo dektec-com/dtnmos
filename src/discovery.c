@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# discovery.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Finding registries with DNS-SD over a one-shot query of multicast DNS: the query for
-// the PTR records of a service type, sent three times within the timeout; the PTR, SRV,
-// TXT and A records of every answer, gathered by the name they belong to; one more query
-// for what the answers left out; and the list of what was found, sorted by priority.
+// dtnmos - Finding registries with DNS-SD over a one-shot query of multicast DNS
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/discovery.h"
 
@@ -63,6 +64,8 @@ struct dtnmos_registry_list
     size_t count;
 };
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_info_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_registry_info_clear(dtnmos_registry_info* registry)
 {
     if (registry == NULL)
@@ -78,6 +81,8 @@ void dtnmos_registry_info_clear(dtnmos_registry_info* registry)
     memset(registry, 0, sizeof(*registry));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_info_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_registry_info_copy(dtnmos_registry_info* target,
                                         const dtnmos_registry_info* source)
 {
@@ -111,17 +116,23 @@ dtnmos_result dtnmos_registry_info_copy(dtnmos_registry_info* target,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 size_t dtnmos_registry_list_count(const dtnmos_registry_list* list)
 {
     return list == NULL ? 0 : list->count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const dtnmos_registry_info* dtnmos_registry_list_at(const dtnmos_registry_list* list,
                                                     size_t index)
 {
     return list == NULL || index >= list->count ? NULL : &list->registries[index];
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_registry_list_free(dtnmos_registry_list* list)
 {
     if (list == NULL)
@@ -139,6 +150,8 @@ void dtnmos_registry_list_free(dtnmos_registry_list* list)
 static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level level,
                         const char* format, ...) DTNMOS_PRINTF(3, 4);
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- log_message -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level level,
                         const char* format, ...)
 {
@@ -154,7 +167,10 @@ static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level 
     config->log(config->log_user, level, message);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_instance_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Whether name is an instance of the service, "<instance>.<service>".
+//
 static int is_instance_of(const char* name, const char* service)
 {
     const size_t name_length = strlen(name);
@@ -164,8 +180,11 @@ static int is_instance_of(const char* name, const char* service)
            dtnmos_dns_same_name(name + name_length - service_length, service);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- instance_named -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Returns the instance of that name, adding it when it is new; null when there is no
 // room.
+//
 static instance* instance_named(gathered* found, const char* name)
 {
     for (size_t i = 0; i < found->instance_count; ++i)
@@ -186,6 +205,8 @@ static instance* instance_named(gathered* found, const char* name)
     return added;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- host_named -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static const host_address* host_named(const gathered* found, const char* name)
 {
     for (size_t i = 0; i < found->host_count; ++i)
@@ -198,6 +219,8 @@ static const host_address* host_named(const gathered* found, const char* name)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- take_record -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void take_record(void* user, const dtnmos_dns_record* record)
 {
     gathered* found = user;
@@ -264,7 +287,10 @@ static void take_record(void* user, const dtnmos_dns_record* record)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- collect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Receives answers until deadline_ms and gathers their records.
+//
 static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
                     gathered* found, uint8_t* buffer, uint64_t deadline_ms)
 {
@@ -292,7 +318,10 @@ static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- instance_label -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes the name of an instance as people read it: its first label, unescaped.
+//
 static void instance_label(const char* name, const char* service, char* label,
                            size_t size)
 {
@@ -309,7 +338,10 @@ static void instance_label(const char* name, const char* service, char* label,
     label[used] = '\0';
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- has_version -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether versions, e.g. "v1.2,v1.3", holds version.
+//
 static int has_version(const char* versions, const char* version)
 {
     const size_t length = strlen(version);
@@ -326,6 +358,8 @@ static int has_version(const char* versions, const char* version)
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- compare_registries -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static int compare_registries(const void* a, const void* b)
 {
     const dtnmos_registry_info* left = a;
@@ -346,7 +380,10 @@ static int compare_registries(const void* a, const void* b)
                   dtnmos_string_get(&right->instance));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- describe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Fills registry from a complete instance; returns 0 when out of memory.
+//
 static int describe(const gathered* found, const instance* service, dtnmos_service kind,
                     dtnmos_registry_info* registry)
 {
@@ -383,7 +420,10 @@ static int describe(const gathered* found, const instance* service, dtnmos_servi
                DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether text is an IPv4 address in dotted decimal.
+//
 static int is_ipv4(const char* text)
 {
     dtnmos_span rest = dtnmos_span_of(text);
@@ -400,7 +440,10 @@ static int is_ipv4(const char* text)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_destination -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads "<IPv4 address>:<port>" into address and port; returns 0 when it is malformed.
+//
 static int read_destination(const char* text, char* address, size_t size, uint16_t* port)
 {
     const char* colon = strrchr(text, ':');
@@ -423,6 +466,8 @@ static int read_destination(const char* text, char* address, size_t size, uint16
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
                               dtnmos_registry_list** list, dtnmos_error* error)
 {

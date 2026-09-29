@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* dns.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// DNS messages (RFC 1035) as far as DNS-SD over multicast DNS needs them: writing a
-// query, and reading the PTR, SRV, TXT and A records of an answer, with name compression.
-// Not exported.
+// dtnmos - DNS messages (RFC 1035) as far as DNS-SD over multicast DNS needs them
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stddef.h>
 #include <stdint.h>

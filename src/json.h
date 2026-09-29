@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# json.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// JSON (RFC 8259) as dtnmos reads the resources of NMOS and writes its own: a tree of
-// values parsed from text, and the escaping of strings for the text it writes. Not
-// exported.
+// dtnmos - JSON (RFC 8259) as dtnmos reads the resources of NMOS and writes its own
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stddef.h>
 

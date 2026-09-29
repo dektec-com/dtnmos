@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#* common-test.c *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Tests of the string type, name-based IDs and the names of results and media.
+// dtnmos - Tests of the string type, name-based IDs and the names of results and media
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +13,8 @@
 #include "dtnmos/sdp.h"
 #include "tests.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- string_keeps_short_and_long_texts -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void string_keeps_short_and_long_texts(void)
 {
     dtnmos_string string = {0};
@@ -35,6 +41,8 @@ void string_keeps_short_and_long_texts(void)
     CHECK_STR(dtnmos_string_get(&string), "");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- string_sets_from_its_own_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void string_sets_from_its_own_text(void)
 {
     dtnmos_string string = {0};
@@ -50,6 +58,8 @@ void string_sets_from_its_own_text(void)
     dtnmos_string_clear(&string);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- string_copies_and_clears -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void string_copies_and_clears(void)
 {
     dtnmos_string source = {0};
@@ -68,6 +78,8 @@ void string_copies_and_clears(void)
     dtnmos_string_clear(NULL);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- id_is_the_uuid_of_version_5 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void id_is_the_uuid_of_version_5(void)
 {
     // The example of the uuid module of Python: uuid5(NAMESPACE_DNS, "python.org").
@@ -87,6 +99,8 @@ void id_is_the_uuid_of_version_5(void)
     CHECK(strchr("89ab", id.text[19]) != NULL);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- id_refuses_a_namespace_of_no_uuid -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void id_refuses_a_namespace_of_no_uuid(void)
 {
     const dtnmos_id wrong = {"6ba7b810-9dad-11d1-80b4-00c04fd430cX"};
@@ -98,6 +112,8 @@ void id_refuses_a_namespace_of_no_uuid(void)
     CHECK(dtnmos_id_from_name(NULL, "x", &id, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- names_results_and_media -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void names_results_and_media(void)
 {
     CHECK_STR(dtnmos_result_name(DTNMOS_E_AMBIGUOUS), "DTNMOS_E_AMBIGUOUS");

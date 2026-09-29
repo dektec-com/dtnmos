@@ -1,6 +1,8 @@
-# SPDX-License-Identifier: BSD-3-Clause
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#*# dtnmos.pc.in *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 #
-# pkg-config file of dtnmos.
+# dtnmos - pkg-config file of dtnmos
+#
+# SPDX-License-Identifier: BSD-3-Clause
 
 prefix=@CMAKE_INSTALL_PREFIX@
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@

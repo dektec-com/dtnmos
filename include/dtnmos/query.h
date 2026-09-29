@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# query.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos: the senders of an NMOS registry, through its Query API (AMWA IS-04 v1.3):
-// listing them, finding one by its ID or label, and fetching the SDP it describes its
-// flow with.
+// dtnmos - dtnmos
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/dtnmos.h"
 #include "dtnmos/http.h"

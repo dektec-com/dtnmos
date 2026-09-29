@@ -1,6 +1,8 @@
-# SPDX-License-Identifier: BSD-3-Clause
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#* CMakeLists.txt *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 #
-# A consumer of an installed dtnmos: it finds the package and parses an SDP with it.
+# dtnmos - A consumer of an installed dtnmos
+#
+# SPDX-License-Identifier: BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.25)
 project(dtnmos-package-test LANGUAGES C)

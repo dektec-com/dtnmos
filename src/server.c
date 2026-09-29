@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* server.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// The node serving itself when the library is built with DTNMOS_WITH_SERVER: a civetweb
-// server whose one handler passes every request to dtnmos_node_handle(), and a thread
-// that polls the node for its registrations and heartbeats.
+// dtnmos - The node serving itself when the library is built with DTNMOS_WITH_SERVER
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "node-internal.h"
 
@@ -24,11 +26,15 @@ typedef struct server
     int stopping;
 } server;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_server -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_has_server(void)
 {
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- handle_request -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static int handle_request(struct mg_connection* connection, void* user)
 {
     dtnmos_node* node = user;
@@ -94,6 +100,8 @@ static int handle_request(struct mg_connection* connection, void* user)
     return status;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- stopping -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static int stopping(server* s)
 {
     dtnmos_mutex_lock(s->mutex);
@@ -102,6 +110,8 @@ static int stopping(server* s)
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- poll_loop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void poll_loop(void* argument)
 {
     dtnmos_node* node = argument;
@@ -124,6 +134,8 @@ static void poll_loop(void* argument)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_node_serve(dtnmos_node* node, dtnmos_error* error)
 {
     if (node == NULL)
@@ -177,6 +189,8 @@ dtnmos_result dtnmos_node_serve(dtnmos_node* node, dtnmos_error* error)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_server_stop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_server_stop(dtnmos_node* node)
 {
     server* s = node->server;
@@ -197,11 +211,15 @@ void dtnmos_server_stop(dtnmos_node* node)
 
 #else
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_server -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_has_server(void)
 {
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_node_serve(dtnmos_node* node, dtnmos_error* error)
 {
     (void)node;
@@ -211,6 +229,8 @@ dtnmos_result dtnmos_node_serve(dtnmos_node* node, dtnmos_error* error)
         "with dtnmos_node_handle() and poll it with dtnmos_node_poll().");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_server_stop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_server_stop(dtnmos_node* node)
 {
     (void)node;

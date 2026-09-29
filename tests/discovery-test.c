@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#* discovery-test.c *#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Tests of finding registries: DNS queries written and responses read as bytes, with and
-// without name compression, escaped dots and malformed messages; and dtnmos_discover()
-// against a responder that the test runs on 127.0.0.1 and gives as the destination, so
-// that no multicast leaves the host: the order of priority, the question asked again for
-// what an answer left out, and a search that finds nothing.
+// dtnmos - Tests of finding registries
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/discovery.h"
 
@@ -23,24 +23,33 @@ typedef struct message
     size_t length;
 } message;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void put8(message* m, unsigned value)
 {
     m->bytes[m->length++] = (uint8_t)value;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void put16(message* m, unsigned value)
 {
     put8(m, value >> 8);
     put8(m, value);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void put32(message* m, unsigned long value)
 {
     put16(m, (unsigned)(value >> 16));
     put16(m, (unsigned)value);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes the labels of name, split at every dot; returns where the name starts.
+//
 static size_t put_name(message* m, const char* name)
 {
     const size_t start = m->length;
@@ -57,11 +66,15 @@ static size_t put_name(message* m, const char* name)
     return start;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_pointer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void put_pointer(message* m, size_t offset)
 {
     put16(m, 0xC000u | (unsigned)offset);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- begin_response -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void begin_response(message* m, unsigned id, unsigned answers, unsigned additional)
 {
     m->length = 0;
@@ -73,8 +86,11 @@ static void begin_response(message* m, unsigned id, unsigned answers, unsigned a
     put16(m, additional);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_record_head -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Writes the type, class, TTL and a placeholder for the length of the data of a record
 // whose name is written; returns where the length goes.
+//
 static size_t put_record_head(message* m, unsigned type)
 {
     put16(m, type);
@@ -85,6 +101,8 @@ static size_t put_record_head(message* m, unsigned type)
     return at;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- end_record -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void end_record(message* m, size_t length_at)
 {
     const size_t length = m->length - length_at - 2;
@@ -92,7 +110,10 @@ static void end_record(message* m, size_t length_at)
     m->bytes[length_at + 1] = (uint8_t)length;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_txt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // The strings of a TXT record, in the data of the record.
+//
 static void put_txt(message* m, const char* const* strings, size_t count)
 {
     for (size_t i = 0; i < count; ++i)
@@ -114,8 +135,11 @@ typedef struct announced
     unsigned char address[4];
 } announced;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_with -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Writes the PTR, SRV, TXT and A records of the instances into an answer to id; with
 // ptr_only, only the PTR records.
+//
 static void answer_with(message* m, unsigned id, const char* service,
                         const announced* instances, size_t count, int ptr_only)
 {
@@ -177,6 +201,8 @@ typedef struct records
     size_t count;
 } records;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- keep_record -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void keep_record(void* user, const dtnmos_dns_record* record)
 {
     records* kept = user;
@@ -194,6 +220,8 @@ static const announced registry_b = {
     4,
     {127, 0, 0, 2}};
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dns_writes_a_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dns_writes_a_query(void)
 {
     uint8_t buffer[512];
@@ -212,6 +240,8 @@ void dns_writes_a_query(void)
     CHECK_EQ(dtnmos_dns_write_query(buffer, sizeof(buffer), 1, &empty_label, 1), 0);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_records_and_compression -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dns_reads_records_and_compression(void)
 {
     message m;
@@ -252,6 +282,8 @@ void dns_reads_records_and_compression(void)
     CHECK(!dtnmos_dns_same_name("registry-b.local", "registry-b.local.x"));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dns_escapes_dots_within_labels -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dns_escapes_dots_within_labels(void)
 {
     // An instance whose label holds a dot, "Registry v1.3".
@@ -279,6 +311,8 @@ void dns_escapes_dots_within_labels(void)
     CHECK(memcmp(buffer + 13, "Registry v1.3", 13) == 0);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dns_refuses_malformed_messages -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dns_refuses_malformed_messages(void)
 {
     message m;
@@ -325,7 +359,10 @@ typedef struct responder
     char destination[32];
 } responder;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads the type of the first question of a query and whether any asks for SRV or TXT.
+//
 static int read_query(const uint8_t* bytes, size_t length, int* asks_srv_txt)
 {
     if (length < 12 || (bytes[2] & 0x80) != 0)
@@ -352,6 +389,8 @@ static int read_query(const uint8_t* bytes, size_t length, int* asks_srv_txt)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- respond -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void respond(void* argument)
 {
     responder* r = argument;
@@ -391,6 +430,8 @@ static void respond(void* argument)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int start_responder(responder* r, const announced* instances, size_t count,
                            int answer)
 {
@@ -410,6 +451,8 @@ static int start_responder(responder* r, const announced* instances, size_t coun
     return r->thread != NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- stop_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void stop_responder(responder* r)
 {
     if (r->thread != NULL)
@@ -423,6 +466,8 @@ static void stop_responder(responder* r)
     dtnmos_mutex_free(r->mutex);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- config_for -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_discovery_config config_for(const responder* r, uint32_t timeout_ms)
 {
     dtnmos_discovery_config config;
@@ -434,6 +479,8 @@ static dtnmos_discovery_config config_for(const responder* r, uint32_t timeout_m
     return config;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.- discovery_finds_registries_by_priority -.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void discovery_finds_registries_by_priority(void)
 {
     static const announced instances[] = {
@@ -496,6 +543,8 @@ void discovery_finds_registries_by_priority(void)
     dtnmos_registry_info_clear(&copy);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.- discovery_asks_again_for_what_is_missing -.-.-.-.-.-.-.-.-.-.-.-
+//
 void discovery_asks_again_for_what_is_missing(void)
 {
     responder r;
@@ -517,6 +566,8 @@ void discovery_asks_again_for_what_is_missing(void)
     dtnmos_registry_list_free(list);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.- discovery_finds_nothing_in_silence -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void discovery_finds_nothing_in_silence(void)
 {
     responder r;

@@ -1,21 +1,29 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# sdp-write.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Writing an SDP (RFC 8866) as SMPTE ST 2110 describes a sender: the session level, and
-// per flow its media section with the attributes that ST 2110-20, -22, -30 and -40 ask
-// for. What the parser reads back from it is the flow it was written from.
+// dtnmos - Writing an SDP (RFC 8866) as SMPTE ST 2110 describes a sender
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <string.h>
 
 #include "dtnmos/sdp.h"
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv6 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether address is IPv6, which holds a colon where IPv4 has none.
+//
 static int is_ipv6(const char* address)
 {
     return strchr(address, ':') != NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv4_multicast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether address is an IPv4 multicast address, 224.0.0.0 to 239.255.255.255.
+//
 static int is_ipv4_multicast(const char* address)
 {
     dtnmos_span first;
@@ -24,6 +32,8 @@ static int is_ipv4_multicast(const char* address)
     return dtnmos_parse_u32(first, 255, &octet) && octet >= 224 && octet <= 239;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- address_type -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static const char* address_type(const char* address)
 {
     return is_ipv6(address) ? "IP6" : "IP4";
@@ -38,6 +48,8 @@ typedef struct fmtp_writer
     int count;
 } fmtp_writer;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- separate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void separate(fmtp_writer* writer)
 {
     if (writer->count++ == 0)
@@ -51,6 +63,8 @@ static void separate(fmtp_writer* writer)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_text(fmtp_writer* writer, const char* name, const dtnmos_string* value)
 {
     if (dtnmos_string_length(value) == 0)
@@ -61,6 +75,8 @@ static void write_text(fmtp_writer* writer, const char* name, const dtnmos_strin
     dtnmos_buffer_printf(writer->buffer, "%s=%s", name, dtnmos_string_get(value));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_number(fmtp_writer* writer, const char* name, uint32_t value)
 {
     if (value == 0)
@@ -71,6 +87,8 @@ static void write_number(fmtp_writer* writer, const char* name, uint32_t value)
     dtnmos_buffer_printf(writer->buffer, "%s=%u", name, (unsigned)value);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_rate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_rate(fmtp_writer* writer, uint32_t numerator, uint32_t denominator)
 {
     if (numerator == 0)
@@ -89,6 +107,8 @@ static void write_rate(fmtp_writer* writer, uint32_t numerator, uint32_t denomin
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_flag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_flag(fmtp_writer* writer, const char* name, int set)
 {
     if (!set)
@@ -99,6 +119,8 @@ static void write_flag(fmtp_writer* writer, const char* name, int set)
     dtnmos_buffer_append(writer->buffer, name, strlen(name));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- end_fmtp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void end_fmtp(fmtp_writer* writer)
 {
     if (writer->count > 0)
@@ -107,6 +129,8 @@ static void end_fmtp(fmtp_writer* writer)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void write_video(dtnmos_buffer* buffer, const dtnmos_flow* flow)
 {
     const dtnmos_video_format* video = &flow->format.video;
@@ -129,6 +153,8 @@ static void write_video(dtnmos_buffer* buffer, const dtnmos_flow* flow)
     end_fmtp(&writer);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_compressed(dtnmos_buffer* buffer, const dtnmos_flow* flow)
 {
     const dtnmos_compressed_video_format* video = &flow->format.compressed_video;
@@ -160,7 +186,10 @@ static void write_compressed(dtnmos_buffer* buffer, const dtnmos_flow* flow)
     end_fmtp(&writer);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_milliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes a time in nanoseconds as milliseconds, "1" or "0.125".
+//
 static void write_milliseconds(dtnmos_buffer* buffer, uint32_t nanoseconds)
 {
     const unsigned whole = (unsigned)(nanoseconds / 1000000u);
@@ -179,6 +208,8 @@ static void write_milliseconds(dtnmos_buffer* buffer, uint32_t nanoseconds)
     dtnmos_buffer_printf(buffer, "%u.%0*u", whole, digits, fraction);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void write_audio(dtnmos_buffer* buffer, const dtnmos_flow* flow)
 {
     const dtnmos_audio_format* audio = &flow->format.audio;
@@ -196,6 +227,8 @@ static void write_audio(dtnmos_buffer* buffer, const dtnmos_flow* flow)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void write_anc(dtnmos_buffer* buffer, const dtnmos_flow* flow)
 {
     const dtnmos_anc_format* anc = &flow->format.anc;
@@ -216,6 +249,8 @@ static void write_anc(dtnmos_buffer* buffer, const dtnmos_flow* flow)
     end_fmtp(&writer);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_other -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void write_other(dtnmos_buffer* buffer, const dtnmos_flow* flow)
 {
     const dtnmos_other_format* other = &flow->format.other;
@@ -232,6 +267,8 @@ static void write_other(dtnmos_buffer* buffer, const dtnmos_flow* flow)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_flow(dtnmos_buffer* buffer, const dtnmos_flow* flow, size_t index,
                        int with_mid)
 {
@@ -289,6 +326,8 @@ static void write_flow(dtnmos_buffer* buffer, const dtnmos_flow* flow, size_t in
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow* flows,
                                size_t count, dtnmos_string* text, dtnmos_error* error)
 {

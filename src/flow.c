@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# flow.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Clearing and copying flows and sessions, whose strings and arrays they own.
+// dtnmos - Clearing and copying flows and sessions, whose strings and arrays they own
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +12,8 @@
 #include "dtnmos/sdp.h"
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void clear_video(dtnmos_video_format* video)
 {
     dtnmos_string_clear(&video->sampling);
@@ -19,6 +25,8 @@ static void clear_video(dtnmos_video_format* video)
     dtnmos_string_clear(&video->transmitter_type);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void clear_compressed(dtnmos_compressed_video_format* video)
 {
     dtnmos_string_clear(&video->encoding);
@@ -33,6 +41,8 @@ static void clear_compressed(dtnmos_compressed_video_format* video)
     dtnmos_string_clear(&video->sublevel);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_flow_clear(dtnmos_flow* flow)
 {
     if (flow == NULL)
@@ -67,6 +77,8 @@ void dtnmos_flow_clear(dtnmos_flow* flow)
     memset(flow, 0, sizeof(*flow));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_set_did_sdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow, const dtnmos_did_sdid* pairs,
                                        size_t count)
 {
@@ -90,7 +102,10 @@ dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow, const dtnmos_did_sdid*
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_strings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Copies each string of the pairs in target and source; returns the first failure.
+//
 static dtnmos_result copy_strings(dtnmos_string* const* targets,
                                   const dtnmos_string* const* sources, size_t count)
 {
@@ -107,6 +122,8 @@ static dtnmos_result copy_strings(dtnmos_string* const* targets,
 
 #define DTNMOS_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_format -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result copy_format(dtnmos_flow* target, const dtnmos_flow* source)
 {
     switch (source->media)
@@ -169,7 +186,10 @@ static dtnmos_result copy_format(dtnmos_flow* target, const dtnmos_flow* source)
     return DTNMOS_E_INVALID_ARGUMENT;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_numbers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Copies the numbers of the format of source, which copy_format() leaves alone.
+//
 static void copy_numbers(dtnmos_flow* target, const dtnmos_flow* source)
 {
     switch (source->media)
@@ -226,6 +246,8 @@ static void copy_numbers(dtnmos_flow* target, const dtnmos_flow* source)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_flow_copy(dtnmos_flow* target, const dtnmos_flow* source)
 {
     if (target == NULL || source == NULL)
@@ -267,6 +289,8 @@ dtnmos_result dtnmos_flow_copy(dtnmos_flow* target, const dtnmos_flow* source)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_session_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_session_clear(dtnmos_session* session)
 {
     if (session == NULL)

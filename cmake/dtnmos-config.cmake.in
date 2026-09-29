@@ -1,6 +1,8 @@
-# SPDX-License-Identifier: BSD-3-Clause
+# #*#*#*#*#*#*#*#*#*#*#*#* dtnmos-config.cmake.in *#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 #
-# Template of the dtnmos CMake package configuration: imports its target.
+# dtnmos - Template of the dtnmos CMake package configuration
+#
+# SPDX-License-Identifier: BSD-3-Clause
 
 @PACKAGE_INIT@
 

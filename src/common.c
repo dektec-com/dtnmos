@@ -1,6 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* common.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// The version, the names of results and media, failures, and name-based UUIDs.
+// dtnmos - The version, the names of results and media, failures, and name-based UUIDs
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +12,8 @@
 #include "dtnmos/sdp.h"
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_version -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_version(int* major, int* minor, int* patch)
 {
     if (major != NULL)
@@ -24,6 +30,8 @@ void dtnmos_version(int* major, int* minor, int* patch)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_result_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 const char* dtnmos_result_name(dtnmos_result result)
 {
     switch (result)
@@ -54,6 +62,8 @@ const char* dtnmos_result_name(dtnmos_result result)
     return "unknown dtnmos_result";
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_media_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const char* dtnmos_media_name(dtnmos_media media)
 {
     switch (media)
@@ -72,6 +82,8 @@ const char* dtnmos_media_name(dtnmos_media media)
     return "unknown";
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_fail(dtnmos_error* error, dtnmos_result code, const char* format,
                           ...)
 {
@@ -86,12 +98,17 @@ dtnmos_result dtnmos_fail(dtnmos_error* error, dtnmos_result code, const char* f
     return code;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_fail_memory -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_fail_memory(dtnmos_error* error)
 {
     return dtnmos_fail(error, DTNMOS_E_NO_MEMORY, "Out of memory.");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_uuid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads the 16 bytes of a UUID in its text form; returns 0 when text is no UUID.
+//
 static int read_uuid(const char* text, uint8_t bytes[16])
 {
     if (strlen(text) != 36)
@@ -123,6 +140,8 @@ static int read_uuid(const char* text, uint8_t bytes[16])
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_id_from_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_id_from_name(const dtnmos_id* namespace_id, const char* name,
                                   dtnmos_id* id, dtnmos_error* error)
 {

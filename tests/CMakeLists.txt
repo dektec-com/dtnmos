@@ -1,7 +1,8 @@
-# SPDX-License-Identifier: BSD-3-Clause
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#* CMakeLists.txt *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 #
-# The dtnmos tests, one ctest per test function of tests.h, and the tests that install dtnmos
-# and use it through find_package.
+# dtnmos - The dtnmos tests, one ctest per test of tests.h, and the package tests
+#
+# SPDX-License-Identifier: BSD-3-Clause
 
 add_executable(
   dtnmos_tests

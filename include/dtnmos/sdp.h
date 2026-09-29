@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* sdp.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos: the flows of an SDP (RFC 8866) as SMPTE ST 2110-20, -22, -30 and -40 describe
-// them, read from its text and written to it. The parser reports what a description says
-// and judges no format: whether a receiver can carry a flow is for the receiver to say.
+// dtnmos - dtnmos
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/dtnmos.h"
 

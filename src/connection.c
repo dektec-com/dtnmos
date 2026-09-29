@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#* connection.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// The Connection API of the node (AMWA IS-05 v1.1): for each sender and receiver its
-// staged and active transport parameters, its constraints and transport type, the
-// transport file of a sender, and the PATCH of the staged parameters, which a controller
-// activates immediately. Scheduled activation is answered as not implemented, and so is
-// the bulk interface.
+// dtnmos - The Connection API of the node (AMWA IS-05 v1.1)
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +42,8 @@ typedef struct connection
     parameters active;
 } connection;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static char* copy_text(const char* text)
 {
     if (text == NULL)
@@ -57,7 +59,10 @@ static char* copy_text(const char* text)
     return copy;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_parameters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Makes target a copy of source; returns 0 when out of memory, leaving target as it was.
+//
 static int copy_parameters(parameters* target, const parameters* source)
 {
     char* file = copy_text(source->transport_file);
@@ -71,6 +76,8 @@ static int copy_parameters(parameters* target, const parameters* source)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_connection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void free_connection(connection* c)
 {
     if (c != NULL)
@@ -81,6 +88,8 @@ static void free_connection(connection* c)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_init_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_connection_init_sender(node_sender* sender)
 {
     connection* c = calloc(1, sizeof(*c));
@@ -104,12 +113,16 @@ dtnmos_result dtnmos_connection_init_sender(node_sender* sender)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_clear_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_connection_clear_sender(node_sender* sender)
 {
     free_connection(sender->connection);
     sender->connection = NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_init_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_connection_init_receiver(node_receiver* receiver)
 {
     connection* c = calloc(1, sizeof(*c));
@@ -130,13 +143,18 @@ dtnmos_result dtnmos_connection_init_receiver(node_receiver* receiver)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_clear_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_connection_clear_receiver(node_receiver* receiver)
 {
     free_connection(receiver->connection);
     receiver->connection = NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_address -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Writes an address, or null for "".
+//
 static void write_address(dtnmos_buffer* b, const char* address)
 {
     if (address[0] == '\0')
@@ -149,6 +167,8 @@ static void write_address(dtnmos_buffer* b, const char* address)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void write_port(dtnmos_buffer* b, int port)
 {
     if (port < 0)
@@ -161,8 +181,11 @@ static void write_port(dtnmos_buffer* b, int port)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_parameters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes the parameters p of a sender or receiver; with_activation writes the immediate
 // activation of p, which staged parameters show only in the answer to their PATCH.
+//
 static void write_parameters(dtnmos_buffer* b, const parameters* p, int sender,
                              int with_activation)
 {
@@ -226,6 +249,8 @@ static const char receiver_constraints[] =
     "[{\"source_ip\": {}, \"multicast_ip\": {}, \"interface_ip\": {}, "
     "\"destination_port\": {}, \"rtp_enabled\": {}}]";
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void answer_text(dtnmos_http_response* response, const char* text)
 {
     dtnmos_buffer b;
@@ -235,7 +260,10 @@ static void answer_text(dtnmos_http_response* response, const char* text)
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_address -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads an address: a string, or null into "". Returns 0 for another type.
+//
 static int read_address(const dtnmos_json* value, char* target, size_t size)
 {
     if (value->type == DTNMOS_JSON_NULL)
@@ -251,7 +279,10 @@ static int read_address(const dtnmos_json* value, char* target, size_t size)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads a port: a whole number of 0 to 65535, or "auto" into -1.
+//
 static int read_port(const dtnmos_json* value, int* port)
 {
     if (value->type == DTNMOS_JSON_STRING && strcmp(value->string, "auto") == 0)
@@ -268,6 +299,8 @@ static int read_port(const dtnmos_json* value, int* port)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_bool -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int read_bool(const dtnmos_json* value, int* target)
 {
     if (value->type != DTNMOS_JSON_TRUE && value->type != DTNMOS_JSON_FALSE)
@@ -278,7 +311,10 @@ static int read_bool(const dtnmos_json* value, int* target)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- merge_leg -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Merges the transport parameters of the one leg into t; returns a message on failure.
+//
 static const char* merge_leg(const dtnmos_json* value, int sender, leg* t)
 {
     if (value->type != DTNMOS_JSON_ARRAY || value->count != 1 ||
@@ -332,8 +368,11 @@ static const char* merge_leg(const dtnmos_json* value, int sender, leg* t)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- merge_patch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Merges the body of a PATCH into staged, and sets activate when it asks for an immediate
 // activation. Returns a message on failure, with its status in status.
+//
 static const char* merge_patch(const dtnmos_json* body, int sender, parameters* staged,
                                int* activate, int* status)
 {
@@ -413,7 +452,10 @@ static const char* merge_patch(const dtnmos_json* body, int sender, parameters* 
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- find_connection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Finds the sender or receiver id; returns its connection, or null.
+//
 static connection* find_connection(dtnmos_node* node, const char* id, int sender,
                                    node_sender** s, node_receiver** r)
 {
@@ -435,9 +477,12 @@ static connection* find_connection(dtnmos_node* node, const char* id, int sender
     return *r != NULL ? (*r)->connection : NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receiver_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Fills flow with what a receiver of media receives by staged: the flow of that media in
 // its transport file, with the transport parameters that are set over it. Returns 0 when
 // the transport file describes none.
+//
 static int receiver_flow(dtnmos_media media, const parameters* staged, dtnmos_flow* flow)
 {
     dtnmos_sdp* sdp = NULL;
@@ -488,6 +533,8 @@ typedef struct activation
     dtnmos_receiver_activation receiver;
 } activation;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void clear_activation(activation* a)
 {
     dtnmos_string_clear(&a->sender.destination_ip);
@@ -495,8 +542,11 @@ static void clear_activation(activation* a)
     dtnmos_flow_clear(&a->receiver.flow);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- gather_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Gathers the activation of staged on the sender s or the receiver r. Returns a message
 // when staged cannot be activated.
+//
 static const char* gather_activation(const node_sender* s, const node_receiver* r,
                                      const parameters* staged, activation* a)
 {
@@ -541,8 +591,11 @@ static const char* gather_activation(const node_sender* s, const node_receiver* 
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_active -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Makes staged, activated, the active parameters of the sender s or receiver r, with the
 // "auto" of a sender resolved, and registers the new state of the sender or receiver.
+//
 static void make_active(dtnmos_node* node, connection* c, node_sender* s,
                         node_receiver* r, parameters* staged)
 {
@@ -585,7 +638,10 @@ static void make_active(dtnmos_node* node, connection* c, node_sender* s,
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- patch_staged -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Answers a PATCH of the staged parameters of the sender or receiver id.
+//
 static void patch_staged(dtnmos_node* node, const char* id, int sender,
                          const dtnmos_http_request* request,
                          dtnmos_http_response* response)
@@ -684,7 +740,10 @@ static void patch_staged(dtnmos_node* node, const char* id, int sender,
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_transport_file -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Answers the transport file of the sender s.
+//
 static void answer_transport_file(const node_sender* s, dtnmos_http_response* response)
 {
     dtnmos_string text = {0};
@@ -700,7 +759,10 @@ static void answer_transport_file(const node_sender* s, dtnmos_http_response* re
     dtnmos_string_clear(&text);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_ids -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Answers the IDs of the senders or the receivers, each followed by a slash.
+//
 static void answer_ids(const dtnmos_node* node, int sender,
                        dtnmos_http_response* response)
 {
@@ -719,8 +781,11 @@ static void answer_ids(const dtnmos_node* node, int sender,
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_single -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Answers a GET of the single interface, whose further segments are segments; the caller
 // holds the lock.
+//
 static void answer_single(dtnmos_node* node, char** segments, size_t count,
                           dtnmos_http_response* response)
 {
@@ -787,6 +852,8 @@ static void answer_single(dtnmos_node* node, char** segments, size_t count,
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_handle -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_connection_handle(dtnmos_node* node,
                                        const dtnmos_http_request* request,
                                        char** segments, size_t count,

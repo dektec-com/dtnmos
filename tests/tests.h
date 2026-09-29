@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# tests.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// The tests of dtnmos, each a function of no arguments. DTNMOS_TESTS lists them for the
-// runner and for CMake, which reads the names from this file.
+// dtnmos - The tests of dtnmos, each a function of no arguments
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
 

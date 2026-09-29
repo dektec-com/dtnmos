@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#* connection-test.c *#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Tests of the Connection API of the node (IS-05): the resources it lists and the
-// parameters it answers, a receiver connected by a transport file, a sender moved and
-// disabled, what an activation changes in the registry, and the PATCHes it refuses.
+// dtnmos - Tests of the Connection API of the node (IS-05)
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +42,8 @@ typedef struct activations
     char last_registered[16];
 } activations;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- activate_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result activate_sender(void* user, const dtnmos_id* sender,
                                      const dtnmos_sender_activation* activation,
                                      dtnmos_error* error)
@@ -60,6 +64,8 @@ static dtnmos_result activate_sender(void* user, const dtnmos_id* sender,
     return seen->answer;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- activate_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result activate_receiver(void* user, const dtnmos_id* receiver,
                                        const dtnmos_receiver_activation* activation,
                                        dtnmos_error* error)
@@ -78,7 +84,10 @@ static dtnmos_result activate_receiver(void* user, const dtnmos_id* receiver,
     return seen->answer;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registry_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // The registry records the type of what is registered, and accepts it all.
+//
 static dtnmos_result registry_http(void* user, const dtnmos_http_request* request,
                                    dtnmos_http_response* response, dtnmos_error* error)
 {
@@ -107,8 +116,11 @@ static dtnmos_result registry_http(void* user, const dtnmos_http_request* reques
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_node -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Makes a node with a video sender to 239.0.0.1:5004 and an audio receiver, whose
 // callbacks record into seen, and registers them.
+//
 static dtnmos_node* make_node(activations* seen)
 {
     dtnmos_node_config config;
@@ -157,8 +169,11 @@ static dtnmos_node* make_node(activations* seen)
     return node;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ask -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Sends method to path with body, and returns the status; json, when not null, gets the
 // JSON of the answer, which the caller frees.
+//
 static int ask(dtnmos_node* node, const char* method, const char* path, const char* body,
                dtnmos_json** json)
 {
@@ -191,7 +206,10 @@ static int ask(dtnmos_node* node, const char* method, const char* path, const ch
     return status;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- leg_member -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Returns the member name of the one leg of the transport parameters of json.
+//
 static const dtnmos_json* leg_member(const dtnmos_json* json, const char* name)
 {
     const dtnmos_json* legs = dtnmos_json_member(json, "transport_params");
@@ -202,6 +220,8 @@ static const dtnmos_json* leg_member(const dtnmos_json* json, const char* name)
     return dtnmos_json_member(&legs->items[0], name);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_answers_its_parameters -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void connection_answers_its_parameters(void)
 {
     activations seen;
@@ -283,6 +303,8 @@ static const char* const connect_receiver =
     "a=ptime:1\\n\"}, "
     "\"transport_params\": [{\"destination_port\": 5008}]}";
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_connects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void connection_connects_a_receiver(void)
 {
     activations seen;
@@ -342,6 +364,8 @@ void connection_connects_a_receiver(void)
     dtnmos_node_destroy(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- connection_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void connection_moves_a_sender(void)
 {
     activations seen;
@@ -430,6 +454,8 @@ void connection_moves_a_sender(void)
     dtnmos_node_destroy(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_refuses_bad_patches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void connection_refuses_bad_patches(void)
 {
     activations seen;

@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#* query-test.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Tests of the JSON parser, the HTTP response, and the query of a registry that an HTTP
-// function of the test answers: senders over two pages, one found by ID and by label, and
-// the failures of a registry.
+// dtnmos - Tests of JSON, the HTTP response, and the query of a registry
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/query.h"
 
@@ -13,6 +15,8 @@
 #include "json.h"
 #include "tests.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- json_reads_values_and_escapes -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void json_reads_values_and_escapes(void)
 {
     const char* text =
@@ -40,6 +44,8 @@ void json_reads_values_and_escapes(void)
     dtnmos_json_free(json);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- json_refuses_what_is_malformed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void json_refuses_what_is_malformed(void)
 {
     const char* const texts[] = {"",    "{",     "[1,]",    "{\"a\" 1}",   "\"open",
@@ -66,6 +72,8 @@ void json_refuses_what_is_malformed(void)
     CHECK(dtnmos_json_parse(deep, strlen(deep), &json, NULL) == DTNMOS_E_PARSE);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- json_writes_escaped_strings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void json_writes_escaped_strings(void)
 {
     dtnmos_buffer buffer;
@@ -76,6 +84,8 @@ void json_writes_escaped_strings(void)
     dtnmos_buffer_free(&buffer);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- http_response_owns_what_it_holds -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void http_response_owns_what_it_holds(void)
 {
     dtnmos_http_response* response = dtnmos_http_response_create();
@@ -118,6 +128,8 @@ typedef struct fake_registry
     int unreachable; // every request fails as if the registry did not answer
 } fake_registry;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result fake_http(void* user, const dtnmos_http_request* request,
                                dtnmos_http_response* response, dtnmos_error* error)
 {
@@ -189,8 +201,11 @@ static const route routes[] = {
      NULL},
 };
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registry_routes -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Builds the routes of a registry with two pages of senders, the second reached through
 // the Link header of the first, as the paging of IS-04 does.
+//
 static void registry_routes(route* table, size_t* count, char* page_one,
                             size_t page_one_size, char* single, size_t single_size,
                             char* by_label, size_t by_label_size, char* twins,
@@ -216,6 +231,8 @@ static void registry_routes(route* table, size_t* count, char* page_one,
     ++*count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_query* make_query(fake_registry* registry)
 {
     dtnmos_query_config config;
@@ -234,6 +251,8 @@ static dtnmos_query* make_query(fake_registry* registry)
     return query;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.- query_lists_the_senders_of_every_page -.-.-.-.-.-.-.-.-.-.-.-.
+//
 void query_lists_the_senders_of_every_page(void)
 {
     route table[16];
@@ -273,6 +292,8 @@ void query_lists_the_senders_of_every_page(void)
     dtnmos_query_destroy(query);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- query_finds_a_sender_and_its_sdp -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void query_finds_a_sender_and_its_sdp(void)
 {
     route table[16];
@@ -314,6 +335,8 @@ void query_finds_a_sender_and_its_sdp(void)
     dtnmos_query_destroy(query);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- query_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void query_names_what_went_wrong(void)
 {
     route table[16];
@@ -367,6 +390,8 @@ void query_names_what_went_wrong(void)
     dtnmos_query_destroy(query);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.- query_refuses_an_incomplete_config -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void query_refuses_an_incomplete_config(void)
 {
     dtnmos_query_config config;

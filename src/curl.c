@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# curl.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// The HTTP transport on libcurl, when the library is built with DTNMOS_WITH_CURL: one
-// easy handle per request, so that requests of different threads never share one.
+// dtnmos - The HTTP transport on libcurl, when the library is built with DTNMOS_WITH_CURL
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/http.h"
 #include "internal.h"
@@ -12,6 +15,8 @@
     #include <stdio.h>
     #include <string.h>
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_curl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_has_curl(void)
 {
     return 1;
@@ -24,6 +29,8 @@ typedef struct transfer
     int failed;
 } transfer;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receive_body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static size_t receive_body(char* data, size_t size, size_t count, void* user)
 {
     transfer* t = user;
@@ -36,6 +43,8 @@ static size_t receive_body(char* data, size_t size, size_t count, void* user)
     return length;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receive_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static size_t receive_header(char* data, size_t size, size_t count, void* user)
 {
     transfer* t = user;
@@ -73,6 +82,8 @@ static size_t receive_header(char* data, size_t size, size_t count, void* user)
     return length;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_curl_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_curl_http(void* user, const dtnmos_http_request* request,
                                dtnmos_http_response* response, dtnmos_error* error)
 {
@@ -152,11 +163,15 @@ dtnmos_result dtnmos_curl_http(void* user, const dtnmos_http_request* request,
 
 #else
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_curl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_has_curl(void)
 {
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_curl_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_curl_http(void* user, const dtnmos_http_request* request,
                                dtnmos_http_response* response, dtnmos_error* error)
 {

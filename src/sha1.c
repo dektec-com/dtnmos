@@ -1,17 +1,24 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# sha1.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// SHA-1 (RFC 3174), which name-based UUIDs of version 5 hash their namespace and name
-// with. It serves identifiers only, never security.
+// dtnmos - SHA-1 (RFC 3174), with which name-based UUIDs of version 5 are hashed
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <string.h>
 
 #include "internal.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- rotate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static uint32_t rotate(uint32_t value, int bits)
 {
     return (value << bits) | (value >> (32 - bits));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- process -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void process(dtnmos_sha1* sha1, const uint8_t block[64])
 {
     uint32_t w[80];
@@ -67,6 +74,8 @@ static void process(dtnmos_sha1* sha1, const uint8_t block[64])
     sha1->state[4] += e;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_init -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_sha1_init(dtnmos_sha1* sha1)
 {
     memset(sha1, 0, sizeof(*sha1));
@@ -77,6 +86,8 @@ void dtnmos_sha1_init(dtnmos_sha1* sha1)
     sha1->state[4] = 0xC3D2E1F0u;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_update -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_sha1_update(dtnmos_sha1* sha1, const void* data, size_t length)
 {
     const uint8_t* bytes = data;
@@ -100,6 +111,8 @@ void dtnmos_sha1_update(dtnmos_sha1* sha1, const void* data, size_t length)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_final -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_sha1_final(dtnmos_sha1* sha1, uint8_t digest[20])
 {
     const uint64_t bits = sha1->length * 8;

@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# platform.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// What the node needs of the operating system, behind names of dtnmos: a mutex, a thread,
-// sleeping, the time, and the address of this host on the way to another. Windows and
-// POSIX.
+// dtnmos - What the node needs of the operating system, behind names of dtnmos
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stddef.h>
 #include <stdint.h>

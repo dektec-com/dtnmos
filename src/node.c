@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# node.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// The NMOS node: its resources as IS-04 v1.3 describes them, their registration with the
-// Registration API of a registry, the heartbeats that keep them there, and the answers of
-// the Node API and the transport files of the senders. The Connection API is in
-// connection.c. A mutex guards the node; requests to the registry are made without it.
+// dtnmos - The NMOS node
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,16 +14,22 @@
 #include "node-internal.h"
 #include "platform.h"
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_lock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_lock(dtnmos_node* node)
 {
     dtnmos_mutex_lock(node->mutex);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_unlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_unlock(dtnmos_node* node)
 {
     dtnmos_mutex_unlock(node->mutex);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static char* copy_text(const char* text)
 {
     const size_t length = text == NULL ? 0 : strlen(text);
@@ -41,6 +48,8 @@ static char* copy_text(const char* text)
 static void node_log(dtnmos_node* node, dtnmos_log_level level, const char* format, ...)
     DTNMOS_PRINTF(3, 4);
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- node_log -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void node_log(dtnmos_node* node, dtnmos_log_level level, const char* format, ...)
 {
     if (node->log == NULL)
@@ -55,7 +64,10 @@ static void node_log(dtnmos_node* node, dtnmos_log_level level, const char* form
     node->log(node->log_user, level, message);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- host_of_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Writes the host of an URL, without brackets around an IPv6 address, into host.
+//
 static int host_of_url(const char* url, char* host, size_t size)
 {
     const char* start = strstr(url, "://");
@@ -85,6 +97,8 @@ static int host_of_url(const char* url, char* host, size_t size)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_create(const dtnmos_node_config* config, dtnmos_node** node,
                                  dtnmos_error* error)
 {
@@ -158,6 +172,8 @@ dtnmos_result dtnmos_node_create(const dtnmos_node_config* config, dtnmos_node**
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void free_sender(node_sender* sender)
 {
     free(sender->label);
@@ -167,6 +183,8 @@ static void free_sender(node_sender* sender)
     dtnmos_connection_clear_sender(sender);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void free_receiver(node_receiver* receiver)
 {
     free(receiver->label);
@@ -174,6 +192,8 @@ static void free_receiver(node_receiver* receiver)
     dtnmos_connection_clear_receiver(receiver);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_free(dtnmos_node* node)
 {
     for (size_t i = 0; i < node->device_count; ++i)
@@ -202,8 +222,11 @@ void dtnmos_node_free(dtnmos_node* node)
     free(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registry_request -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Performs a request to the Registration API; path follows its base. Returns the status
 // in status, or fails when no answer came.
+//
 static dtnmos_result registry_request(dtnmos_node* node, const char* method,
                                       const char* path, const char* body, int* status,
                                       dtnmos_error* error)
@@ -248,7 +271,10 @@ static dtnmos_result registry_request(dtnmos_node* node, const char* method,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- register_resource -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Registers a resource of type with the JSON data; 200 and 201 are both success.
+//
 static dtnmos_result register_resource(dtnmos_node* node, const char* type,
                                        const char* data, dtnmos_error* error)
 {
@@ -277,7 +303,10 @@ static dtnmos_result register_resource(dtnmos_node* node, const char* type,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_common -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes the members that every resource of IS-04 has.
+//
 static void write_common(dtnmos_buffer* b, const dtnmos_id* id, const char* version,
                          const char* label, const char* description)
 {
@@ -289,6 +318,8 @@ static void write_common(dtnmos_buffer* b, const dtnmos_id* id, const char* vers
     DTNMOS_APPEND_LITERAL(b, ", \"tags\": {}");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_base_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_base_url(const dtnmos_node* node, dtnmos_buffer* b)
 {
     const int ipv6 = strchr(node->api_host, ':') != NULL;
@@ -296,6 +327,8 @@ void dtnmos_node_write_base_url(const dtnmos_node* node, dtnmos_buffer* b)
                          ipv6 ? "]" : "", (unsigned)node->api_port);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_self -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_self(const dtnmos_node* node, dtnmos_buffer* b)
 {
     DTNMOS_APPEND_LITERAL(b, "{");
@@ -315,6 +348,8 @@ void dtnmos_node_write_self(const dtnmos_node* node, dtnmos_buffer* b)
         (unsigned)node->api_port);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_device -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_device(const dtnmos_node* node, const node_device* device,
                               dtnmos_buffer* b)
 {
@@ -352,11 +387,15 @@ void dtnmos_node_write_device(const dtnmos_node* node, const node_device* device
                              "\"urn:x-nmos:control:sr-ctrl/v1.1\"}]}");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static int is_video(const node_sender* sender)
 {
     return sender->flow.media == DTNMOS_MEDIA_VIDEO;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_source -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_source(const node_sender* sender, dtnmos_buffer* b)
 {
     DTNMOS_APPEND_LITERAL(b, "{");
@@ -385,12 +424,17 @@ void dtnmos_node_write_source(const node_sender* sender, dtnmos_buffer* b)
     DTNMOS_APPEND_LITERAL(b, "]}");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- or_default -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Returns text, or fallback when it is empty.
+//
 static const char* or_default(const dtnmos_string* text, const char* fallback)
 {
     return dtnmos_string_length(text) > 0 ? dtnmos_string_get(text) : fallback;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_flow(const node_sender* sender, dtnmos_buffer* b)
 {
     DTNMOS_APPEND_LITERAL(b, "{");
@@ -435,6 +479,8 @@ void dtnmos_node_write_flow(const node_sender* sender, dtnmos_buffer* b)
         (unsigned)audio->sample_rate, l16 ? "L16" : "L24", l16 ? 16 : 24);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_sender(const dtnmos_node* node, const node_sender* sender,
                               dtnmos_buffer* b)
 {
@@ -467,6 +513,8 @@ void dtnmos_node_write_sender(const dtnmos_node* node, const node_sender* sender
                          sender->master_enable ? "true" : "false");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_node_write_receiver(const node_receiver* receiver, dtnmos_buffer* b)
 {
     const int video = receiver->media == DTNMOS_MEDIA_VIDEO;
@@ -494,6 +542,8 @@ void dtnmos_node_write_receiver(const node_receiver* receiver, dtnmos_buffer* b)
                          receiver->master_enable ? "true" : "false");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_is_multicast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 int dtnmos_is_multicast(const char* address)
 {
     if (strchr(address, ':') != NULL)
@@ -505,6 +555,8 @@ int dtnmos_is_multicast(const char* address)
     return first >= 224 && first <= 239;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_transport_file -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_write_transport_file(const node_sender* sender,
                                                dtnmos_string* text, dtnmos_error* error)
 {
@@ -527,11 +579,15 @@ dtnmos_result dtnmos_node_write_transport_file(const node_sender* sender,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- new_version -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void new_version(dtnmos_node* node, char* version, size_t size)
 {
     dtnmos_version_now(&node->last_version, version, size);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_find_device -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 node_device* dtnmos_node_find_device(dtnmos_node* node, const dtnmos_id* id)
 {
     for (size_t i = 0; i < node->device_count; ++i)
@@ -544,6 +600,8 @@ node_device* dtnmos_node_find_device(dtnmos_node* node, const dtnmos_id* id)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_find_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 node_sender* dtnmos_node_find_sender(dtnmos_node* node, const dtnmos_id* id)
 {
     for (size_t i = 0; i < node->sender_count; ++i)
@@ -556,6 +614,8 @@ node_sender* dtnmos_node_find_sender(dtnmos_node* node, const dtnmos_id* id)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_find_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 node_receiver* dtnmos_node_find_receiver(dtnmos_node* node, const dtnmos_id* id)
 {
     for (size_t i = 0; i < node->receiver_count; ++i)
@@ -568,6 +628,8 @@ node_receiver* dtnmos_node_find_receiver(dtnmos_node* node, const dtnmos_id* id)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- id_taken -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static int id_taken(dtnmos_node* node, const dtnmos_id* id)
 {
     return strcmp(node->id.text, id->text) == 0 ||
@@ -576,7 +638,10 @@ static int id_taken(dtnmos_node* node, const dtnmos_id* id)
            dtnmos_node_find_receiver(node, id) != NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- grow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Grows an array of count elements of size bytes to hold one more.
+//
 static int grow(void** array, size_t* capacity, size_t count, size_t size)
 {
     if (count < *capacity)
@@ -594,7 +659,10 @@ static int grow(void** array, size_t* capacity, size_t count, size_t size)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- touch_device -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // The device of a sender or receiver changes with it, as it lists them.
+//
 static void touch_device(dtnmos_node* node, const dtnmos_id* id)
 {
     node_device* device = dtnmos_node_find_device(node, id);
@@ -605,6 +673,8 @@ static void touch_device(dtnmos_node* node, const dtnmos_id* id)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_add_device -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_add_device(dtnmos_node* node,
                                      const dtnmos_device_config* device,
                                      dtnmos_error* error)
@@ -648,7 +718,10 @@ dtnmos_result dtnmos_node_add_device(dtnmos_node* node,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- derived_id -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Makes the ID of a resource that a sender brings along, from the ID of the sender.
+//
 static void derived_id(const dtnmos_id* sender, const char* what, dtnmos_id* id)
 {
     if (dtnmos_id_from_name(sender, what, id, NULL) != DTNMOS_OK)
@@ -657,6 +730,8 @@ static void derived_id(const dtnmos_id* sender, const char* what, dtnmos_id* id)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_add_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_add_sender(dtnmos_node* node,
                                      const dtnmos_sender_config* sender,
                                      dtnmos_sender_activate_fn activate, void* user,
@@ -727,6 +802,8 @@ dtnmos_result dtnmos_node_add_sender(dtnmos_node* node,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_add_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_add_receiver(dtnmos_node* node,
                                        const dtnmos_receiver_config* receiver,
                                        dtnmos_receiver_activate_fn activate, void* user,
@@ -787,7 +864,10 @@ dtnmos_result dtnmos_node_add_receiver(dtnmos_node* node,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- schedule_removal -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Adds a resource of type to delete from the registry, when it was registered.
+//
 static int schedule_removal(dtnmos_node* node, const char* type, const dtnmos_id* id)
 {
     if (!grow((void**)&node->removals, &node->removal_capacity, node->removal_count,
@@ -801,6 +881,8 @@ static int schedule_removal(dtnmos_node* node, const char* type, const dtnmos_id
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- remove_sender_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void remove_sender_at(dtnmos_node* node, size_t index)
 {
     node_sender* sender = &node->senders[index];
@@ -816,6 +898,8 @@ static void remove_sender_at(dtnmos_node* node, size_t index)
     --node->sender_count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- remove_receiver_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void remove_receiver_at(dtnmos_node* node, size_t index)
 {
     node_receiver* receiver = &node->receivers[index];
@@ -830,6 +914,8 @@ static void remove_receiver_at(dtnmos_node* node, size_t index)
     --node->receiver_count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_remove(dtnmos_node* node, const dtnmos_id* id,
                                  dtnmos_error* error)
 {
@@ -886,6 +972,8 @@ dtnmos_result dtnmos_node_remove(dtnmos_node* node, const dtnmos_id* id,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_update_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_node_update_sender(dtnmos_node* node, const dtnmos_id* id,
                                         const dtnmos_flow* flow, dtnmos_error* error)
 {
@@ -923,7 +1011,10 @@ dtnmos_result dtnmos_node_update_sender(dtnmos_node* node, const dtnmos_id* id,
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- forget_registration -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Marks everything unregistered, as when the registry has lost the node.
+//
 static void forget_registration(dtnmos_node* node)
 {
     node->node_registered = 0;
@@ -953,6 +1044,8 @@ typedef struct pending
     size_t count;
 } pending;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_pending -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void free_pending(pending* p)
 {
     for (size_t i = 0; i < p->count; ++i)
@@ -962,8 +1055,11 @@ static void free_pending(pending* p)
     memset(p, 0, sizeof(*p));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_pending -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Renders into p the first resource that is not registered, parents before children;
 // returns 0 when all are registered.
+//
 static int next_pending(dtnmos_node* node, pending* p)
 {
     memset(p, 0, sizeof(*p));
@@ -1041,7 +1137,10 @@ static int next_pending(dtnmos_node* node, pending* p)
     return p->count > 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- mark_registered -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Marks what p registered, unless it changed meanwhile.
+//
 static void mark_registered(dtnmos_node* node, const pending* p)
 {
     if (p->kind == 0 && strcmp(node->version, p->version) == 0)
@@ -1069,6 +1168,8 @@ static void mark_registered(dtnmos_node* node, const pending* p)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_registered -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_node_registered(const dtnmos_node* node)
 {
     if (node == NULL)
@@ -1094,6 +1195,8 @@ int dtnmos_node_registered(const dtnmos_node* node)
     return all;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_poll(dtnmos_node* node, uint32_t* next_ms, dtnmos_error* error)
 {
     if (node == NULL)
@@ -1203,7 +1306,10 @@ dtnmos_result dtnmos_node_poll(dtnmos_node* node, uint32_t* next_ms, dtnmos_erro
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- unregister_all -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Deletes from the registry everything the node registered, children before parents.
+//
 static void unregister_all(dtnmos_node* node)
 {
     dtnmos_node_lock(node);
@@ -1234,6 +1340,8 @@ static void unregister_all(dtnmos_node* node)
     dtnmos_node_poll(node, NULL, &ignored);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_node_destroy(dtnmos_node* node)
 {
     if (node == NULL)
@@ -1245,11 +1353,15 @@ void dtnmos_node_destroy(dtnmos_node* node)
     dtnmos_node_free(node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_api_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 uint16_t dtnmos_node_api_port(const dtnmos_node* node)
 {
     return node == NULL ? 0 : node->api_port;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_api_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_node_api_url(const dtnmos_node* node, dtnmos_string* url)
 {
     if (node == NULL || url == NULL)
@@ -1265,7 +1377,10 @@ dtnmos_result dtnmos_node_api_url(const dtnmos_node* node, dtnmos_string* url)
     return result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_answer_error -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Answers with an error of the APIs of NMOS, a JSON object with its code and message.
+//
 void dtnmos_node_answer_error(dtnmos_http_response* response, int status,
                               const char* message)
 {
@@ -1282,7 +1397,10 @@ void dtnmos_node_answer_error(dtnmos_http_response* response, int status,
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_answer_json -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Answers with the JSON of b, or with an error when it failed.
+//
 void dtnmos_node_answer_json(dtnmos_http_response* response, dtnmos_buffer* b)
 {
     if (b->failed)
@@ -1294,7 +1412,10 @@ void dtnmos_node_answer_json(dtnmos_http_response* response, dtnmos_buffer* b)
     dtnmos_http_response_set_body(response, "application/json", b->data, b->length);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_node_api -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Answers the Node API; segments follow /x-nmos/node/v1.3.
+//
 static void answer_node_api(dtnmos_node* node, char** segments, size_t count,
                             dtnmos_http_response* response)
 {
@@ -1400,7 +1521,10 @@ static void answer_node_api(dtnmos_node* node, char** segments, size_t count,
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_names -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Answers a list of the names of the next level of an API.
+//
 static void answer_names(dtnmos_http_response* response, const char* names)
 {
     dtnmos_buffer b;
@@ -1410,6 +1534,8 @@ static void answer_names(dtnmos_http_response* response, const char* names)
     dtnmos_buffer_free(&b);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_handle -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_node_handle(dtnmos_node* node, const dtnmos_http_request* request,
                                  dtnmos_http_response* response, dtnmos_error* error)
 {

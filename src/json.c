@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# json.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// A parser of JSON (RFC 8259) into a tree of values, recursive to a limited depth, and
-// the escaping of strings that dtnmos writes.
+// dtnmos - A parser of JSON (RFC 8259) of limited depth, and the escaping of strings
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "json.h"
 
@@ -20,12 +23,16 @@ typedef struct reader
     dtnmos_error* error;
 } reader;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result fail(reader* r, const char* what)
 {
     return dtnmos_fail(r->error, DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position,
                        what);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- skip_space -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static void skip_space(reader* r)
 {
     while (r->position < r->length)
@@ -39,11 +46,15 @@ static void skip_space(reader* r)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_is -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int next_is(reader* r, char c)
 {
     return r->position < r->length && r->text[r->position] == c;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int read_word(reader* r, const char* word)
 {
     const size_t length = strlen(word);
@@ -56,6 +67,8 @@ static int read_word(reader* r, const char* word)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- hex_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int hex_value(char c)
 {
     if (c >= '0' && c <= '9')
@@ -73,7 +86,10 @@ static int hex_value(char c)
     return -1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_hex4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads the four hexadecimal digits of \u.
+//
 static int read_hex4(reader* r, unsigned* code)
 {
     if (r->length - r->position < 4)
@@ -95,6 +111,8 @@ static int read_hex4(reader* r, unsigned* code)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- append_utf8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void append_utf8(dtnmos_buffer* buffer, unsigned code)
 {
     char bytes[4];
@@ -124,7 +142,10 @@ static void append_utf8(dtnmos_buffer* buffer, unsigned code)
     dtnmos_buffer_append(buffer, bytes, count);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_string -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads a string after its opening quote into a text of its own.
+//
 static dtnmos_result read_string(reader* r, char** text, size_t* length)
 {
     dtnmos_buffer buffer;
@@ -219,6 +240,8 @@ static dtnmos_result read_string(reader* r, char** text, size_t* length)
     return fail(r, "a string does not end");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result read_number(reader* r, dtnmos_json* value)
 {
     const size_t start = r->position;
@@ -256,7 +279,10 @@ static dtnmos_result read_number(reader* r, dtnmos_json* value)
 
 static dtnmos_result read_value(reader* r, dtnmos_json* value, int depth);
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- add_item -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Appends an item to a value, and for an object its key, which it takes over.
+//
 static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
 {
     if (value->count == *capacity)
@@ -289,6 +315,8 @@ static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
     return item;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_container -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, char close)
 {
     const int object = close == '}';
@@ -351,6 +379,8 @@ static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, ch
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_value(reader* r, dtnmos_json* value, int depth)
 {
     if (depth > DTNMOS_JSON_MAX_DEPTH)
@@ -392,6 +422,8 @@ static dtnmos_result read_value(reader* r, dtnmos_json* value, int depth)
     return read_number(r, value);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void clear_value(dtnmos_json* value)
 {
     free(value->string);
@@ -407,6 +439,8 @@ static void clear_value(dtnmos_json* value)
     free(value->keys);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 dtnmos_result dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
                                 dtnmos_error* error)
 {
@@ -440,6 +474,8 @@ dtnmos_result dtnmos_json_parse(const char* text, size_t length, dtnmos_json** v
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_json_free(dtnmos_json* value)
 {
     if (value == NULL)
@@ -450,6 +486,8 @@ void dtnmos_json_free(dtnmos_json* value)
     free(value);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_member -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 const dtnmos_json* dtnmos_json_member(const dtnmos_json* value, const char* key)
 {
     if (value == NULL || value->type != DTNMOS_JSON_OBJECT || key == NULL)
@@ -466,16 +504,22 @@ const dtnmos_json* dtnmos_json_member(const dtnmos_json* value, const char* key)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 const char* dtnmos_json_text(const dtnmos_json* value)
 {
     return value != NULL && value->type == DTNMOS_JSON_STRING ? value->string : NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_member_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const char* dtnmos_json_member_text(const dtnmos_json* value, const char* key)
 {
     return dtnmos_json_text(dtnmos_json_member(value, key));
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_write_string -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
 {
     DTNMOS_APPEND_LITERAL(buffer, "\"");

@@ -1,8 +1,8 @@
-# SPDX-License-Identifier: BSD-3-Clause
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#* CMakeLists.txt *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 #
-# dtnmos, a C library that reads and writes the SDP of SMPTE ST 2110 flows and speaks NMOS.
-# It builds, tests and installs on its own, without dependencies, or as a subdirectory of a
-# project that sets the DTNMOS_* options before add_subdirectory().
+# dtnmos - dtnmos, a C library for the SDP of SMPTE ST 2110 flows and for NMOS
+#
+# SPDX-License-Identifier: BSD-3-Clause
 cmake_minimum_required(VERSION 3.25)
 
 project(

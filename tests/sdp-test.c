@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# sdp-test.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// Tests of reading and writing the SDP of ST 2110 flows: descriptions as the standards
-// write them, the defaults of the session, the errors a malformed one gives, and a round
-// trip of every media through the writer and the parser.
+// dtnmos - Tests of reading and writing the SDP of ST 2110 flows
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/sdp.h"
 
@@ -81,6 +83,8 @@ static const char* const anc_sdp =
     "a=fmtp:100 DID_SDID={0x61,0x02};DID_SDID={0x41,0x05};VPID_Code=133;"
     "exactframerate=30000/1001;TM=CTM;SSN=ST2110-40:2023\r\n";
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_sdp* parse(const char* text)
 {
     dtnmos_sdp* sdp = NULL;
@@ -92,6 +96,8 @@ static dtnmos_sdp* parse(const char* text)
     return sdp;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_video_on_two_paths -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void sdp_reads_video_on_two_paths(void)
 {
     dtnmos_sdp* sdp = parse(video_sdp);
@@ -140,6 +146,8 @@ void sdp_reads_video_on_two_paths(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void sdp_reads_audio(void)
 {
     dtnmos_sdp* sdp = parse(audio_sdp);
@@ -158,6 +166,8 @@ void sdp_reads_audio(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_compressed_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void sdp_reads_compressed_video(void)
 {
     dtnmos_sdp* sdp = parse(compressed_sdp);
@@ -180,6 +190,8 @@ void sdp_reads_compressed_video(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_ancillary_data -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void sdp_reads_ancillary_data(void)
 {
     dtnmos_sdp* sdp = parse(anc_sdp);
@@ -200,6 +212,8 @@ void sdp_reads_ancillary_data(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_other_media_as_they_are -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void sdp_reads_other_media_as_they_are(void)
 {
     dtnmos_sdp* sdp = parse("v=0\r\no=- 1 1 IN IP4 10.0.0.8\r\ns=H.264\r\nt=0 0\r\n"
@@ -216,6 +230,8 @@ void sdp_reads_other_media_as_they_are(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- sdp_takes_defaults_of_the_session -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void sdp_takes_defaults_of_the_session(void)
 {
     // c=, a=source-filter, a=ts-refclk and a=mediaclk of the session, IPv6, and a line
@@ -239,7 +255,10 @@ void sdp_takes_defaults_of_the_session(void)
     dtnmos_sdp_free(sdp);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- check_error -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Parses text, which must fail with code, and checks that the message holds fragment.
+//
 static void check_error(const char* text, dtnmos_result code, const char* fragment)
 {
     dtnmos_sdp* sdp = (dtnmos_sdp*)&sdp;
@@ -255,6 +274,8 @@ static void check_error(const char* text, dtnmos_result code, const char* fragme
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- sdp_names_the_line_of_an_error -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void sdp_names_the_line_of_an_error(void)
 {
     const char* head = "v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n";
@@ -283,13 +304,19 @@ void sdp_names_the_line_of_an_error(void)
     CHECK(dtnmos_sdp_parse(NULL, 1, &sdp, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- same -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Checks that the strings a and b hold the same text.
+//
 static int same(const dtnmos_string* a, const dtnmos_string* b)
 {
     return strcmp(dtnmos_string_get(a), dtnmos_string_get(b)) == 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- flows_equal -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether flows a and b describe the same flow.
+//
 static int flows_equal(const dtnmos_flow* a, const dtnmos_flow* b)
 {
     if (a->media != b->media || !same(&a->destination_ip, &b->destination_ip) ||
@@ -357,6 +384,8 @@ static int flows_equal(const dtnmos_flow* a, const dtnmos_flow* b)
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_writes_what_it_reads_back -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void sdp_writes_what_it_reads_back(void)
 {
     const char* const texts[] = {video_sdp, audio_sdp, compressed_sdp, anc_sdp};
@@ -409,6 +438,8 @@ void sdp_writes_what_it_reads_back(void)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- sdp_writes_an_audio_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void sdp_writes_an_audio_sender(void)
 {
     dtnmos_session session = {0};
@@ -447,6 +478,8 @@ void sdp_writes_an_audio_sender(void)
     dtnmos_session_clear(&session);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.- sdp_refuses_to_write_an_incomplete_flow -.-.-.-.-.-.-.-.-.-.-.-.
+//
 void sdp_refuses_to_write_an_incomplete_flow(void)
 {
     dtnmos_session session = {0};
@@ -483,6 +516,8 @@ void sdp_refuses_to_write_an_incomplete_flow(void)
     dtnmos_session_clear(&session);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- flow_copy_owns_its_strings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 void flow_copy_owns_its_strings(void)
 {
     dtnmos_sdp* sdp = parse(anc_sdp);

@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* dns.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// DNS messages for DNS-SD: a query written label by label, and the records of a response
-// read with the pointers of name compression followed, each within the message and at
-// most a bounded number of times, so that a malformed message cannot loop or overrun.
+// dtnmos - DNS messages for DNS-SD
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dns.h"
 
@@ -16,26 +18,35 @@ enum
     max_pointers = 64 // name compression pointers followed within one name
 };
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static void put16(uint8_t* at, uint16_t value)
 {
     at[0] = (uint8_t)(value >> 8);
     at[1] = (uint8_t)value;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- get16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static uint16_t get16(const uint8_t* at)
 {
     return (uint16_t)((at[0] << 8) | at[1]);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- get32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static uint32_t get32(const uint8_t* at)
 {
     return ((uint32_t)at[0] << 24) | ((uint32_t)at[1] << 16) | ((uint32_t)at[2] << 8) |
            at[3];
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Writes name, in which "\." and "\\" stand for a dot and a backslash within a label, as
 // labels at buffer + *offset; returns 0 when it does not fit or a label is empty or
 // longer than 63 bytes.
+//
 static int write_name(uint8_t* buffer, size_t size, size_t* offset, const char* name)
 {
     const char* at = name;
@@ -76,6 +87,8 @@ static int write_name(uint8_t* buffer, size_t size, size_t* offset, const char* 
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_write_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
                               const dtnmos_dns_question* questions, size_t count)
 {
@@ -101,8 +114,11 @@ size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
     return offset;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads the name at *offset into text, following compression pointers, and moves *offset
 // past the name as it stands there. Returns 0 when the name is malformed or too long.
+//
 static int read_name(const uint8_t* message, size_t length, size_t* offset, char* text)
 {
     size_t at = *offset;
@@ -170,6 +186,8 @@ static int read_name(const uint8_t* message, size_t length, size_t* offset, char
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_response -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_dns_read_response(const uint8_t* message, size_t length,
                              void (*record)(void* user, const dtnmos_dns_record* found),
                              void* user)
@@ -251,11 +269,15 @@ int dtnmos_dns_read_response(const uint8_t* message, size_t length,
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- lower -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static int lower(int c)
 {
     return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_same_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_dns_same_name(const char* a, const char* b)
 {
     while (*a != '\0' && lower((unsigned char)*a) == lower((unsigned char)*b))
@@ -266,6 +288,8 @@ int dtnmos_dns_same_name(const char* a, const char* b)
     return *a == '\0' && *b == '\0';
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_txt_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 int dtnmos_dns_txt_value(const uint8_t* txt, size_t length, const char* key, char* value,
                          size_t size)
 {

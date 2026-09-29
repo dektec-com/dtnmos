@@ -1,9 +1,10 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# sdp-parse.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// Reading an SDP (RFC 8866) as SMPTE ST 2110 writes it. The lines of each media section
-// are gathered as spans of the text first; the flows are built once the whole description
-// is read, because the session level gives defaults and a=group:DUP names the sections of
-// both paths of ST 2022-7 at the top.
+// dtnmos - Reading an SDP (RFC 8866) as SMPTE ST 2110 writes it
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdlib.h>
 #include <string.h>
@@ -62,19 +63,26 @@ typedef struct parser
     size_t capacity;
 } parser;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail_line -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result fail_line(parser* p, const char* what, dtnmos_span text)
 {
     return dtnmos_fail(p->error, DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", p->line,
                        what, (int)(text.length > 120 ? 120 : text.length), text.data);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result fail_at(parser* p, size_t line, const char* what, dtnmos_span text)
 {
     return dtnmos_fail(p->error, DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", line, what,
                        (int)(text.length > 120 ? 120 : text.length), text.data);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_line -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Returns the next line without its end of line, or 0 at the end of the text.
+//
 static int next_line(parser* p, dtnmos_span* line)
 {
     if (p->position >= p->length)
@@ -95,8 +103,11 @@ static int next_line(parser* p, dtnmos_span* line)
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Splits span at its first space: word is what lies before it, and the rest follows,
 // trimmed.
+//
 static dtnmos_span next_word(dtnmos_span span, dtnmos_span* word)
 {
     span = dtnmos_span_trim(span);
@@ -104,6 +115,8 @@ static dtnmos_span next_word(dtnmos_span span, dtnmos_span* word)
     return dtnmos_span_trim(rest);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_connection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result read_connection(parser* p, dtnmos_span value, shared_lines* lines)
 {
     dtnmos_span network;
@@ -127,6 +140,8 @@ static dtnmos_result read_connection(parser* p, dtnmos_span value, shared_lines*
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_origin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result read_origin(parser* p, dtnmos_span value)
 {
     dtnmos_span user;
@@ -155,6 +170,8 @@ static dtnmos_result read_origin(parser* p, dtnmos_span value)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_media -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_media(parser* p, dtnmos_span value)
 {
     if (p->count == p->capacity)
@@ -195,8 +212,11 @@ static dtnmos_result read_media(parser* p, dtnmos_span value)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_payload_type -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads the payload type that starts value, as a=rtpmap and a=fmtp begin, into
 // payload_type, and returns what follows it.
+//
 static int read_payload_type(dtnmos_span value, uint32_t* payload_type, dtnmos_span* rest)
 {
     dtnmos_span number;
@@ -204,6 +224,8 @@ static int read_payload_type(dtnmos_span value, uint32_t* payload_type, dtnmos_s
     return dtnmos_parse_u32(number, 127, payload_type);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_rtpmap -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result read_rtpmap(parser* p, section* s, dtnmos_span value)
 {
     uint32_t payload_type = 0;
@@ -230,6 +252,8 @@ static dtnmos_result read_rtpmap(parser* p, section* s, dtnmos_span value)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_source_filter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_source_filter(parser* p, dtnmos_span value, shared_lines* lines)
 {
     // a=source-filter: incl IN IP4 <destination> <source> ...
@@ -259,7 +283,10 @@ static dtnmos_result read_source_filter(parser* p, dtnmos_span value, shared_lin
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_attribute -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads an attribute into the lines of the session or of the current section.
+//
 static dtnmos_result read_attribute(parser* p, dtnmos_span line)
 {
     dtnmos_span name;
@@ -335,6 +362,8 @@ static dtnmos_result read_attribute(parser* p, dtnmos_span line)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_bandwidth -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_bandwidth(parser* p, dtnmos_span value)
 {
     if (p->count == 0)
@@ -352,6 +381,8 @@ static dtnmos_result read_bandwidth(parser* p, dtnmos_span value)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_lines -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result read_lines(parser* p)
 {
     dtnmos_span line;
@@ -403,7 +434,10 @@ static dtnmos_result read_lines(parser* p)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- media_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Returns the media of an encoding of a=rtpmap.
+//
 static dtnmos_media media_of(dtnmos_span encoding)
 {
     if (dtnmos_span_equals(encoding, "raw", 1))
@@ -433,8 +467,11 @@ typedef struct fmtp_reader
     dtnmos_span rest;
 } fmtp_reader;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_parameter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads the next parameter into name and value; value is empty for a flag such as
 // interlace.
+//
 static int next_parameter(fmtp_reader* reader, dtnmos_span* name, dtnmos_span* value)
 {
     while (reader->rest.data != NULL)
@@ -462,8 +499,11 @@ static int next_parameter(fmtp_reader* reader, dtnmos_span* name, dtnmos_span* v
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- flag_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Whether a flag such as interlace is set: present without a value, or with one other
 // than 0.
+//
 static int flag_value(dtnmos_span value)
 {
     return value.length == 0 || !dtnmos_span_equals(value, "0", 0);
@@ -487,7 +527,10 @@ typedef struct raster
     dtnmos_string* transmitter_type;
 } raster;
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_raster -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads the parameter name of the raster; sets handled when it is one of them.
+//
 static dtnmos_result read_raster(parser* p, size_t line, const raster* r,
                                  dtnmos_span name, dtnmos_span value, int* handled)
 {
@@ -558,6 +601,8 @@ static dtnmos_result read_raster(parser* p, size_t line, const raster* r,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result build_video(parser* p, const section* s, dtnmos_video_format* video)
 {
     const raster r = {&video->width,           &video->height,
@@ -587,6 +632,8 @@ static dtnmos_result build_video(parser* p, const section* s, dtnmos_video_forma
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result build_compressed(parser* p, const section* s,
                                       dtnmos_compressed_video_format* video)
 {
@@ -653,6 +700,8 @@ static dtnmos_result build_compressed(parser* p, const section* s,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result build_audio(parser* p, const section* s, dtnmos_audio_format* audio)
 {
     if (dtnmos_string_set_span(&audio->encoding, s->encoding) != DTNMOS_OK)
@@ -682,7 +731,10 @@ static dtnmos_result build_audio(parser* p, const section* s, dtnmos_audio_forma
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_did_sdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Reads DID_SDID={0x61,0x02} into pair.
+//
 static int read_did_sdid(dtnmos_span value, dtnmos_did_sdid* pair)
 {
     if (value.length < 2 || value.data[0] != '{' || value.data[value.length - 1] != '}')
@@ -696,6 +748,8 @@ static int read_did_sdid(dtnmos_span value, dtnmos_did_sdid* pair)
            dtnmos_parse_byte(dtnmos_span_trim(sdid), &pair->sdid);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 static dtnmos_result build_anc(parser* p, const section* s, dtnmos_flow* flow)
 {
     dtnmos_anc_format* anc = &flow->format.anc;
@@ -750,7 +804,10 @@ static dtnmos_result build_anc(parser* p, const section* s, dtnmos_flow* flow)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_second_leg -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 // Whether the mid of s is the second of a group of DUP.
+//
 static int is_second_leg(const parser* p, const section* s)
 {
     if (s->mid.length == 0)
@@ -769,7 +826,10 @@ static int is_second_leg(const parser* p, const section* s)
     return 0;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_media_clock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // Reads a=mediaclk:direct=<offset> into the flow.
+//
 static dtnmos_result read_media_clock(parser* p, const section* s, dtnmos_span mediaclk,
                                       dtnmos_flow* flow)
 {
@@ -788,6 +848,8 @@ static dtnmos_result read_media_clock(parser* p, const section* s, dtnmos_span m
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 static dtnmos_result build_flow(parser* p, const section* s, dtnmos_flow* flow)
 {
     flow->size = sizeof(*flow);
@@ -846,6 +908,8 @@ static dtnmos_result build_flow(parser* p, const section* s, dtnmos_flow* flow)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 dtnmos_result dtnmos_sdp_parse(const char* text, size_t length, dtnmos_sdp** sdp,
                                dtnmos_error* error)
 {
@@ -896,21 +960,29 @@ dtnmos_result dtnmos_sdp_parse(const char* text, size_t length, dtnmos_sdp** sdp
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_session -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 const dtnmos_session* dtnmos_sdp_session(const dtnmos_sdp* sdp)
 {
     return sdp == NULL ? NULL : &sdp->session;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_flow_count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 size_t dtnmos_sdp_flow_count(const dtnmos_sdp* sdp)
 {
     return sdp == NULL ? 0 : sdp->count;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 const dtnmos_flow* dtnmos_sdp_flow(const dtnmos_sdp* sdp, size_t index)
 {
     return sdp == NULL || index >= sdp->count ? NULL : &sdp->flows[index];
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
 void dtnmos_sdp_free(dtnmos_sdp* sdp)
 {
     if (sdp == NULL)

@@ -1,12 +1,12 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# discovery.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos: finding the registries on the network as AMWA IS-04 finds them, with DNS-SD:
-// the Query APIs that announce the service type _nmos-query._tcp and the Registration
-// APIs that announce _nmos-register._tcp, through a one-shot query of multicast DNS
-// (RFC 6762). The query goes to 224.0.0.251:5353 from a port of its own, so that the
-// responders answer it with unicast and no port 5353 or multicast group is needed. IPv4.
+// dtnmos - dtnmos
+//
+// SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "dtnmos/dtnmos.h"
 
