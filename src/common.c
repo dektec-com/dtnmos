@@ -48,6 +48,8 @@ const char* dtnmos_result_name(dtnmos_result result)
       return "DTNMOS_E_NO_MEMORY";
     case DTNMOS_E_INTERNAL:
       return "DTNMOS_E_INTERNAL";
+    case DTNMOS_E_NETWORK:
+      return "DTNMOS_E_NETWORK";
   }
   return "unknown dtnmos_result";
 }

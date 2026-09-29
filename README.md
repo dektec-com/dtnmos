@@ -2,8 +2,9 @@
 
 A small C library that reads and writes the SDP of SMPTE ST 2110 flows: ST 2110-20
 uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary data. It
-also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP. And it is an NMOS
-node that registers senders and receivers with a registry (IS-04) and serves its Node API.
+also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP, and finds the
+registries on the network with multicast DNS. And it is an NMOS node that registers senders
+and receivers with a registry (IS-04) and serves its Node API.
 It is the NMOS support of gst-dektec, and is meant to be used by other projects as well,
 such as CDTAPI and FFmpeg (plan [0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
 
@@ -138,6 +139,38 @@ if (dtnmos_query_create(&config, &query, &error) == DTNMOS_OK)
 An HTTP function of its own receives a `dtnmos_http_request` and fills the response with
 `dtnmos_http_response_set_status()`, `_add_header()` and `_set_body()`; it returns
 `DTNMOS_OK` whenever the server answered, whatever the status.
+
+## Finding registries
+
+A search finds the Query or Registration APIs that the registries on the local network
+announce, as IS-04 does with DNS-SD, through a one-shot multicast DNS query of the library
+itself: it goes to 224.0.0.251:5353 from a port of its own, so the responders answer with
+unicast, and it needs neither port 5353 nor Avahi or Bonjour. IPv4 only.
+
+```c
+#include <dtnmos/discovery.h>
+
+dtnmos_discovery_config config = {0};
+config.size = sizeof(config);
+config.service = DTNMOS_SERVICE_QUERY;  // or DTNMOS_SERVICE_REGISTRATION
+config.interface_address = NULL;        // or the IPv4 address of the interface to ask on
+dtnmos_registry_list* list = NULL;
+dtnmos_error error = {0};
+if (dtnmos_discover(&config, &list, &error) == DTNMOS_OK)
+{
+  // Usable ones first, by priority: take the first, and the next when it fails.
+  for (size_t i = 0; i < dtnmos_registry_list_count(list); ++i)
+  {
+    const dtnmos_registry_info* registry = dtnmos_registry_list_at(list, i);
+    // dtnmos_string_get(&registry->url), e.g. "http://192.168.1.5:8080"
+  }
+  dtnmos_registry_list_free(list);
+}
+```
+
+A search takes about a second, `timeout_ms` of the config, and finding nothing is no
+failure. The URL of a Query API goes into `dtnmos_query_config.registry_url`, and that of a
+Registration API into `dtnmos_node_config.registration_url`.
 
 ## Being a node
 

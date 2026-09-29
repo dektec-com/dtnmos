@@ -164,8 +164,9 @@ void node_registers_again_when_the_registry_lost_it(void)
   dtnmos_error error = {DTNMOS_OK, ""};
   REQUIRE(dtnmos_node_poll(node, NULL, &error) == DTNMOS_OK);
   const int registered = registry.count;
-  // A heartbeat the registry answers with 404 means it lost the node.
-  dtnmos_sleep_ms(5);
+  // A heartbeat the registry answers with 404 means it lost the node. The wait is longer
+  // than a tick of the clock of Windows, about 16 ms, so that the heartbeat is due.
+  dtnmos_sleep_ms(40);
   registry.heartbeat_status = 404;
   REQUIRE(dtnmos_node_poll(node, NULL, &error) == DTNMOS_OK);
   CHECK(strstr(registry.requests[registered].url, "/health/nodes/" NODE_ID) != NULL);

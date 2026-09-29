@@ -50,6 +50,8 @@ add_library(
   src/common.c
   src/connection.c
   src/curl.c
+  src/discovery.c
+  src/dns.c
   src/flow.c
   src/http.c
   src/json.c

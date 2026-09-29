@@ -39,7 +39,14 @@
   DTNMOS_TEST(connection_answers_its_parameters)              \
   DTNMOS_TEST(connection_connects_a_receiver)                 \
   DTNMOS_TEST(connection_moves_a_sender)                      \
-  DTNMOS_TEST(connection_refuses_bad_patches)
+  DTNMOS_TEST(connection_refuses_bad_patches)                 \
+  DTNMOS_TEST(dns_writes_a_query)                             \
+  DTNMOS_TEST(dns_reads_records_and_compression)              \
+  DTNMOS_TEST(dns_escapes_dots_within_labels)                 \
+  DTNMOS_TEST(dns_refuses_malformed_messages)                 \
+  DTNMOS_TEST(discovery_finds_registries_by_priority)         \
+  DTNMOS_TEST(discovery_asks_again_for_what_is_missing)       \
+  DTNMOS_TEST(discovery_finds_nothing_in_silence)
 
 #define DTNMOS_TEST(name) void name(void);
 DTNMOS_TESTS

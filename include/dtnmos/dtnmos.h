@@ -46,7 +46,8 @@ typedef enum dtnmos_result
   DTNMOS_E_TIMEOUT,           // a request got no answer in time
   DTNMOS_E_STATE,             // the handle is not in a state that allows the call
   DTNMOS_E_NO_MEMORY,
-  DTNMOS_E_INTERNAL
+  DTNMOS_E_INTERNAL,
+  DTNMOS_E_NETWORK  // a socket could not be opened, or could not send
 } dtnmos_result;
 
 // Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.

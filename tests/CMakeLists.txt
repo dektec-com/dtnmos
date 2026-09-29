@@ -3,7 +3,15 @@
 # The dtnmos tests, one ctest per test function of tests.h, and the tests that install dtnmos
 # and use it through find_package.
 
-add_executable(dtnmos_tests main.c common-test.c connection-test.c node-test.c query-test.c sdp-test.c)
+add_executable(
+  dtnmos_tests
+  main.c
+  common-test.c
+  connection-test.c
+  discovery-test.c
+  node-test.c
+  query-test.c
+  sdp-test.c)
 target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
 # The tests of the JSON parser reach the internal headers of the library.
 target_include_directories(dtnmos_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")

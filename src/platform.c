@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The mutex, thread, time and addresses of platform.h, on Windows and on POSIX.
+// The mutex, thread, time, addresses and datagram sockets of platform.h, on Windows and
+// on POSIX.
 
 // Strict C11 hides the functions of POSIX that this file needs.
 #if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
@@ -12,10 +13,16 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+// Of mstcpip.h, which is not included, as it needs a particular order of the headers.
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
 #include <pthread.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -134,6 +141,8 @@ static int start_sockets(void)
 
 #define DTNMOS_CLOSE_SOCKET closesocket
 typedef SOCKET dtnmos_socket;
+// The length of a buffer, as the sockets of the platform take it.
+#define DTNMOS_SOCKET_LENGTH(length) ((int)(length))
 #define DTNMOS_NO_SOCKET INVALID_SOCKET
 
 #else
@@ -238,6 +247,7 @@ static int start_sockets(void)
 
 #define DTNMOS_CLOSE_SOCKET close
 typedef int dtnmos_socket;
+#define DTNMOS_SOCKET_LENGTH(length) (length)
 #define DTNMOS_NO_SOCKET (-1)
 
 #endif
@@ -327,4 +337,136 @@ uint16_t dtnmos_free_port(const char* host)
   }
   freeaddrinfo(found);
   return port;
+}
+
+struct dtnmos_udp
+{
+  dtnmos_socket socket;
+};
+
+dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_address)
+{
+  if (!start_sockets())
+  {
+    return NULL;
+  }
+  struct sockaddr_in local;
+  memset(&local, 0, sizeof(local));
+  local.sin_family = AF_INET;
+  local.sin_addr.s_addr = htonl(INADDR_ANY);
+  struct in_addr interface;
+  memset(&interface, 0, sizeof(interface));
+  if ((bind_address != NULL && inet_pton(AF_INET, bind_address, &local.sin_addr) != 1) ||
+      (interface_address != NULL &&
+       inet_pton(AF_INET, interface_address, &interface) != 1))
+  {
+    return NULL;
+  }
+  const dtnmos_socket handle = socket(AF_INET, SOCK_DGRAM, 0);
+  if (handle == DTNMOS_NO_SOCKET)
+  {
+    return NULL;
+  }
+  // Multicast DNS asks for a hop limit of 255, and a responder on this host answers too.
+  const int ttl = 255;
+  const int loop = 1;
+  int ok = bind(handle, (struct sockaddr*)&local, sizeof(local)) == 0 &&
+           setsockopt(handle, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl,
+                      sizeof(ttl)) == 0 &&
+           setsockopt(handle, IPPROTO_IP, IP_MULTICAST_LOOP, (const char*)&loop,
+                      sizeof(loop)) == 0;
+  if (ok && interface_address != NULL)
+  {
+    ok = setsockopt(handle, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&interface,
+                    sizeof(interface)) == 0;
+  }
+#if defined(_WIN32)
+  // Without this, a datagram to a port nobody listens on makes the next receive fail.
+  BOOL report = FALSE;
+  DWORD returned = 0;
+  WSAIoctl(handle, SIO_UDP_CONNRESET, &report, sizeof(report), NULL, 0, &returned, NULL,
+           NULL);
+#endif
+  dtnmos_udp* udp = ok ? malloc(sizeof(*udp)) : NULL;
+  if (udp == NULL)
+  {
+    DTNMOS_CLOSE_SOCKET(handle);
+    return NULL;
+  }
+  udp->socket = handle;
+  return udp;
+}
+
+uint16_t dtnmos_udp_port(const dtnmos_udp* udp)
+{
+  struct sockaddr_in local;
+  socklen_t length = sizeof(local);
+  if (getsockname(udp->socket, (struct sockaddr*)&local, &length) != 0)
+  {
+    return 0;
+  }
+  return ntohs(local.sin_port);
+}
+
+int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const void* data,
+                    size_t length)
+{
+  struct sockaddr_in to;
+  memset(&to, 0, sizeof(to));
+  to.sin_family = AF_INET;
+  to.sin_port = htons(port);
+  if (inet_pton(AF_INET, address, &to.sin_addr) != 1)
+  {
+    return 0;
+  }
+  return (size_t)sendto(udp->socket, (const char*)data, DTNMOS_SOCKET_LENGTH(length), 0,
+                        (struct sockaddr*)&to, sizeof(to)) == length;
+}
+
+long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
+                        char* from_address, size_t from_size, uint16_t* from_port)
+{
+  fd_set readable;
+  FD_ZERO(&readable);
+  FD_SET(udp->socket, &readable);
+  struct timeval timeout;
+  timeout.tv_sec = (long)(timeout_ms / 1000u);
+  timeout.tv_usec = (long)(timeout_ms % 1000u) * 1000;
+  const int ready = select((int)udp->socket + 1, &readable, NULL, NULL, &timeout);
+  if (ready == 0)
+  {
+    return 0;
+  }
+  if (ready < 0)
+  {
+    return -1;
+  }
+  struct sockaddr_in from;
+  socklen_t from_length = sizeof(from);
+  const long received =
+      (long)recvfrom(udp->socket, (char*)buffer, DTNMOS_SOCKET_LENGTH(size), 0,
+                     (struct sockaddr*)&from, &from_length);
+  if (received < 0)
+  {
+    return -1;
+  }
+  if (from_address != NULL &&
+      inet_ntop(AF_INET, &from.sin_addr, from_address, (socklen_t)from_size) == NULL)
+  {
+    from_address[0] = '\0';
+  }
+  if (from_port != NULL)
+  {
+    *from_port = ntohs(from.sin_port);
+  }
+  return received;
+}
+
+void dtnmos_udp_close(dtnmos_udp* udp)
+{
+  if (udp != NULL)
+  {
+    DTNMOS_CLOSE_SOCKET(udp->socket);
+    free(udp);
+  }
 }

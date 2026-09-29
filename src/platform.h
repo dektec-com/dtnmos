@@ -41,3 +41,26 @@ int dtnmos_address_toward(const char* host, char* address, size_t size);
 
 // Returns a TCP port that is free on the address host now, or 0 when there is none.
 uint16_t dtnmos_free_port(const char* host);
+
+// An IPv4 datagram socket, for the queries of multicast DNS.
+typedef struct dtnmos_udp dtnmos_udp;
+
+// Opens a socket on a free port of bind_address, or of every address when it is null,
+// whose multicast leaves through the interface of interface_address, or of the default
+// route when it is null, with a hop limit of 255 and loopback. Returns null on failure.
+dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_address);
+
+// Returns the port the socket is bound to.
+uint16_t dtnmos_udp_port(const dtnmos_udp* udp);
+
+// Sends length bytes of data to address and port; returns 0 on failure.
+int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const void* data,
+                    size_t length);
+
+// Waits up to timeout_ms for a datagram and receives it into buffer; returns its length,
+// 0 when none came in time, or -1 on failure. from_address, when not null, receives the
+// address of the sender as text, and from_port its port.
+long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
+                        char* from_address, size_t from_size, uint16_t* from_port);
+
+void dtnmos_udp_close(dtnmos_udp* udp);
