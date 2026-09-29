@@ -56,6 +56,7 @@ add_library(
   dtnmos
   src/common.c
   src/connection.c
+  src/controller.c
   src/curl.c
   src/discovery.c
   src/dns.c

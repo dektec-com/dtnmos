@@ -4,7 +4,8 @@ A small C library that reads and writes the SDP of SMPTE ST 2110 flows: ST 2110-
 uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary data. It
 also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP, and finds the
 registries on the network with multicast DNS. And it is an NMOS node that registers senders
-and receivers with a registry (IS-04) and serves its Node API.
+and receivers with a registry (IS-04) and serves its Node API, and a controller that
+connects the receivers of a registry to its senders (IS-05).
 It is the NMOS support of gst-dektec, and is meant to be used by other projects as well,
 such as CDTAPI and FFmpeg (plan [0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
 
@@ -139,6 +140,33 @@ if (dtnmos_query_create(&config, &query, &error) == DTNMOS_OK)
 An HTTP function of its own receives a `dtnmos_http_request` and fills the response with
 `dtnmos_http_response_set_status()`, `_add_header()` and `_set_body()`; it returns
 `DTNMOS_OK` whenever the server answered, whatever the status.
+
+`dtnmos_query_receivers()` and `dtnmos_query_find_receiver()` list and find the receivers
+of a registry the same way, each with the sender it is subscribed to.
+
+## Connecting a receiver
+
+A controller connects a receiver of the registry to a sender, each by its ID or label, and
+disconnects it (`dtnmos/controller.h`). It finds the Connection API of the receiver through
+the control `urn:x-nmos:control:sr-ctrl/v1.1` of its device, and activates at once its
+staged parameters with the sender and the SDP of the sender as transport file. The
+requests to the node go through the HTTP function of the query:
+
+```c
+#include <dtnmos/controller.h>
+
+dtnmos_connection connection = {0};
+if (dtnmos_connect(query, "monitor", "camera 1", &connection, &error) == DTNMOS_OK)
+{
+  // connection.receiver and connection.sender as the registry lists them, and
+  // connection.sdp, the transport file the receiver was given.
+  dtnmos_connection_clear(&connection);
+}
+dtnmos_disconnect(query, "monitor", NULL, &error);
+```
+
+A sender of another kind of media than the receiver, video, audio or data, is refused
+before the node is asked; what the node refuses comes back with the error it gave.
 
 ## Finding registries
 

@@ -91,6 +91,43 @@ DTNMOS_API dtnmos_result dtnmos_query_sender_sdp(dtnmos_query* query,
                                                  const dtnmos_sender_info* sender,
                                                  dtnmos_sdp** sdp, dtnmos_error* error);
 
+// A receiver as the registry lists it. Strings the registry leaves out are empty.
+typedef struct dtnmos_receiver_info
+{
+    dtnmos_id id;
+    dtnmos_id device_id;
+    dtnmos_string label;
+    dtnmos_string description;
+    dtnmos_media media;      // from its format; DTNMOS_MEDIA_OTHER for another one
+    dtnmos_string transport; // e.g. "urn:x-nmos:transport:rtp"
+    dtnmos_id sender_id;     // the sender it is subscribed to; empty when none
+    int active;              // whether that subscription is active
+} dtnmos_receiver_info;
+
+DTNMOS_API void dtnmos_receiver_info_clear(dtnmos_receiver_info* receiver);
+DTNMOS_API dtnmos_result dtnmos_receiver_info_copy(dtnmos_receiver_info* target,
+                                                   const dtnmos_receiver_info* source);
+
+// The receivers of a registry, which the list owns.
+typedef struct dtnmos_receiver_list dtnmos_receiver_list;
+
+DTNMOS_API size_t dtnmos_receiver_list_count(const dtnmos_receiver_list* list);
+DTNMOS_API const dtnmos_receiver_info*
+dtnmos_receiver_list_at(const dtnmos_receiver_list* list, size_t index);
+DTNMOS_API void dtnmos_receiver_list_free(dtnmos_receiver_list* list);
+
+// Lists the receivers of the registry, following its paging.
+DTNMOS_API dtnmos_result dtnmos_query_receivers(dtnmos_query* query,
+                                                dtnmos_receiver_list** list,
+                                                dtnmos_error* error);
+
+// Finds the receiver whose ID is id_or_label when it is a UUID, or else whose label it
+// is, as dtnmos_query_find_sender() finds a sender, with the same errors.
+DTNMOS_API dtnmos_result dtnmos_query_find_receiver(dtnmos_query* query,
+                                                    const char* id_or_label,
+                                                    dtnmos_receiver_info* receiver,
+                                                    dtnmos_error* error);
+
 #ifdef __cplusplus
 }
 #endif

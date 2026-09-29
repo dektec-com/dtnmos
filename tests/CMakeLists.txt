@@ -9,6 +9,7 @@ add_executable(
   main.c
   common-test.c
   connection-test.c
+  controller-test.c
   discovery-test.c
   node-test.c
   query-test.c
