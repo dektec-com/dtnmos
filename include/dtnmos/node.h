@@ -75,8 +75,10 @@ typedef struct dtnmos_receiver_config
 } dtnmos_receiver_config;
 
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
-// receives, from the transport file or the transport parameters; has_flow is 0 when the
-// activation only disables it. The node owns what it passes to a callback, which copies
+// receives: the flow of the media of the receiver in the transport file, with the
+// multicast_ip, source_ip and destination_port of the transport parameters over it.
+// has_flow is 0 when the staged parameters hold no transport file, as the parameters
+// alone do not describe a flow. The node owns what it passes to a callback, which copies
 // what it keeps with dtnmos_flow_copy().
 typedef struct dtnmos_receiver_activation
 {
@@ -86,7 +88,8 @@ typedef struct dtnmos_receiver_activation
   dtnmos_id sender_id;  // empty when not given
 } dtnmos_receiver_activation;
 
-// What a controller activates on a sender: whether it sends, and where to.
+// What a controller activates on a sender: whether it sends, and where to, "auto"
+// resolved to where it sends now; source_ip is empty for "auto".
 typedef struct dtnmos_sender_activation
 {
   int master_enable;

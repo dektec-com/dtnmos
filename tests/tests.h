@@ -35,7 +35,11 @@
   DTNMOS_TEST(node_registers_again_when_the_registry_lost_it) \
   DTNMOS_TEST(node_deletes_what_is_removed_and_what_it_had)   \
   DTNMOS_TEST(node_answers_its_node_api_and_transport_files)  \
-  DTNMOS_TEST(node_serves_itself_over_http)
+  DTNMOS_TEST(node_serves_itself_over_http)                   \
+  DTNMOS_TEST(connection_answers_its_parameters)              \
+  DTNMOS_TEST(connection_connects_a_receiver)                 \
+  DTNMOS_TEST(connection_moves_a_sender)                      \
+  DTNMOS_TEST(connection_refuses_bad_patches)
 
 #define DTNMOS_TEST(name) void name(void);
 DTNMOS_TESTS

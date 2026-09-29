@@ -169,3 +169,27 @@ if (dtnmos_node_create(&config, &node, NULL) == DTNMOS_OK)
   dtnmos_node_destroy(node);
 }
 ```
+
+## Being connected
+
+The node answers the Connection API of IS-05 in `dtnmos_node_handle()` as well. When a
+controller activates a sender or receiver, the node calls the function given to
+`dtnmos_node_add_sender()` or `dtnmos_node_add_receiver()`, without its lock, and makes the
+staged parameters the active ones only when that function succeeds:
+
+```c
+static dtnmos_result connect_receiver(void* user, const dtnmos_id* receiver,
+                                      const dtnmos_receiver_activation* activation,
+                                      dtnmos_error* error)
+{
+  if (activation->has_flow)
+  {
+    // Receive activation->flow, e.g. dtnmos_string_get(&activation->flow.destination_ip).
+  }
+  // Receive, or stop receiving, as activation->master_enable says.
+  return DTNMOS_OK;
+}
+```
+
+Immediate activation is supported; a scheduled activation and the bulk interface are
+answered with 501.

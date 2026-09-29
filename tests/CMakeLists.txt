@@ -3,7 +3,7 @@
 # The dtnmos tests, one ctest per test function of tests.h, and the tests that install dtnmos
 # and use it through find_package.
 
-add_executable(dtnmos_tests main.c common-test.c node-test.c query-test.c sdp-test.c)
+add_executable(dtnmos_tests main.c common-test.c connection-test.c node-test.c query-test.c sdp-test.c)
 target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
 # The tests of the JSON parser reach the internal headers of the library.
 target_include_directories(dtnmos_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
@@ -13,7 +13,9 @@ endif()
 dtnmos_set_warnings(dtnmos_tests)
 
 # The names of the tests are read from their list, so that a new one needs no entry here.
-# The list continues its lines with a backslash, so the file is read whole.
+# The list continues its lines with a backslash, so the file is read whole, and a change
+# of it configures again.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS tests.h)
 file(READ tests.h _dtnmos_tests_header)
 string(REGEX MATCHALL "DTNMOS_TEST\\([a-z0-9_]+\\)" _dtnmos_test_calls
              "${_dtnmos_tests_header}")
