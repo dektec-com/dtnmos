@@ -42,7 +42,9 @@ if(DTNMOS_INSTALL)
   # A dtnmos with libcurl or civetweb finds them where the build found them.
   set(_package_prefix_path "${_package_dir}/prefix")
   if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
-    string(APPEND _package_prefix_path "$<SEMICOLON>${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    string(
+      APPEND _package_prefix_path
+      "$<SEMICOLON>${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
   endif()
   add_test(NAME dtnmos.package.install
            COMMAND "${CMAKE_COMMAND}" --install "${PROJECT_BINARY_DIR}" --prefix
@@ -53,8 +55,12 @@ if(DTNMOS_INSTALL)
       "${CMAKE_CTEST_COMMAND}" --build-and-test "${CMAKE_CURRENT_SOURCE_DIR}/package"
       "${_package_dir}/build" --build-generator "${CMAKE_GENERATOR}" --build-options
       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
-      "-DCMAKE_PREFIX_PATH=${_package_prefix_path}" "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
-      "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" --test-command dtnmos-package-test)
+      "-DCMAKE_PREFIX_PATH=${_package_prefix_path}"
+      "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
+      "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
+      --test-command dtnmos-package-test)
   set_tests_properties(dtnmos.package.install PROPERTIES FIXTURES_SETUP dtnmos-package)
-  set_tests_properties(dtnmos.package.find-package PROPERTIES FIXTURES_REQUIRED dtnmos-package)
+  set_tests_properties(
+    dtnmos.package.find-package
+    PROPERTIES FIXTURES_REQUIRED dtnmos-package)
 endif()

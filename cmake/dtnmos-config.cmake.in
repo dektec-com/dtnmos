@@ -6,8 +6,8 @@
 
 @PACKAGE_INIT@
 
-# A static dtnmos links what it is built with into its consumers: libcurl, civetweb and the
-# threads of the platform.
+# A static dtnmos links what it is built with into its consumers: libcurl, civetweb and
+# the threads of the platform.
 include(CMakeFindDependencyMacro)
 set(DTNMOS_WITH_CURL @DTNMOS_WITH_CURL@)
 set(DTNMOS_WITH_SERVER @DTNMOS_WITH_SERVER@)

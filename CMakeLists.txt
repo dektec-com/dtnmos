@@ -19,11 +19,16 @@ set(CMAKE_C_EXTENSIONS OFF)
 include(GNUInstallDirs)
 
 option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
-option(DTNMOS_INSTALL "Install the dtnmos library, headers, CMake package and pkg-config file"
-       ${PROJECT_IS_TOP_LEVEL})
+option(
+  DTNMOS_INSTALL
+  "Install the dtnmos library, headers, CMake package and pkg-config file"
+  ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 option(DTNMOS_WITH_CURL "Build the HTTP transport on libcurl, dtnmos_curl_http()" OFF)
-option(DTNMOS_WITH_SERVER "Build the server of the node on civetweb, dtnmos_node_serve()" OFF)
+option(
+  DTNMOS_WITH_SERVER
+  "Build the server of the node on civetweb, dtnmos_node_serve()"
+  OFF)
 # The flags of the sanitizers the library is built with, which the package test builds its
 # consumer with as well; a project that builds dtnmos with sanitizers sets them.
 set(DTNMOS_SANITIZER_FLAGS
@@ -38,7 +43,9 @@ function(dtnmos_set_warnings target)
       target_compile_options(${target} PRIVATE /WX)
     endif()
   else()
-    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
+    target_compile_options(
+      ${target}
+      PRIVATE -Wall -Wextra -Wpedantic -Wshadow -Wconversion)
     if(DTNMOS_WARNINGS_AS_ERRORS)
       target_compile_options(${target} PRIVATE -Werror)
     endif()
@@ -116,8 +123,9 @@ if(DTNMOS_INSTALL)
   configure_package_config_file(
     cmake/dtnmos-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
     INSTALL_DESTINATION "${_dtnmos_package_dir}")
-  write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
-                                   COMPATIBILITY SameMinorVersion)
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
+    COMPATIBILITY SameMinorVersion)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
                 "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
           DESTINATION "${_dtnmos_package_dir}")
