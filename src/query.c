@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dtnmos/subscription.h"
 #include "internal.h"
 #include "json.h"
 #include "query-internal.h"
@@ -210,6 +211,13 @@ static void log_message(dtnmos_query* query, dtnmos_log_level level, const char*
 const char* dtnmos_query_base(const dtnmos_query* query)
 {
     return query->base;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_timeout -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+uint32_t dtnmos_query_timeout(const dtnmos_query* query)
+{
+    return query->timeout_ms;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_request -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1062,4 +1070,27 @@ dtnmos_result dtnmos_query_sender_sdp(dtnmos_query* query,
     }
     dtnmos_string_clear(&text);
     return result;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sender_info_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+dtnmos_result dtnmos_sender_info_parse(const char* json, size_t length,
+                                       dtnmos_sender_info* sender, dtnmos_error* error)
+{
+    if (json == NULL || sender == NULL)
+    {
+        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+                           "dtnmos_sender_info_parse() needs JSON and a sender.");
+    }
+    dtnmos_sender_info_clear(sender);
+    dtnmos_json* resource = NULL;
+    if (dtnmos_json_parse(json, length, &resource, error) != DTNMOS_OK ||
+        resource->type != DTNMOS_JSON_OBJECT)
+    {
+        dtnmos_json_free(resource);
+        return dtnmos_fail(error, DTNMOS_E_PARSE, "The JSON of a sender is no object.");
+    }
+    const dtnmos_result result = read_sender(resource, sender);
+    dtnmos_json_free(resource);
+    return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory(error);
 }

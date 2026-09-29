@@ -9,12 +9,16 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "dtnmos/query.h"
 #include "json.h"
 
 // Returns the base URL of the Query API of query, ending in a slash.
 const char* dtnmos_query_base(const dtnmos_query* query);
+
+// Returns how long a request of query may take, in milliseconds.
+uint32_t dtnmos_query_timeout(const dtnmos_query* query);
 
 // Sends a request with the HTTP function and the timeout of query, and logs it; the body
 // may be null. Fails only when the HTTP function does, whatever status the answer has.

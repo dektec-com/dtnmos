@@ -58,6 +58,7 @@ add_library(
   src/connection.c
   src/controller.c
   src/curl.c
+  src/curl-websocket.c
   src/discovery.c
   src/dns.c
   src/flow.c
@@ -71,6 +72,7 @@ add_library(
   src/server.c
   src/sha1.c
   src/string.c
+  src/subscription.c
   src/text.c)
 add_library(dtnmos::dtnmos ALIAS dtnmos)
 target_include_directories(

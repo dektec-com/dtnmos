@@ -13,12 +13,17 @@ add_executable(
   discovery-test.c
   node-test.c
   query-test.c
-  sdp-test.c)
+  sdp-test.c
+  subscription-test.c)
 target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
 # The tests of the JSON parser reach the internal headers of the library.
 target_include_directories(dtnmos_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
 if(MSVC)
   target_compile_definitions(dtnmos_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+# The test of the WebSocket on libcurl serves one on a socket of its own.
+if(WIN32)
+  target_link_libraries(dtnmos_tests PRIVATE ws2_32)
 endif()
 dtnmos_set_warnings(dtnmos_tests)
 

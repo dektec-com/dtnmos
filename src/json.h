@@ -53,3 +53,7 @@ const char* dtnmos_json_member_text(const dtnmos_json* value, const char* key);
 
 // Appends text as a JSON string, quoted and escaped.
 void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text);
+
+// Appends value as JSON text, without spaces, which dtnmos_json_parse() reads back as the
+// same value.
+void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value);

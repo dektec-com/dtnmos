@@ -5,7 +5,8 @@ uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary 
 also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP, and finds the
 registries on the network with multicast DNS. And it is an NMOS node that registers senders
 and receivers with a registry (IS-04) and serves its Node API, and a controller that
-connects the receivers of a registry to its senders (IS-05).
+connects the receivers of a registry to its senders (IS-05). It follows a registry
+through the subscriptions of its Query API.
 It is the NMOS support of gst-dektec, and is meant to be used by other projects as well,
 such as CDTAPI and FFmpeg (plan [0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
 
@@ -167,6 +168,44 @@ dtnmos_disconnect(query, "monitor", NULL, &error);
 
 A sender of another kind of media than the receiver, video, audio or data, is refused
 before the node is asked; what the node refuses comes back with the error it gave.
+
+## Following a registry
+
+A subscription of the Query API tells what changes in the registry as it happens
+(`dtnmos/subscription.h`): first every resource of its path as it is, then each one that
+is added, modified or removed, with its JSON before and after. The messages come over a
+WebSocket, which, as HTTP, goes through functions the caller passes in; with
+`-DDTNMOS_WITH_CURL=ON` and a libcurl with WebSockets, `dtnmos_curl_websocket()` is one.
+dtnmos starts no thread: the caller polls.
+
+```c
+#include <dtnmos/subscription.h>
+
+static void on_change(void* user, const dtnmos_change* change)
+{
+  // change->kind, change->id, and change->pre and change->post, the JSON of the
+  // resource, which dtnmos_sender_info_parse() reads for a sender.
+}
+
+dtnmos_subscription_config config = {0};
+config.size = sizeof(config);
+config.resource_path = "/senders";
+config.on_change = on_change;  // websocket left null: dtnmos_curl_websocket()
+dtnmos_subscription* subscription = NULL;
+if (dtnmos_subscription_create(query, &config, &subscription, &error) == DTNMOS_OK)
+{
+  dtnmos_result result = DTNMOS_OK;
+  while (result == DTNMOS_OK || result == DTNMOS_E_TIMEOUT)
+  {
+    result = dtnmos_subscription_poll(subscription, 1000, &error);
+  }
+  // DTNMOS_E_NETWORK: the WebSocket closed; a new subscription starts again.
+  dtnmos_subscription_destroy(subscription);
+}
+```
+
+A message the subscription cannot read fails its poll with `DTNMOS_E_PARSE`, after which
+it can be polled again.
 
 ## Finding registries
 

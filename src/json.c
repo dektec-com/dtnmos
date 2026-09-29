@@ -556,3 +556,55 @@ void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
     }
     DTNMOS_APPEND_LITERAL(buffer, "\"");
 }
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value)
+{
+    switch (value->type)
+    {
+    case DTNMOS_JSON_NULL:
+        DTNMOS_APPEND_LITERAL(buffer, "null");
+        break;
+    case DTNMOS_JSON_FALSE:
+        DTNMOS_APPEND_LITERAL(buffer, "false");
+        break;
+    case DTNMOS_JSON_TRUE:
+        DTNMOS_APPEND_LITERAL(buffer, "true");
+        break;
+    case DTNMOS_JSON_NUMBER:
+        // Seventeen digits give a double back exactly; a whole number has none after the
+        // point.
+        dtnmos_buffer_printf(buffer, "%.17g", value->number);
+        break;
+    case DTNMOS_JSON_STRING:
+        dtnmos_json_write_string(buffer, value->string);
+        break;
+    case DTNMOS_JSON_ARRAY:
+        DTNMOS_APPEND_LITERAL(buffer, "[");
+        for (size_t i = 0; i < value->count; ++i)
+        {
+            if (i > 0)
+            {
+                DTNMOS_APPEND_LITERAL(buffer, ",");
+            }
+            dtnmos_json_write(buffer, &value->items[i]);
+        }
+        DTNMOS_APPEND_LITERAL(buffer, "]");
+        break;
+    case DTNMOS_JSON_OBJECT:
+        DTNMOS_APPEND_LITERAL(buffer, "{");
+        for (size_t i = 0; i < value->count; ++i)
+        {
+            if (i > 0)
+            {
+                DTNMOS_APPEND_LITERAL(buffer, ",");
+            }
+            dtnmos_json_write_string(buffer, value->keys[i]);
+            DTNMOS_APPEND_LITERAL(buffer, ":");
+            dtnmos_json_write(buffer, &value->items[i]);
+        }
+        DTNMOS_APPEND_LITERAL(buffer, "}");
+        break;
+    }
+}
