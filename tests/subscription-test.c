@@ -23,6 +23,8 @@
 typedef SOCKET test_socket;
     #define TEST_NO_SOCKET INVALID_SOCKET
     #define test_close_socket closesocket
+    // The length that send() and recv() take.
+    #define TEST_LENGTH(n) ((int)(n))
 #else
     #include <arpa/inet.h>
     #include <netinet/in.h>
@@ -31,6 +33,7 @@ typedef SOCKET test_socket;
 typedef int test_socket;
     #define TEST_NO_SOCKET (-1)
     #define test_close_socket close
+    #define TEST_LENGTH(n) ((size_t)(n))
 #endif
 
 #define BASE "http://registry.test/x-nmos/query/v1.3/"
@@ -402,11 +405,11 @@ static void send_frame(test_socket client, int opcode, int last, const char* pay
         }
         size = 10;
     }
-    send(client, (const char*)header, (int)size, 0);
+    send(client, (const char*)header, TEST_LENGTH(size), 0);
     size_t sent = 0;
     while (sent < length)
     {
-        const int now = (int)send(client, payload + sent, (int)(length - sent), 0);
+        const int now = (int)send(client, payload + sent, TEST_LENGTH(length - sent), 0);
         if (now <= 0)
         {
             return;
@@ -430,8 +433,8 @@ static void serve_client(void* argument)
     request[0] = '\0';
     while (length < sizeof(request) - 1 && strstr(request, "\r\n\r\n") == NULL)
     {
-        const int now =
-            (int)recv(client, request + length, (int)(sizeof(request) - 1 - length), 0);
+        const int now = (int)recv(client, request + length,
+                                  TEST_LENGTH(sizeof(request) - 1 - length), 0);
         if (now <= 0)
         {
             break;
@@ -459,7 +462,7 @@ static void serve_client(void* argument)
                      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
                      "Connection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
                      accept_key);
-        send(client, answer, answer_length, 0);
+        send(client, answer, TEST_LENGTH(answer_length), 0);
         server->handshake_ok = 1;
 
         // A message in two fragments with a ping between them, one of 70000 bytes, and
@@ -477,7 +480,7 @@ static void serve_client(void* argument)
         send_frame(client, 0x8, 1, "\x03\xe8", 2);
         // Wait for the client to close, so that nothing is lost in a reset.
         char rest[256];
-        while (recv(client, rest, sizeof(rest), 0) > 0)
+        while (recv(client, rest, TEST_LENGTH(sizeof(rest)), 0) > 0)
         {
         }
     }
