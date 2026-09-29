@@ -19,28 +19,28 @@ typedef struct dtnmos_query dtnmos_query;
 
 typedef struct dtnmos_query_config
 {
-  size_t size;               // sizeof(dtnmos_query_config)
-  const char* registry_url;  // base URL of the registry, e.g. "http://registry.local"
-  const char*
-      api_version;      // of the Query API; "v1.3" when null, the only one accepted yet
-  dtnmos_http_fn http;  // e.g. dtnmos_curl_http
-  void* http_user;
-  uint32_t timeout_ms;  // of each request; 5000 when 0
-  dtnmos_log_fn log;    // optional
-  void* log_user;
+    size_t size;              // sizeof(dtnmos_query_config)
+    const char* registry_url; // base URL of the registry, e.g. "http://registry.local"
+    const char*
+        api_version;     // of the Query API; "v1.3" when null, the only one accepted yet
+    dtnmos_http_fn http; // e.g. dtnmos_curl_http
+    void* http_user;
+    uint32_t timeout_ms; // of each request; 5000 when 0
+    dtnmos_log_fn log;   // optional
+    void* log_user;
 } dtnmos_query_config;
 
 // A sender as the registry lists it. Strings the registry leaves out are empty.
 typedef struct dtnmos_sender_info
 {
-  dtnmos_id id;
-  dtnmos_id flow_id;  // empty when the sender has no flow
-  dtnmos_id device_id;
-  dtnmos_string label;
-  dtnmos_string description;
-  dtnmos_media media;           // from its flow; DTNMOS_MEDIA_OTHER without one
-  dtnmos_string transport;      // e.g. "urn:x-nmos:transport:rtp.mcast"
-  dtnmos_string manifest_href;  // the URL of its SDP; empty when it has none
+    dtnmos_id id;
+    dtnmos_id flow_id; // empty when the sender has no flow
+    dtnmos_id device_id;
+    dtnmos_string label;
+    dtnmos_string description;
+    dtnmos_media media;          // from its flow; DTNMOS_MEDIA_OTHER without one
+    dtnmos_string transport;     // e.g. "urn:x-nmos:transport:rtp.mcast"
+    dtnmos_string manifest_href; // the URL of its SDP; empty when it has none
 } dtnmos_sender_info;
 
 DTNMOS_API void dtnmos_sender_info_clear(dtnmos_sender_info* sender);

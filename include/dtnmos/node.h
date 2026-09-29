@@ -26,52 +26,53 @@ typedef struct dtnmos_node dtnmos_node;
 
 typedef struct dtnmos_node_config
 {
-  size_t size;   // sizeof(dtnmos_node_config)
-  dtnmos_id id;  // stable, e.g. from dtnmos_id_from_name()
-  const char* label;
-  const char* description;
-  const char* hostname;
-  // The address the Node and the Connection API are reached at; null finds the address of
-  // this host on the way to the registry.
-  const char* api_host;
-  uint16_t api_port;             // 0 lets dtnmos_node_serve() take any free port
-  const char* registration_url;  // base URL of the registry, e.g. "http://registry.local"
-  const char* api_version;       // of IS-04; "v1.3" when null, the only one accepted yet
-  dtnmos_http_fn http;           // for the requests to the registry
-  void* http_user;
-  uint32_t timeout_ms;    // of each request to the registry; 5000 when 0
-  uint32_t heartbeat_ms;  // 5000 when 0
-  dtnmos_log_fn log;      // optional
-  void* log_user;
+    size_t size;  // sizeof(dtnmos_node_config)
+    dtnmos_id id; // stable, e.g. from dtnmos_id_from_name()
+    const char* label;
+    const char* description;
+    const char* hostname;
+    // The address the Node and the Connection API are reached at; null finds the address
+    // of this host on the way to the registry.
+    const char* api_host;
+    uint16_t api_port; // 0 lets dtnmos_node_serve() take any free port
+    const char*
+        registration_url;    // base URL of the registry, e.g. "http://registry.local"
+    const char* api_version; // of IS-04; "v1.3" when null, the only one accepted yet
+    dtnmos_http_fn http;     // for the requests to the registry
+    void* http_user;
+    uint32_t timeout_ms;   // of each request to the registry; 5000 when 0
+    uint32_t heartbeat_ms; // 5000 when 0
+    dtnmos_log_fn log;     // optional
+    void* log_user;
 } dtnmos_node_config;
 
 typedef struct dtnmos_device_config
 {
-  size_t size;
-  dtnmos_id id;
-  const char* label;  // e.g. "DTA-2110 2110000076 port 1"
-  const char* description;
+    size_t size;
+    dtnmos_id id;
+    const char* label; // e.g. "DTA-2110 2110000076 port 1"
+    const char* description;
 } dtnmos_device_config;
 
 typedef struct dtnmos_sender_config
 {
-  size_t size;
-  dtnmos_id id;
-  dtnmos_id device_id;
-  const char* label;
-  const char* description;
-  const dtnmos_flow* flow;  // what it sends, video or audio, written as its SDP; copied
-  const char* source_ip;    // the address it sends from, in its SDP
+    size_t size;
+    dtnmos_id id;
+    dtnmos_id device_id;
+    const char* label;
+    const char* description;
+    const dtnmos_flow* flow; // what it sends, video or audio, written as its SDP; copied
+    const char* source_ip;   // the address it sends from, in its SDP
 } dtnmos_sender_config;
 
 typedef struct dtnmos_receiver_config
 {
-  size_t size;
-  dtnmos_id id;
-  dtnmos_id device_id;
-  const char* label;
-  const char* description;
-  dtnmos_media media;  // video or audio
+    size_t size;
+    dtnmos_id id;
+    dtnmos_id device_id;
+    const char* label;
+    const char* description;
+    dtnmos_media media; // video or audio
 } dtnmos_receiver_config;
 
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
@@ -82,20 +83,20 @@ typedef struct dtnmos_receiver_config
 // what it keeps with dtnmos_flow_copy().
 typedef struct dtnmos_receiver_activation
 {
-  int master_enable;
-  int has_flow;
-  dtnmos_flow flow;
-  dtnmos_id sender_id;  // empty when not given
+    int master_enable;
+    int has_flow;
+    dtnmos_flow flow;
+    dtnmos_id sender_id; // empty when not given
 } dtnmos_receiver_activation;
 
 // What a controller activates on a sender: whether it sends, and where to, "auto"
 // resolved to where it sends now; source_ip is empty for "auto".
 typedef struct dtnmos_sender_activation
 {
-  int master_enable;
-  dtnmos_string destination_ip;
-  uint16_t destination_port;
-  dtnmos_string source_ip;
+    int master_enable;
+    dtnmos_string destination_ip;
+    uint16_t destination_port;
+    dtnmos_string source_ip;
 } dtnmos_sender_activation;
 
 // Called when a controller activates a receiver or a sender. The callback applies it and

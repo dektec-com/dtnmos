@@ -17,21 +17,21 @@ extern "C"
 // A header of a request or a response.
 typedef struct dtnmos_http_header
 {
-  const char* name;
-  const char* value;
+    const char* name;
+    const char* value;
 } dtnmos_http_header;
 
 // A request: of the library to a server for a client request, or of a client to the
 // library for a request the library answers.
 typedef struct dtnmos_http_request
 {
-  size_t size;         // sizeof(dtnmos_http_request)
-  const char* method;  // "GET", "POST", "PUT", "PATCH" or "DELETE"
-  const char* url;     // absolute URL of a client request; path and query of another
-  const char* content_type;  // of body; null without body
-  const char* body;
-  size_t body_length;
-  uint32_t timeout_ms;  // of a client request: how long it may take in all
+    size_t size;        // sizeof(dtnmos_http_request)
+    const char* method; // "GET", "POST", "PUT", "PATCH" or "DELETE"
+    const char* url;    // absolute URL of a client request; path and query of another
+    const char* content_type; // of body; null without body
+    const char* body;
+    size_t body_length;
+    uint32_t timeout_ms; // of a client request: how long it may take in all
 } dtnmos_http_request;
 
 // A response: its status, headers and body, which it owns.
@@ -68,8 +68,8 @@ DTNMOS_API const char* dtnmos_http_response_body(const dtnmos_http_response* res
                                                  size_t* length);
 
 // Returns the content type of the body; "" when it has none.
-DTNMOS_API const char* dtnmos_http_response_content_type(
-    const dtnmos_http_response* response);
+DTNMOS_API const char*
+dtnmos_http_response_content_type(const dtnmos_http_response* response);
 
 // Returns the number of headers, and the header at index, whose strings the response
 // owns.
@@ -79,8 +79,8 @@ dtnmos_http_response_header(const dtnmos_http_response* response, size_t index);
 
 // Returns the value of the first header called name, compared without regard to case,
 // or null when there is none.
-DTNMOS_API const char* dtnmos_http_response_find_header(
-    const dtnmos_http_response* response, const char* name);
+DTNMOS_API const char*
+dtnmos_http_response_find_header(const dtnmos_http_response* response, const char* name);
 
 // Performs a client request and fills response, which is empty. Returns DTNMOS_OK when
 // an answer came, whatever its status; DTNMOS_E_TIMEOUT when none came in time, and

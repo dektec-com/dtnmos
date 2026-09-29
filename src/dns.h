@@ -11,20 +11,20 @@
 
 enum
 {
-  DTNMOS_DNS_TYPE_A = 1,
-  DTNMOS_DNS_TYPE_PTR = 12,
-  DTNMOS_DNS_TYPE_TXT = 16,
-  DTNMOS_DNS_TYPE_SRV = 33,
-  DTNMOS_DNS_CLASS_IN = 1,
-  // The longest name as text, without the final dot, and its null character.
-  DTNMOS_DNS_NAME_SIZE = 256
+    DTNMOS_DNS_TYPE_A = 1,
+    DTNMOS_DNS_TYPE_PTR = 12,
+    DTNMOS_DNS_TYPE_TXT = 16,
+    DTNMOS_DNS_TYPE_SRV = 33,
+    DTNMOS_DNS_CLASS_IN = 1,
+    // The longest name as text, without the final dot, and its null character.
+    DTNMOS_DNS_NAME_SIZE = 256
 };
 
 // A question of a query: a name, e.g. "_nmos-query._tcp.local", and the type of record.
 typedef struct dtnmos_dns_question
 {
-  const char* name;
-  uint16_t type;
+    const char* name;
+    uint16_t type;
 } dtnmos_dns_question;
 
 // Writes a query with id and count questions into buffer; returns its length, or 0 when
@@ -37,16 +37,16 @@ size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
 // does not use stays zero.
 typedef struct dtnmos_dns_record
 {
-  char name[DTNMOS_DNS_NAME_SIZE];
-  uint16_t type;
-  uint32_t ttl;
-  char target[DTNMOS_DNS_NAME_SIZE];  // of a PTR or SRV record
-  uint16_t priority;                  // of an SRV record
-  uint16_t weight;
-  uint16_t port;
-  uint8_t address[4];  // of an A record
-  const uint8_t* txt;  // of a TXT record: its data, within the message
-  size_t txt_length;
+    char name[DTNMOS_DNS_NAME_SIZE];
+    uint16_t type;
+    uint32_t ttl;
+    char target[DTNMOS_DNS_NAME_SIZE]; // of a PTR or SRV record
+    uint16_t priority;                 // of an SRV record
+    uint16_t weight;
+    uint16_t port;
+    uint8_t address[4]; // of an A record
+    const uint8_t* txt; // of a TXT record: its data, within the message
+    size_t txt_length;
 } dtnmos_dns_record;
 
 // Reads a response of length bytes and calls record() for each record of its answer,

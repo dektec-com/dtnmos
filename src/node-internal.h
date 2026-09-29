@@ -13,93 +13,93 @@
 
 typedef struct node_device
 {
-  dtnmos_id id;
-  char* label;
-  char* description;
-  char version[32];
-  int registered;      // the registry holds this version
-  int was_registered;  // the registry held a version, which a removal deletes
+    dtnmos_id id;
+    char* label;
+    char* description;
+    char version[32];
+    int registered;     // the registry holds this version
+    int was_registered; // the registry held a version, which a removal deletes
 } node_device;
 
 typedef struct node_sender
 {
-  dtnmos_id id;
-  dtnmos_id device_id;
-  dtnmos_id source_id;  // derived from id: the source and flow the sender brings along
-  dtnmos_id flow_id;
-  dtnmos_id receiver_id;  // the receiver a controller connected it to, or empty
-  char* label;
-  char* description;
-  char* source_ip;
-  dtnmos_flow flow;
-  dtnmos_sender_activate_fn activate;
-  void* user;
-  char version[32];
-  int registered;      // with its source and flow
-  int was_registered;  // the registry held a version, which a removal deletes
-  int master_enable;
-  uint64_t session_id;  // of its SDP
-  uint64_t session_version;
-  void* connection;  // the staged parameters of IS-05, which connection.c owns
+    dtnmos_id id;
+    dtnmos_id device_id;
+    dtnmos_id source_id; // derived from id: the source and flow the sender brings along
+    dtnmos_id flow_id;
+    dtnmos_id receiver_id; // the receiver a controller connected it to, or empty
+    char* label;
+    char* description;
+    char* source_ip;
+    dtnmos_flow flow;
+    dtnmos_sender_activate_fn activate;
+    void* user;
+    char version[32];
+    int registered;     // with its source and flow
+    int was_registered; // the registry held a version, which a removal deletes
+    int master_enable;
+    uint64_t session_id; // of its SDP
+    uint64_t session_version;
+    void* connection; // the staged parameters of IS-05, which connection.c owns
 } node_sender;
 
 typedef struct node_receiver
 {
-  dtnmos_id id;
-  dtnmos_id device_id;
-  dtnmos_id sender_id;  // the sender a controller connected it to, or empty
-  char* label;
-  char* description;
-  dtnmos_media media;
-  dtnmos_receiver_activate_fn activate;
-  void* user;
-  char version[32];
-  int registered;
-  int was_registered;
-  int master_enable;
-  void* connection;  // the staged and active parameters of IS-05, of connection.c
+    dtnmos_id id;
+    dtnmos_id device_id;
+    dtnmos_id sender_id; // the sender a controller connected it to, or empty
+    char* label;
+    char* description;
+    dtnmos_media media;
+    dtnmos_receiver_activate_fn activate;
+    void* user;
+    char version[32];
+    int registered;
+    int was_registered;
+    int master_enable;
+    void* connection; // the staged and active parameters of IS-05, of connection.c
 } node_receiver;
 
 typedef struct node_removal
 {
-  char type[16];  // the collection of the Registration API, e.g. "senders"
-  dtnmos_id id;
+    char type[16]; // the collection of the Registration API, e.g. "senders"
+    dtnmos_id id;
 } node_removal;
 
 struct dtnmos_node
 {
-  dtnmos_mutex* mutex;
-  dtnmos_id id;
-  char* label;
-  char* description;
-  char* hostname;
-  char* api_host;
-  uint16_t api_port;
-  char* registration;  // base URL of the Registration API, ending in /
-  dtnmos_http_fn http;
-  void* http_user;
-  uint32_t timeout_ms;
-  uint32_t heartbeat_ms;
-  dtnmos_log_fn log;
-  void* log_user;
-  char version[32];
-  uint64_t last_version;
-  int node_registered;
-  int closing;  // the node deletes what it registered and registers nothing more
-  uint64_t next_heartbeat_ms;
-  node_device* devices;
-  size_t device_count;
-  size_t device_capacity;
-  node_sender* senders;
-  size_t sender_count;
-  size_t sender_capacity;
-  node_receiver* receivers;
-  size_t receiver_count;
-  size_t receiver_capacity;
-  node_removal* removals;
-  size_t removal_count;
-  size_t removal_capacity;
-  void* server;  // of server.c, when the node serves itself
+    dtnmos_mutex* mutex;
+    dtnmos_id id;
+    char* label;
+    char* description;
+    char* hostname;
+    char* api_host;
+    uint16_t api_port;
+    char* registration; // base URL of the Registration API, ending in /
+    dtnmos_http_fn http;
+    void* http_user;
+    uint32_t timeout_ms;
+    uint32_t heartbeat_ms;
+    dtnmos_log_fn log;
+    void* log_user;
+    char version[32];
+    uint64_t last_version;
+    int node_registered;
+    int closing; // the node deletes what it registered and registers nothing more
+    uint64_t next_heartbeat_ms;
+    node_device* devices;
+    size_t device_count;
+    size_t device_capacity;
+    node_sender* senders;
+    size_t sender_count;
+    size_t sender_capacity;
+    node_receiver* receivers;
+    size_t receiver_count;
+    size_t receiver_capacity;
+    node_removal* removals;
+    size_t removal_count;
+    size_t removal_capacity;
+    void* server; // of server.c, when the node serves itself
 };
 
 void dtnmos_node_lock(dtnmos_node* node);

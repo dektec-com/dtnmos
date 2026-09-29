@@ -16,11 +16,11 @@ extern "C"
 // What a media section carries, from the encoding of its a=rtpmap.
 typedef enum dtnmos_media
 {
-  DTNMOS_MEDIA_VIDEO = 0,             // ST 2110-20, uncompressed video: raw (RFC 4175)
-  DTNMOS_MEDIA_AUDIO = 1,             // ST 2110-30 and -31: L16, L24 or AM824
-  DTNMOS_MEDIA_COMPRESSED_VIDEO = 2,  // ST 2110-22: jxsv, JPEG XS (RFC 9134)
-  DTNMOS_MEDIA_ANC = 3,               // ST 2110-40: smpte291, ancillary data (RFC 8331)
-  DTNMOS_MEDIA_OTHER = 99             // anything else, with its encoding and raw fmtp
+    DTNMOS_MEDIA_VIDEO = 0,            // ST 2110-20, uncompressed video: raw (RFC 4175)
+    DTNMOS_MEDIA_AUDIO = 1,            // ST 2110-30 and -31: L16, L24 or AM824
+    DTNMOS_MEDIA_COMPRESSED_VIDEO = 2, // ST 2110-22: jxsv, JPEG XS (RFC 9134)
+    DTNMOS_MEDIA_ANC = 3,              // ST 2110-40: smpte291, ancillary data (RFC 8331)
+    DTNMOS_MEDIA_OTHER = 99            // anything else, with its encoding and raw fmtp
 } dtnmos_media;
 
 // Returns the name of a media, e.g. "video"; a static string.
@@ -31,31 +31,31 @@ DTNMOS_API const char* dtnmos_media_name(dtnmos_media media);
 // transmitter_type "2110TPN"; a parameter the SDP does not give is 0 or empty.
 typedef struct dtnmos_video_format
 {
-  uint32_t width;
-  uint32_t height;
-  uint32_t rate_numerator;  // exactframerate, e.g. 30000/1001, or 25/1
-  uint32_t rate_denominator;
-  int interlaced;  // interlace
-  int segmented;   // segmented, PsF
-  uint32_t depth;  // bits per sample
-  dtnmos_string sampling;
-  dtnmos_string colorimetry;
-  dtnmos_string tcs;               // TCS
-  dtnmos_string range;             // RANGE
-  dtnmos_string packing_mode;      // PM
-  dtnmos_string ssn;               // SSN, e.g. "ST2110-20:2017"
-  dtnmos_string transmitter_type;  // TP
+    uint32_t width;
+    uint32_t height;
+    uint32_t rate_numerator; // exactframerate, e.g. 30000/1001, or 25/1
+    uint32_t rate_denominator;
+    int interlaced; // interlace
+    int segmented;  // segmented, PsF
+    uint32_t depth; // bits per sample
+    dtnmos_string sampling;
+    dtnmos_string colorimetry;
+    dtnmos_string tcs;              // TCS
+    dtnmos_string range;            // RANGE
+    dtnmos_string packing_mode;     // PM
+    dtnmos_string ssn;              // SSN, e.g. "ST2110-20:2017"
+    dtnmos_string transmitter_type; // TP
 } dtnmos_video_format;
 
 // An audio format as a=rtpmap, a=ptime and a=fmtp of ST 2110-30 state it.
 typedef struct dtnmos_audio_format
 {
-  dtnmos_string encoding;  // "L24", "L16" or "AM824"
-  uint32_t sample_rate;    // e.g. 48000
-  uint32_t channels;
-  uint32_t packet_time_ns;  // a=ptime: 1000000 for 1 ms, 125000 for 0.125 ms
-  dtnmos_string
-      channel_order;  // channel-order, e.g. "SMPTE2110.(ST,ST)"; empty if absent
+    dtnmos_string encoding; // "L24", "L16" or "AM824"
+    uint32_t sample_rate;   // e.g. 48000
+    uint32_t channels;
+    uint32_t packet_time_ns; // a=ptime: 1000000 for 1 ms, 125000 for 0.125 ms
+    dtnmos_string
+        channel_order; // channel-order, e.g. "SMPTE2110.(ST,ST)"; empty if absent
 } dtnmos_audio_format;
 
 // A compressed video format as ST 2110-22 states it: the raster and colour of ST
@@ -63,77 +63,77 @@ typedef struct dtnmos_audio_format
 // packetmode and transmode), and the bandwidth of b=AS.
 typedef struct dtnmos_compressed_video_format
 {
-  dtnmos_string encoding;  // e.g. "jxsv"
-  uint32_t width;
-  uint32_t height;
-  uint32_t rate_numerator;
-  uint32_t rate_denominator;
-  int interlaced;
-  int segmented;
-  uint32_t depth;
-  dtnmos_string sampling;
-  dtnmos_string colorimetry;
-  dtnmos_string tcs;
-  dtnmos_string range;
-  dtnmos_string ssn;
-  dtnmos_string transmitter_type;
-  dtnmos_string profile;
-  dtnmos_string level;
-  dtnmos_string sublevel;
-  uint32_t packet_mode;        // packetmode
-  uint32_t transmission_mode;  // transmode; 1 when absent, as RFC 9134 says
-  uint64_t bandwidth_kbps;     // b=AS; 0 when absent
+    dtnmos_string encoding; // e.g. "jxsv"
+    uint32_t width;
+    uint32_t height;
+    uint32_t rate_numerator;
+    uint32_t rate_denominator;
+    int interlaced;
+    int segmented;
+    uint32_t depth;
+    dtnmos_string sampling;
+    dtnmos_string colorimetry;
+    dtnmos_string tcs;
+    dtnmos_string range;
+    dtnmos_string ssn;
+    dtnmos_string transmitter_type;
+    dtnmos_string profile;
+    dtnmos_string level;
+    dtnmos_string sublevel;
+    uint32_t packet_mode;       // packetmode
+    uint32_t transmission_mode; // transmode; 1 when absent, as RFC 9134 says
+    uint64_t bandwidth_kbps;    // b=AS; 0 when absent
 } dtnmos_compressed_video_format;
 
 // One DID and SDID pair of ancillary data.
 typedef struct dtnmos_did_sdid
 {
-  uint8_t did;
-  uint8_t sdid;
+    uint8_t did;
+    uint8_t sdid;
 } dtnmos_did_sdid;
 
 // An ANC format as ST 2110-40 states it in a=fmtp.
 typedef struct dtnmos_anc_format
 {
-  const dtnmos_did_sdid* did_sdid;  // DID_SDID, owned by the flow; null when absent
-  size_t did_sdid_count;
-  uint32_t vpid_code;       // VPID_Code; 0 when absent
-  uint32_t rate_numerator;  // exactframerate; 0 when absent
-  uint32_t rate_denominator;
-  dtnmos_string transmission_model;  // TM, e.g. "CTM"; empty when absent
-  dtnmos_string ssn;
+    const dtnmos_did_sdid* did_sdid; // DID_SDID, owned by the flow; null when absent
+    size_t did_sdid_count;
+    uint32_t vpid_code;      // VPID_Code; 0 when absent
+    uint32_t rate_numerator; // exactframerate; 0 when absent
+    uint32_t rate_denominator;
+    dtnmos_string transmission_model; // TM, e.g. "CTM"; empty when absent
+    dtnmos_string ssn;
 } dtnmos_anc_format;
 
 // A media section the parser does not know: its encoding from a=rtpmap and its a=fmtp
 // as it stands.
 typedef struct dtnmos_other_format
 {
-  dtnmos_string encoding;
-  dtnmos_string fmtp;
+    dtnmos_string encoding;
+    dtnmos_string fmtp;
 } dtnmos_other_format;
 
 // One RTP flow: a media section of an SDP.
 typedef struct dtnmos_flow
 {
-  size_t size;  // sizeof(dtnmos_flow), set by whoever fills it
-  dtnmos_media media;
-  dtnmos_string destination_ip;  // c=, IPv4 or IPv6, multicast or unicast, without TTL
-  uint16_t destination_port;     // m=
-  dtnmos_string source_ip;       // a=source-filter: incl; empty receives from any source
-  uint8_t payload_type;          // the first of m=
-  uint32_t clock_rate;           // a=rtpmap: 90000 for video, the sample rate for audio
-  dtnmos_string ts_refclk;       // a=ts-refclk, e.g. "ptp=IEEE1588-2008:traceable"
-  int media_clock_direct;        // a=mediaclk:direct=<offset> is present
-  uint32_t media_clock_offset;
-  uint32_t leg;  // 0, or 1 for the second path of ST 2022-7 (a=group:DUP)
-  union
-  {
-    dtnmos_video_format video;
-    dtnmos_audio_format audio;
-    dtnmos_compressed_video_format compressed_video;
-    dtnmos_anc_format anc;
-    dtnmos_other_format other;
-  } format;  // the member of media
+    size_t size; // sizeof(dtnmos_flow), set by whoever fills it
+    dtnmos_media media;
+    dtnmos_string destination_ip; // c=, IPv4 or IPv6, multicast or unicast, without TTL
+    uint16_t destination_port;    // m=
+    dtnmos_string source_ip;      // a=source-filter: incl; empty receives from any source
+    uint8_t payload_type;         // the first of m=
+    uint32_t clock_rate;          // a=rtpmap: 90000 for video, the sample rate for audio
+    dtnmos_string ts_refclk;      // a=ts-refclk, e.g. "ptp=IEEE1588-2008:traceable"
+    int media_clock_direct;       // a=mediaclk:direct=<offset> is present
+    uint32_t media_clock_offset;
+    uint32_t leg; // 0, or 1 for the second path of ST 2022-7 (a=group:DUP)
+    union
+    {
+        dtnmos_video_format video;
+        dtnmos_audio_format audio;
+        dtnmos_compressed_video_format compressed_video;
+        dtnmos_anc_format anc;
+        dtnmos_other_format other;
+    } format; // the member of media
 } dtnmos_flow;
 
 // Frees the strings and arrays of flow, by its media, and leaves it zeroed.
@@ -151,11 +151,11 @@ DTNMOS_API dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow,
 // The session level of an SDP.
 typedef struct dtnmos_session
 {
-  size_t size;
-  dtnmos_string name;       // s=
-  dtnmos_string origin_ip;  // o=, the address of the sender
-  uint64_t session_id;
-  uint64_t session_version;
+    size_t size;
+    dtnmos_string name;      // s=
+    dtnmos_string origin_ip; // o=, the address of the sender
+    uint64_t session_id;
+    uint64_t session_version;
 } dtnmos_session;
 
 DTNMOS_API void dtnmos_session_clear(dtnmos_session* session);

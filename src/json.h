@@ -13,25 +13,25 @@
 
 typedef enum dtnmos_json_type
 {
-  DTNMOS_JSON_NULL,
-  DTNMOS_JSON_FALSE,
-  DTNMOS_JSON_TRUE,
-  DTNMOS_JSON_NUMBER,
-  DTNMOS_JSON_STRING,
-  DTNMOS_JSON_ARRAY,
-  DTNMOS_JSON_OBJECT
+    DTNMOS_JSON_NULL,
+    DTNMOS_JSON_FALSE,
+    DTNMOS_JSON_TRUE,
+    DTNMOS_JSON_NUMBER,
+    DTNMOS_JSON_STRING,
+    DTNMOS_JSON_ARRAY,
+    DTNMOS_JSON_OBJECT
 } dtnmos_json_type;
 
 // A value. An array holds count items; an object holds count items with a key each.
 typedef struct dtnmos_json
 {
-  dtnmos_json_type type;
-  double number;
-  char* string;  // a string, decoded, ending in a null character
-  size_t string_length;
-  struct dtnmos_json* items;
-  char** keys;  // of an object, decoded
-  size_t count;
+    dtnmos_json_type type;
+    double number;
+    char* string; // a string, decoded, ending in a null character
+    size_t string_length;
+    struct dtnmos_json* items;
+    char** keys; // of an object, decoded
+    size_t count;
 } dtnmos_json;
 
 // Parses length bytes of text into a value, which dtnmos_json_free() frees. Fails with

@@ -10,17 +10,17 @@
 #include <stdint.h>
 
 #if defined(DTNMOS_SHARED)
-#if defined(_WIN32)
-#if defined(DTNMOS_BUILDING)
-#define DTNMOS_API __declspec(dllexport)
+    #if defined(_WIN32)
+        #if defined(DTNMOS_BUILDING)
+            #define DTNMOS_API __declspec(dllexport)
+        #else
+            #define DTNMOS_API __declspec(dllimport)
+        #endif
+    #else
+        #define DTNMOS_API __attribute__((visibility("default")))
+    #endif
 #else
-#define DTNMOS_API __declspec(dllimport)
-#endif
-#else
-#define DTNMOS_API __attribute__((visibility("default")))
-#endif
-#else
-#define DTNMOS_API
+    #define DTNMOS_API
 #endif
 
 #ifdef __cplusplus
@@ -37,17 +37,17 @@ DTNMOS_API void dtnmos_version(int* major, int* minor, int* patch);
 
 typedef enum dtnmos_result
 {
-  DTNMOS_OK = 0,
-  DTNMOS_E_INVALID_ARGUMENT,  // a parameter is null, empty or out of range
-  DTNMOS_E_PARSE,             // an SDP or JSON document is malformed
-  DTNMOS_E_NOT_FOUND,         // the registry has no such resource
-  DTNMOS_E_AMBIGUOUS,         // a label names more than one resource
-  DTNMOS_E_HTTP,              // a request failed or was answered with an error status
-  DTNMOS_E_TIMEOUT,           // a request got no answer in time
-  DTNMOS_E_STATE,             // the handle is not in a state that allows the call
-  DTNMOS_E_NO_MEMORY,
-  DTNMOS_E_INTERNAL,
-  DTNMOS_E_NETWORK  // a socket could not be opened, or could not send
+    DTNMOS_OK = 0,
+    DTNMOS_E_INVALID_ARGUMENT, // a parameter is null, empty or out of range
+    DTNMOS_E_PARSE,            // an SDP or JSON document is malformed
+    DTNMOS_E_NOT_FOUND,        // the registry has no such resource
+    DTNMOS_E_AMBIGUOUS,        // a label names more than one resource
+    DTNMOS_E_HTTP,             // a request failed or was answered with an error status
+    DTNMOS_E_TIMEOUT,          // a request got no answer in time
+    DTNMOS_E_STATE,            // the handle is not in a state that allows the call
+    DTNMOS_E_NO_MEMORY,
+    DTNMOS_E_INTERNAL,
+    DTNMOS_E_NETWORK // a socket could not be opened, or could not send
 } dtnmos_result;
 
 // Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.
@@ -57,8 +57,8 @@ DTNMOS_API const char* dtnmos_result_name(dtnmos_result result);
 // message is a fixed array, so that reporting a failure never allocates.
 typedef struct dtnmos_error
 {
-  dtnmos_result code;
-  char message[512];
+    dtnmos_result code;
+    char message[512];
 } dtnmos_error;
 
 // A string the library hands out. A dtnmos_string set to zero is valid and empty, so a
@@ -71,9 +71,9 @@ typedef struct dtnmos_error
 // frees them twice: use its _copy().
 typedef struct dtnmos_string
 {
-  size_t length;
-  char* heap;
-  char local[24];
+    size_t length;
+    char* heap;
+    char local[24];
 } dtnmos_string;
 
 // Returns the text of string, ending in a null character; never null, "" when string is
@@ -103,7 +103,7 @@ DTNMOS_API void dtnmos_string_clear(dtnmos_string* string);
 // "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01".
 typedef struct dtnmos_id
 {
-  char text[37];
+    char text[37];
 } dtnmos_id;
 
 // Writes the name-based UUID (version 5, RFC 9562) of name in the namespace
@@ -117,10 +117,10 @@ DTNMOS_API dtnmos_result dtnmos_id_from_name(const dtnmos_id* namespace_id,
 // Where log messages go.
 typedef enum dtnmos_log_level
 {
-  DTNMOS_LOG_DEBUG = 0,
-  DTNMOS_LOG_INFO = 1,
-  DTNMOS_LOG_WARNING = 2,
-  DTNMOS_LOG_ERROR = 3
+    DTNMOS_LOG_DEBUG = 0,
+    DTNMOS_LOG_INFO = 1,
+    DTNMOS_LOG_WARNING = 2,
+    DTNMOS_LOG_ERROR = 3
 } dtnmos_log_level;
 
 typedef void (*dtnmos_log_fn)(void* user, dtnmos_log_level level, const char* message);

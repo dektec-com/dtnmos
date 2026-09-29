@@ -12,10 +12,10 @@
 #include "dtnmos/dtnmos.h"
 
 #if defined(__GNUC__) || defined(__clang__)
-#define DTNMOS_PRINTF(format_index, first_argument) \
-  __attribute__((format(printf, format_index, first_argument)))
+    #define DTNMOS_PRINTF(format_index, first_argument)                                  \
+        __attribute__((format(printf, format_index, first_argument)))
 #else
-#define DTNMOS_PRINTF(format_index, first_argument)
+    #define DTNMOS_PRINTF(format_index, first_argument)
 #endif
 
 // Fills error, when it is not null, with code and the message of format, and returns
@@ -30,10 +30,10 @@ dtnmos_result dtnmos_fail_memory(dtnmos_error* error);
 // later append do nothing, so that a writer checks once at the end.
 typedef struct dtnmos_buffer
 {
-  char* data;
-  size_t length;
-  size_t capacity;
-  int failed;
+    char* data;
+    size_t length;
+    size_t capacity;
+    int failed;
 } dtnmos_buffer;
 
 void dtnmos_buffer_append(dtnmos_buffer* buffer, const char* text, size_t length);
@@ -42,14 +42,14 @@ void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
 void dtnmos_buffer_free(dtnmos_buffer* buffer);
 
 // Appends a string literal, whose length the compiler knows.
-#define DTNMOS_APPEND_LITERAL(buffer, literal) \
-  dtnmos_buffer_append((buffer), (literal), sizeof(literal) - 1)
+#define DTNMOS_APPEND_LITERAL(buffer, literal)                                           \
+    dtnmos_buffer_append((buffer), (literal), sizeof(literal) - 1)
 
 // A piece of text that is not null terminated.
 typedef struct dtnmos_span
 {
-  const char* data;
-  size_t length;
+    const char* data;
+    size_t length;
 } dtnmos_span;
 
 dtnmos_span dtnmos_span_of(const char* text);
@@ -79,10 +79,10 @@ dtnmos_result dtnmos_string_set_span(dtnmos_string* string, dtnmos_span span);
 // SHA-1 (RFC 3174), for name-based UUIDs only.
 typedef struct dtnmos_sha1
 {
-  uint32_t state[5];
-  uint64_t length;
-  uint8_t block[64];
-  size_t used;
+    uint32_t state[5];
+    uint64_t length;
+    uint8_t block[64];
+    size_t used;
 } dtnmos_sha1;
 
 void dtnmos_sha1_init(dtnmos_sha1* sha1);
