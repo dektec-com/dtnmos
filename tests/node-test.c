@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "check.h"
+#include "internal.h"
 #include "json.h"
 #include "platform.h"
 #include "tests.h"
@@ -29,6 +30,7 @@ typedef struct fake_registration
     recorded requests[64];
     int count;
     int heartbeat_status;
+    const char* unreachable; // a request to a URL that holds it gets no answer
 } fake_registration;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -36,12 +38,16 @@ typedef struct fake_registration
 static dtnmos_result record_http(void* user, const dtnmos_http_request* request,
                                  dtnmos_http_response* response, dtnmos_error* error)
 {
-    (void)error;
     fake_registration* registry = user;
     recorded* r = &registry->requests[registry->count < 64 ? registry->count++ : 63];
     memset(r, 0, sizeof(*r));
     snprintf(r->method, sizeof(r->method), "%s", request->method);
     snprintf(r->url, sizeof(r->url), "%s", request->url);
+    if (registry->unreachable != NULL &&
+        strstr(request->url, registry->unreachable) != NULL)
+    {
+        return dtnmos_fail(error, DTNMOS_E_HTTP, "%s did not answer.", request->url);
+    }
     int status = 404;
     if (strstr(request->url, "/x-nmos/registration/v1.3/resource") != NULL &&
         strcmp(request->method, "POST") == 0)
@@ -193,6 +199,94 @@ void node_registers_again_when_the_registry_lost_it(void)
 
 // .-.-.-.-.-.-.-.-.-.- node_deletes_what_is_removed_and_what_it_had -.-.-.-.-.-.-.-.-.-.-
 //
+// The registry a callback moves the node to, and what it was asked.
+typedef struct next_registry
+{
+    int calls;
+    uint32_t failures;
+    const char* url; // null keeps the node where it is
+} next_registry;
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- give_next_registry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+static int give_next_registry(void* user, uint32_t failures, dtnmos_string* next_url)
+{
+    next_registry* next = user;
+    ++next->calls;
+    next->failures = failures;
+    if (next->url == NULL)
+    {
+        return 0;
+    }
+    dtnmos_string_set_text(next_url, next->url);
+    return 1;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- node_moves_to_the_next_registry -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void node_moves_to_the_next_registry(void)
+{
+    fake_registration registry;
+    memset(&registry, 0, sizeof(registry));
+    registry.heartbeat_status = 200;
+    registry.unreachable = "registry-a.test";
+    next_registry next = {0, 0, "http://registry-b.test"};
+    dtnmos_node_config config;
+    memset(&config, 0, sizeof(config));
+    config.size = sizeof(config);
+    config.id = (dtnmos_id){NODE_ID};
+    config.label = "moving node";
+    config.api_host = "192.168.1.5";
+    config.api_port = 8080;
+    config.registration_url = "http://registry-a.test";
+    config.http = record_http;
+    config.http_user = &registry;
+    config.heartbeat_ms = 1;
+    config.registry_failed = give_next_registry;
+    config.registry_failed_user = &next;
+    config.failures_before_switch = 2;
+    dtnmos_node* node = NULL;
+    REQUIRE(dtnmos_node_create(&config, &node, NULL) == DTNMOS_OK);
+
+    // The first registry does not answer; after two failed polls the node moves on, and
+    // registers with the next one from the start.
+    CHECK(dtnmos_node_poll(node, NULL, NULL) != DTNMOS_OK);
+    CHECK_EQ(next.calls, 0);
+    CHECK(dtnmos_node_poll(node, NULL, NULL) != DTNMOS_OK);
+    CHECK_EQ(next.calls, 1);
+    CHECK_EQ(next.failures, 2);
+    const int before = registry.count;
+    REQUIRE(dtnmos_node_poll(node, NULL, NULL) == DTNMOS_OK);
+    CHECK(dtnmos_node_registered(node));
+    REQUIRE(registry.count > before);
+    CHECK(strstr(registry.requests[before].url,
+                 "http://registry-b.test/x-nmos/registration/v1.3/resource") != NULL);
+    CHECK_STR(registry.requests[before].type, "node");
+
+    // A heartbeat answered with 404 is no failure: the node registers again with the
+    // same registry.
+    registry.heartbeat_status = 404;
+    dtnmos_sleep_ms(40);
+    CHECK(dtnmos_node_poll(node, NULL, NULL) == DTNMOS_OK);
+    registry.heartbeat_status = 200;
+    CHECK(dtnmos_node_poll(node, NULL, NULL) == DTNMOS_OK);
+    CHECK_EQ(next.calls, 1);
+    CHECK(strstr(registry.requests[registry.count - 1].url, "registry-b.test") != NULL);
+
+    // A callback without another registry keeps the node where it is.
+    registry.unreachable = "registry-b.test";
+    next.url = NULL;
+    for (int poll = 0; poll < 2; ++poll)
+    {
+        dtnmos_sleep_ms(40);
+        CHECK(dtnmos_node_poll(node, NULL, NULL) != DTNMOS_OK);
+    }
+    CHECK_EQ(next.calls, 2);
+    CHECK(strstr(registry.requests[registry.count - 1].url, "registry-b.test") != NULL);
+    registry.unreachable = NULL;
+    dtnmos_node_destroy(node);
+}
+
 void node_deletes_what_is_removed_and_what_it_had(void)
 {
     fake_registration registry;

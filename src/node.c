@@ -6,6 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -99,6 +100,30 @@ static int host_of_url(const char* url, char* host, size_t size)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registration_base -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Returns the base of the Registration API of the registry at url, which the caller
+// frees, or null when out of memory.
+//
+static char* registration_base(const char* url)
+{
+    size_t length = strlen(url);
+    while (length > 0 && url[length - 1] == '/')
+    {
+        --length;
+    }
+    dtnmos_buffer base;
+    memset(&base, 0, sizeof(base));
+    dtnmos_buffer_append(&base, url, length);
+    DTNMOS_APPEND_LITERAL(&base, "/x-nmos/registration/v1.3/");
+    if (base.failed)
+    {
+        dtnmos_buffer_free(&base);
+        return NULL;
+    }
+    return base.data;
+}
+
 dtnmos_result dtnmos_node_create(const dtnmos_node_config* config, dtnmos_node** node,
                                  dtnmos_error* error)
 {
@@ -143,27 +168,29 @@ dtnmos_result dtnmos_node_create(const dtnmos_node_config* config, dtnmos_node**
         }
     }
     result->api_host = copy_text(host);
-    size_t length = strlen(config->registration_url);
-    while (length > 0 && config->registration_url[length - 1] == '/')
-    {
-        --length;
-    }
-    dtnmos_buffer base;
-    memset(&base, 0, sizeof(base));
-    dtnmos_buffer_append(&base, config->registration_url, length);
-    DTNMOS_APPEND_LITERAL(&base, "/x-nmos/registration/v1.3/");
-    result->registration = base.data;
+    result->registration = registration_base(config->registration_url);
     result->http = config->http;
     result->http_user = config->http_user;
     result->timeout_ms = config->timeout_ms == 0 ? 5000 : config->timeout_ms;
     result->heartbeat_ms = config->heartbeat_ms == 0 ? 5000 : config->heartbeat_ms;
     result->log = config->log;
     result->log_user = config->log_user;
-    if (result->mutex == NULL || result->label == NULL || result->description == NULL ||
-        result->hostname == NULL || result->api_host == NULL || base.failed)
+    // A config of an older header ends before the fields of moving to another registry.
+    if (config->size >= offsetof(dtnmos_node_config, failures_before_switch) +
+                            sizeof(config->failures_before_switch))
     {
-        dtnmos_buffer_free(&base);
-        result->registration = NULL;
+        result->registry_failed = config->registry_failed;
+        result->registry_failed_user = config->registry_failed_user;
+        result->failures_before_switch = config->failures_before_switch;
+    }
+    if (result->failures_before_switch == 0)
+    {
+        result->failures_before_switch = 3;
+    }
+    if (result->mutex == NULL || result->label == NULL || result->description == NULL ||
+        result->hostname == NULL || result->api_host == NULL ||
+        result->registration == NULL)
+    {
         dtnmos_node_free(result);
         return dtnmos_fail_memory(error);
     }
@@ -1288,6 +1315,36 @@ dtnmos_result dtnmos_node_poll(dtnmos_node* node, uint32_t* next_ms, dtnmos_erro
         }
         node->next_heartbeat_ms = dtnmos_monotonic_ms() + node->heartbeat_ms;
         dtnmos_node_unlock(node);
+    }
+    // A registry that fails polls in a row makes way for another one, when the caller
+    // gives one. The URL is swapped here, on the thread that reads it.
+    if (result == DTNMOS_OK)
+    {
+        node->failures = 0;
+    }
+    else if (++node->failures >= node->failures_before_switch &&
+             node->registry_failed != NULL)
+    {
+        dtnmos_string next = {0};
+        char* base = NULL;
+        if (node->registry_failed(node->registry_failed_user, node->failures, &next) &&
+            dtnmos_string_length(&next) > 0)
+        {
+            base = registration_base(dtnmos_string_get(&next));
+        }
+        if (base != NULL)
+        {
+            node_log(node, DTNMOS_LOG_WARNING,
+                     "The registry failed %u polls in a row; the node registers with %s.",
+                     (unsigned)node->failures, dtnmos_string_get(&next));
+            dtnmos_node_lock(node);
+            free(node->registration);
+            node->registration = base;
+            forget_registration(node);
+            dtnmos_node_unlock(node);
+            node->failures = 0;
+        }
+        dtnmos_string_clear(&next);
     }
     if (next_ms != NULL)
     {

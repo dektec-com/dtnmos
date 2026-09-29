@@ -203,6 +203,11 @@ if (dtnmos_node_create(&config, &node, NULL) == DTNMOS_OK)
 }
 ```
 
+A node can move to another registry when its own fails: `registry_failed` of the config
+is called on the poll thread after `failures_before_switch` polls in a row failed (3 when
+0), and returns the URL of the next registry, e.g. the next of a `dtnmos_discover()` for
+`DTNMOS_SERVICE_REGISTRATION`, which the node then registers with from the start.
+
 ## Being connected
 
 The node answers the Connection API of IS-05 in `dtnmos_node_handle()` as well. When a

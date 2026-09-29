@@ -19,6 +19,15 @@ extern "C"
 
 typedef struct dtnmos_node dtnmos_node;
 
+// Called by dtnmos_node_poll(), on its thread and without the lock of the node, when the
+// registry has failed failures polls in a row: requests that got no answer, or an error
+// status. A registry that answers a heartbeat with 404 has lost the node, which registers
+// again with it, and that is no failure. The function returns 1 after setting next_url
+// to the base URL of another registry, which the node then registers with from the start,
+// or 0 to stay with the one it has.
+typedef int (*dtnmos_registry_failed_fn)(void* user, uint32_t failures,
+                                         dtnmos_string* next_url);
+
 typedef struct dtnmos_node_config
 {
     size_t size;  // sizeof(dtnmos_node_config)
@@ -39,6 +48,10 @@ typedef struct dtnmos_node_config
     uint32_t heartbeat_ms; // 5000 when 0
     dtnmos_log_fn log;     // optional
     void* log_user;
+    // Optional: moves the node to another registry when its registry fails.
+    dtnmos_registry_failed_fn registry_failed;
+    void* registry_failed_user;
+    uint32_t failures_before_switch; // polls that fail in a row first; 3 when 0
 } dtnmos_node_config;
 
 typedef struct dtnmos_device_config

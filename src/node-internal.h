@@ -90,6 +90,10 @@ struct dtnmos_node
     int node_registered;
     int closing; // the node deletes what it registered and registers nothing more
     uint64_t next_heartbeat_ms;
+    dtnmos_registry_failed_fn registry_failed;
+    void* registry_failed_user;
+    uint32_t failures_before_switch;
+    uint32_t failures; // polls that failed in a row; the poll thread's own
     node_device* devices;
     size_t device_count;
     size_t device_capacity;
