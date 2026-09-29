@@ -98,6 +98,17 @@ static dtnmos_result ws_connect(void* user, const char* url, uint32_t timeout_ms
             error, code == CURLE_OPERATION_TIMEDOUT ? DTNMOS_E_TIMEOUT : DTNMOS_E_NETWORK,
             "The WebSocket %s could not be opened: %s.", url, curl_easy_strerror(code));
     }
+    // A server that answered without switching gives no WebSocket to receive on.
+    long status = 0;
+    curl_easy_getinfo(made->curl, CURLINFO_RESPONSE_CODE, &status);
+    if (status != 101)
+    {
+        curl_easy_cleanup(made->curl);
+        free(made);
+        return dtnmos_fail(error, DTNMOS_E_NETWORK,
+                           "The server of %s answered with %ld, not with a WebSocket.",
+                           url, status);
+    }
     *connection = made;
     return DTNMOS_OK;
 }
