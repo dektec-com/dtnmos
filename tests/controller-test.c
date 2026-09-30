@@ -23,6 +23,10 @@
 #define CAMERA_ID "11111111-1111-4111-8111-111111111111"
 #define DARK_ID "22222222-2222-4222-8222-222222222222"
 #define VIDEO_FLOW "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+#define ENCODER_ID "88888888-8888-4888-8888-888888888888"
+#define PLAYER_ID "99999999-9999-4999-8999-999999999999"
+#define MOVED                                                                            \
+    "http://node.test/x-nmos/connection/v1.1/single/senders/" ENCODER_ID "/staged"
 #define STAGED                                                                           \
     "http://node.test/x-nmos/connection/v1.1/single/receivers/" MONITOR_ID "/staged"
 
@@ -76,6 +80,13 @@ static const fake_route fake_routes[] = {
     {BASE "receivers/" MONITOR_ID, MONITOR},
     {BASE "senders?label=camera%201&paging.limit=100", "[" CAMERA "]"},
     {BASE "senders?label=camera%202&paging.limit=100", "[" DARK "]"},
+    // A sender of RTP on the device with a Connection API, and one of WebSocket.
+    {BASE "senders?label=encoder&paging.limit=100",
+     "[{\"id\": \"" ENCODER_ID "\", \"label\": \"encoder\", \"device_id\": \"" DEVICE_ID
+     "\", \"transport\": \"urn:x-nmos:transport:rtp.mcast\"}]"},
+    {BASE "senders?label=player&paging.limit=100",
+     "[{\"id\": \"" PLAYER_ID "\", \"label\": \"player\", \"device_id\": \"" DEVICE_ID
+     "\", \"transport\": \"urn:x-nmos:transport:websocket\"}]"},
     {BASE "flows/" VIDEO_FLOW,
      "{\"id\": \"" VIDEO_FLOW "\", \"format\": \"urn:x-nmos:format:video\", "
      "\"media_type\": \"video/raw\"}"},
@@ -348,6 +359,63 @@ void controller_names_what_went_wrong(void)
     CHECK(dtnmos_disconnect(query, "monitor", NULL, &error) == DTNMOS_E_HTTP);
     CHECK(strstr(error.message, "connection refused") != NULL);
     CHECK(connection.receiver.id.text[0] == '\0');
+    free(network.body);
+    dtnmos_query_destroy(query);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- controller_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void controller_moves_a_sender(void)
+{
+    fake_network network;
+    dtnmos_query* query = make_network(&network);
+    REQUIRE(query != NULL);
+    dtnmos_sender_info moved = {0};
+    dtnmos_error error = {DTNMOS_OK, ""};
+    const dtnmos_result result =
+        dtnmos_move_sender(query, "encoder", "239.1.2.3", 5010, &moved, &error);
+    if (result != DTNMOS_OK)
+    {
+        printf("  %s\n", error.message);
+    }
+    REQUIRE(result == DTNMOS_OK);
+    CHECK_STR(moved.id.text, ENCODER_ID);
+    CHECK_STR(dtnmos_string_get(&moved.label), "encoder");
+    // The sender, the device of the sender, and the PATCH of its staged parameters.
+    REQUIRE(network.count == 3);
+    CHECK_STR(network.requests[0], "GET " BASE "senders?label=encoder&paging.limit=100");
+    CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
+    CHECK_STR(network.requests[2], "PATCH " MOVED);
+    dtnmos_json* body = NULL;
+    REQUIRE(dtnmos_json_parse(network.body, strlen(network.body), &body, NULL) ==
+            DTNMOS_OK);
+    const dtnmos_json* legs = dtnmos_json_member(body, "transport_params");
+    REQUIRE(legs != NULL && legs->type == DTNMOS_JSON_ARRAY && legs->count == 1);
+    CHECK_STR(dtnmos_json_member_text(&legs->items[0], "destination_ip"), "239.1.2.3");
+    CHECK_EQ(dtnmos_json_member(&legs->items[0], "destination_port")->number, 5010);
+    CHECK_STR(dtnmos_json_member_text(dtnmos_json_member(body, "activation"), "mode"),
+              "activate_immediate");
+    CHECK(dtnmos_json_member(body, "master_enable") == NULL);
+    dtnmos_json_free(body);
+    dtnmos_sender_info_clear(&moved);
+
+    // A sender that does not send over RTP, one without a device, and no port.
+    CHECK(dtnmos_move_sender(query, "player", "239.1.2.3", 5010, NULL, &error) ==
+          DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(error.message, "not RTP") != NULL);
+    CHECK(dtnmos_move_sender(query, "camera 1", "239.1.2.3", 5010, NULL, &error) ==
+          DTNMOS_E_NOT_FOUND);
+    CHECK(strstr(error.message, "names no device") != NULL);
+    CHECK(dtnmos_move_sender(query, "encoder", "239.1.2.3", 0, NULL, &error) ==
+          DTNMOS_E_INVALID_ARGUMENT);
+    // A node that refuses the destination.
+    network.patch_status = 400;
+    network.patch_answer =
+        "{\"code\": 400, \"error\": \"no such address\", \"debug\": null}";
+    CHECK(dtnmos_move_sender(query, "encoder", "10.0.0.1", 5010, NULL, &error) ==
+          DTNMOS_E_HTTP);
+    CHECK(strstr(error.message, "sender " ENCODER_ID " ('encoder') answered") != NULL);
+    CHECK(strstr(error.message, "with 400: no such address") != NULL);
     free(network.body);
     dtnmos_query_destroy(query);
 }

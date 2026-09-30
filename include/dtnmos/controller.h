@@ -8,6 +8,8 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdint.h>
+
 #include "dtnmos/dtnmos.h"
 #include "dtnmos/query.h"
 
@@ -52,6 +54,19 @@ DTNMOS_API dtnmos_result dtnmos_connect(dtnmos_query* query, const char* receive
 DTNMOS_API dtnmos_result dtnmos_disconnect(dtnmos_query* query, const char* receiver,
                                            dtnmos_receiver_info* disconnected,
                                            dtnmos_error* error);
+
+// Moves a sender of the registry of query, given by its ID or label, to destination_ip
+// and destination_port, as a controller of IS-05 does: through the Connection API of the
+// sender, found as dtnmos_connect() finds that of a receiver, it activates at once the
+// staged parameters of its leg with the new destination. moved, when not null, is
+// cleared first and receives the sender as the registry lists it. Fails as
+// dtnmos_connect() does, and with DTNMOS_E_INVALID_ARGUMENT for a sender of another
+// transport than RTP.
+DTNMOS_API dtnmos_result dtnmos_move_sender(dtnmos_query* query, const char* sender,
+                                            const char* destination_ip,
+                                            uint16_t destination_port,
+                                            dtnmos_sender_info* moved,
+                                            dtnmos_error* error);
 
 #ifdef __cplusplus
 }

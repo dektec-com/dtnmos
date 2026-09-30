@@ -169,6 +169,13 @@ dtnmos_disconnect(query, "monitor", NULL, &error);
 A sender of another kind of media than the receiver, video, audio or data, is refused
 before the node is asked; what the node refuses comes back with the error it gave.
 
+`dtnmos_move_sender()` moves a sender to another destination the same way, through the
+Connection API of the sender:
+
+```c
+dtnmos_move_sender(query, "camera 1", "239.10.1.2", 5004, NULL, &error);
+```
+
 ## Following a registry
 
 A subscription of the Query API tells what changes in the registry as it happens

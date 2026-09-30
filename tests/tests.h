@@ -36,6 +36,7 @@
     DTNMOS_TEST(controller_connects_a_receiver)                                          \
     DTNMOS_TEST(controller_disconnects_a_receiver)                                       \
     DTNMOS_TEST(controller_names_what_went_wrong)                                        \
+    DTNMOS_TEST(controller_moves_a_sender)                                               \
     DTNMOS_TEST(json_writes_what_it_reads_back)                                          \
     DTNMOS_TEST(subscription_reports_what_changes)                                       \
     DTNMOS_TEST(subscription_names_what_went_wrong)                                      \
