@@ -52,6 +52,25 @@ if(DTNMOS_INSTALL)
       APPEND _package_prefix_path
       "$<SEMICOLON>${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
   endif()
+  # A consumer on vcpkg finds the dependencies of the package through the toolchain of
+  # vcpkg, which knows the names a triplet gives its libraries, such as zs.lib for the
+  # static zlib of a Windows triplet, where the find modules of CMake do not.
+  set(_package_vcpkg_options)
+  if(CMAKE_TOOLCHAIN_FILE
+     AND DEFINED VCPKG_INSTALLED_DIR
+     AND DEFINED VCPKG_TARGET_TRIPLET)
+    list(
+      APPEND
+      _package_vcpkg_options
+      "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"
+      "-DVCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}"
+      "-DVCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}"
+      "-DVCPKG_MANIFEST_MODE=OFF")
+  endif()
+  # The consumer is configured afresh on every run, as a toolchain takes effect only in
+  # the first configuration of a build directory.
+  add_test(NAME dtnmos.package.clean COMMAND "${CMAKE_COMMAND}" -E rm -rf
+                                            "${_package_dir}/build")
   add_test(NAME dtnmos.package.install
            COMMAND "${CMAKE_COMMAND}" --install "${PROJECT_BINARY_DIR}" --prefix
                    "${_package_dir}/prefix" --config "$<CONFIG>")
@@ -63,9 +82,10 @@ if(DTNMOS_INSTALL)
       "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_PREFIX_PATH=${_package_prefix_path}"
       "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
-      "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
+      "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" ${_package_vcpkg_options}
       --test-command dtnmos-package-test)
-  set_tests_properties(dtnmos.package.install PROPERTIES FIXTURES_SETUP dtnmos-package)
+  set_tests_properties(dtnmos.package.clean dtnmos.package.install
+                       PROPERTIES FIXTURES_SETUP dtnmos-package)
   set_tests_properties(
     dtnmos.package.find-package
     PROPERTIES FIXTURES_REQUIRED dtnmos-package)
