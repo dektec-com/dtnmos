@@ -354,15 +354,16 @@ typedef struct responder
     int stop;          // guarded by mutex
     int queries;       // queries received, guarded by mutex
     int asked_srv_txt; // a query asked for SRV and TXT records, guarded by mutex
+    int faults;        // queries a DNS server counts as faults, guarded by mutex
+    // Set before the thread starts and only read by it afterwards.
     const announced* instances;
     size_t count;
     int answer; // 0: none, 1: everything, 2: PTR first, the rest when asked
     char destination[32];
-    const char* service; // that it announces, "_nmos-query._tcp.local" by default
+    const char* service; // that it announces
     // A DNS server, which counts a query without recursion desired or of more than one
-    // question as a fault, guarded by mutex, and answers it with FORMERR.
+    // question as a fault, and answers it with FORMERR.
     int dns;
-    int faults;
 } responder;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -445,16 +446,20 @@ static void respond(void* argument)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder_as -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int start_responder(responder* r, const announced* instances, size_t count,
-                           int answer)
+// Starts a responder that announces service, as a DNS server when dns is set. Everything
+// the thread reads without the mutex is set before it starts.
+//
+static int start_responder_as(responder* r, const announced* instances, size_t count,
+                              int answer, const char* service, int dns)
 {
     memset(r, 0, sizeof(*r));
     r->instances = instances;
     r->count = count;
     r->answer = answer;
-    r->service = "_nmos-query._tcp.local";
+    r->service = service;
+    r->dns = dns;
     r->socket = dtnmos_udp_open("127.0.0.1", NULL);
     r->mutex = dtnmos_mutex_create();
     if (r->socket == NULL || r->mutex == NULL)
@@ -465,6 +470,16 @@ static int start_responder(responder* r, const announced* instances, size_t coun
              dtnmos_udp_port(r->socket));
     r->thread = dtnmos_thread_start(respond, r);
     return r->thread != NULL;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Starts a responder that announces "_nmos-query._tcp.local" over multicast DNS.
+//
+static int start_responder(responder* r, const announced* instances, size_t count,
+                           int answer)
+{
+    return start_responder_as(r, instances, count, answer, "_nmos-query._tcp.local", 0);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- stop_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -692,11 +707,7 @@ void discovery_asks_a_dns_server_too(void)
     responder mdns;
     REQUIRE(start_responder(&mdns, &on_link, 1, 1));
     responder dns;
-    REQUIRE(start_responder(&dns, in_dns, 2, 2));
-    dtnmos_mutex_lock(dns.mutex);
-    dns.service = "_nmos-query._tcp.studio.example";
-    dns.dns = 1;
-    dtnmos_mutex_unlock(dns.mutex);
+    REQUIRE(start_responder_as(&dns, in_dns, 2, 2, "_nmos-query._tcp.studio.example", 1));
 
     dtnmos_discovery_config config = config_for(&mdns, 300);
     config.searches = 0;
@@ -752,11 +763,8 @@ void discovery_takes_only_the_dns_server(void)
     responder mdns;
     REQUIRE(start_responder(&mdns, &registry_b, 1, 1));
     responder dns;
-    REQUIRE(start_responder(&dns, &registry_b, 1, 1));
-    dtnmos_mutex_lock(dns.mutex);
-    dns.service = "_nmos-query._tcp.studio.example";
-    dns.dns = 1;
-    dtnmos_mutex_unlock(dns.mutex);
+    REQUIRE(start_responder_as(&dns, &registry_b, 1, 1, "_nmos-query._tcp.studio.example",
+                               1));
     dtnmos_discovery_config config = config_for(&mdns, 200);
     config.searches = DTNMOS_SEARCH_UNICAST;
     config.dns_server = dns.destination;
