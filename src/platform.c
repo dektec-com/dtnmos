@@ -14,6 +14,8 @@
     #include <windows.h>
     #include <winsock2.h>
     #include <ws2tcpip.h>
+    // After winsock2.h, which it needs.
+    #include <iphlpapi.h>
     // Of mstcpip.h, which is not included, as it needs a particular order of the headers.
     #ifndef SIO_UDP_CONNRESET
         #define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
@@ -36,6 +38,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "dns.h"
 #include "platform.h"
 
 // TAI runs ahead of UTC by the leap seconds, 37 since 2017.
@@ -533,4 +536,85 @@ void dtnmos_udp_close(dtnmos_udp* udp)
         DTNMOS_CLOSE_SOCKET(udp->socket);
         free(udp);
     }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_system_dns -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void dtnmos_system_dns(char* server, size_t server_size, char* domain, size_t domain_size)
+{
+    server[0] = '\0';
+    domain[0] = '\0';
+#if defined(_WIN32)
+    // The suffix that DHCP gives is the one of the connection, which GetNetworkParams()
+    // does not know; that of the domain of the PC is taken when it has none.
+    ULONG size = 16 * 1024;
+    IP_ADAPTER_ADDRESSES* adapters = NULL;
+    ULONG status = ERROR_BUFFER_OVERFLOW;
+    for (int attempt = 0; attempt < 3 && status == ERROR_BUFFER_OVERFLOW; ++attempt)
+    {
+        free(adapters);
+        adapters = malloc(size);
+        if (adapters == NULL)
+        {
+            return;
+        }
+        status = GetAdaptersAddresses(AF_UNSPEC,
+                                      GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
+                                          GAA_FLAG_SKIP_MULTICAST,
+                                      NULL, adapters, &size);
+    }
+    for (const IP_ADAPTER_ADDRESSES* adapter = status == NO_ERROR ? adapters : NULL;
+         adapter != NULL && server[0] == '\0'; adapter = adapter->Next)
+    {
+        if (adapter->OperStatus != IfOperStatusUp ||
+            adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||
+            adapter->FirstGatewayAddress == NULL)
+        {
+            continue;
+        }
+        for (const IP_ADAPTER_DNS_SERVER_ADDRESS* dns = adapter->FirstDnsServerAddress;
+             dns != NULL; dns = dns->Next)
+        {
+            const struct sockaddr* address = dns->Address.lpSockaddr;
+            if (address != NULL && address->sa_family == AF_INET &&
+                inet_ntop(AF_INET, &((const struct sockaddr_in*)address)->sin_addr,
+                          server, server_size) != NULL)
+            {
+                break;
+            }
+            server[0] = '\0';
+        }
+        if (server[0] != '\0' && adapter->DnsSuffix != NULL &&
+            WideCharToMultiByte(CP_UTF8, 0, adapter->DnsSuffix, -1, domain,
+                                (int)domain_size, NULL, NULL) == 0)
+        {
+            domain[0] = '\0';
+        }
+    }
+    free(adapters);
+    if (server[0] != '\0' && domain[0] == '\0')
+    {
+        FIXED_INFO* params = NULL;
+        ULONG length = 0;
+        if (GetNetworkParams(NULL, &length) == ERROR_BUFFER_OVERFLOW &&
+            (params = malloc(length)) != NULL &&
+            GetNetworkParams(params, &length) == NO_ERROR &&
+            strlen(params->DomainName) < domain_size)
+        {
+            memcpy(domain, params->DomainName, strlen(params->DomainName) + 1);
+        }
+        free(params);
+    }
+#else
+    FILE* file = fopen("/etc/resolv.conf", "r");
+    if (file == NULL)
+    {
+        return;
+    }
+    char text[16 * 1024];
+    const size_t length = fread(text, 1, sizeof(text) - 1, file);
+    fclose(file);
+    text[length] = '\0';
+    dtnmos_dns_read_resolv_conf(text, server, server_size, domain, domain_size);
+#endif
 }

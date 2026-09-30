@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* dns.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos - DNS messages (RFC 1035) as far as DNS-SD over multicast DNS needs them
+// dtnmos - DNS messages (RFC 1035) as far as DNS-SD over multicast and unicast needs them
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -18,6 +18,11 @@ enum
     DTNMOS_DNS_TYPE_TXT = 16,
     DTNMOS_DNS_TYPE_SRV = 33,
     DTNMOS_DNS_CLASS_IN = 1,
+    // The flag of a query that asks a DNS server to recurse, which a unicast query needs
+    // and a query of multicast DNS leaves out.
+    DTNMOS_DNS_RECURSION_DESIRED = 0x0100,
+    // The response code of an answer without error.
+    DTNMOS_DNS_NO_ERROR = 0,
     // The longest name as text, without the final dot, and its null character.
     DTNMOS_DNS_NAME_SIZE = 256
 };
@@ -29,10 +34,22 @@ typedef struct dtnmos_dns_question
     uint16_t type;
 } dtnmos_dns_question;
 
-// Writes a query with id and count questions into buffer; returns its length, or 0 when
-// it does not fit or a name is not valid.
-size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
+// Writes a query with id, flags and count questions into buffer; returns its length, or
+// 0 when it does not fit or a name is not valid.
+size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id, uint16_t flags,
                               const dtnmos_dns_question* questions, size_t count);
+
+// Reads the ID and the response code (RCODE) of the header of a message; returns 0 when
+// it is shorter than a header.
+int dtnmos_dns_read_header(const uint8_t* message, size_t length, uint16_t* id,
+                           unsigned* rcode);
+
+// Reads the text of a resolv.conf: the first IPv4 address of a nameserver line into
+// server, and the first domain of the last search or domain line into domain, as the
+// resolver takes them. Each is left empty when the text has none, or when it does not
+// fit.
+void dtnmos_dns_read_resolv_conf(const char* text, char* server, size_t server_size,
+                                 char* domain, size_t domain_size);
 
 // A record of a message. Names are text without the final dot, a dot or backslash within
 // a label written as "\." or "\\", as dtnmos_dns_write_query() takes them. What a type

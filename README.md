@@ -3,7 +3,7 @@
 A small C library that reads and writes the SDP of SMPTE ST 2110 flows: ST 2110-20
 uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary data. It
 also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP, and finds the
-registries on the network with multicast DNS. And it is an NMOS node that registers senders
+registries on the network with multicast DNS and the DNS server of the host. And it is an NMOS node that registers senders
 and receivers with a registry (IS-04) and serves its Node API, and a controller that
 connects the receivers of a registry to its senders (IS-05). It follows a registry
 through the subscriptions of its Query API.
@@ -216,10 +216,21 @@ it can be polled again.
 
 ## Finding registries
 
-A search finds the Query or Registration APIs that the registries on the local network
-announce, as IS-04 does with DNS-SD, through a one-shot multicast DNS query of the library
-itself: it goes to 224.0.0.251:5353 from a port of its own, so the responders answer with
-unicast, and it needs neither port 5353 nor Avahi or Bonjour. IPv4 only.
+A search finds the Query or Registration APIs that the registries on the network announce,
+as IS-04 does with DNS-SD, in two ways at once from one socket of the library itself:
+
+- a one-shot multicast DNS query in the domain `local`: it goes to 224.0.0.251:5353 from a
+  port of its own, so the responders answer with unicast, and it needs neither port 5353
+  nor Avahi or Bonjour;
+- a query of the DNS server of the host in the domain the host searches (unicast
+  DNS-SD): the first IPv4 `nameserver` and the last `search` or `domain` line of
+  `/etc/resolv.conf`, or on Windows the DNS server and suffix of the network connection
+  with a gateway. The server is asked one question per query, with recursion desired;
+  a host without a server or domain asks multicast DNS alone.
+
+Each registry tells which search found it (`found_by`); of equal priority, those of the DNS
+server come first. `searches`, `dns_server` and `dns_domain` of the config choose the
+searches and give a server and domain of their own. IPv4 only, and DNS over UDP only.
 
 ```c
 #include <dtnmos/discovery.h>

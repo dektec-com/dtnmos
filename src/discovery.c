@@ -23,7 +23,8 @@ enum
     max_message = 9000, // the largest answer multicast DNS allows
     sends = 3,          // of the first query, spread over the timeout
     default_timeout_ms = 1000,
-    mdns_port = 5353
+    mdns_port = 5353,
+    dns_port = 53
 };
 
 static const char* const mdns_address = "224.0.0.251";
@@ -57,6 +58,19 @@ typedef struct gathered
     host_address hosts[max_hosts];
     size_t host_count;
 } gathered;
+
+// One of the searches: where its queries go, and what its answers told.
+typedef struct search
+{
+    int active;
+    dtnmos_search kind;
+    char address[64];
+    uint16_t port;
+    uint16_t flags;                     // of its queries
+    int answered;                       // the DNS server answered its first query
+    char service[DTNMOS_DNS_NAME_SIZE]; // e.g. "_nmos-query._tcp.local"
+    gathered found;
+} search;
 
 struct dtnmos_registry_list
 {
@@ -101,6 +115,7 @@ dtnmos_result dtnmos_registry_info_copy(dtnmos_registry_info* target,
     copy.priority = source->priority;
     copy.auth = source->auth;
     copy.usable = source->usable;
+    copy.found_by = source->found_by;
     if (dtnmos_string_copy(&copy.instance, &source->instance) != DTNMOS_OK ||
         dtnmos_string_copy(&copy.host, &source->host) != DTNMOS_OK ||
         dtnmos_string_copy(&copy.address, &source->address) != DTNMOS_OK ||
@@ -289,11 +304,14 @@ static void take_record(void* user, const dtnmos_dns_record* record)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- collect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Receives answers until deadline_ms and gathers their records.
+// Receives answers until deadline_ms and gathers their records into the search they
+// answer: that of the DNS server when they come from it with the ID of the query, and
+// that of multicast DNS otherwise.
 //
 static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
-                    gathered* found, uint8_t* buffer, uint64_t deadline_ms)
+                    search* searches, uint16_t id, uint8_t* buffer, uint64_t deadline_ms)
 {
+    search* unicast = &searches[1];
     for (;;)
     {
         const uint64_t now = dtnmos_monotonic_ms();
@@ -302,20 +320,105 @@ static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
             return;
         }
         char from[64];
+        uint16_t from_port = 0;
         const long received =
             dtnmos_udp_receive(udp, buffer, max_message, (uint32_t)(deadline_ms - now),
-                               from, sizeof(from), NULL);
+                               from, sizeof(from), &from_port);
         if (received < 0)
         {
             return;
         }
-        if (received > 0 &&
-            !dtnmos_dns_read_response(buffer, (size_t)received, take_record, found))
+        if (received == 0)
+        {
+            continue;
+        }
+        search* target = &searches[0];
+        if (unicast->active && from_port == unicast->port &&
+            strcmp(from, unicast->address) == 0)
+        {
+            uint16_t answer_id = 0;
+            unsigned rcode = 0;
+            if (!dtnmos_dns_read_header(buffer, (size_t)received, &answer_id, &rcode) ||
+                answer_id != id)
+            {
+                log_message(config, DTNMOS_LOG_DEBUG,
+                            "An answer of the DNS server %s:%u is not to the query.",
+                            from, from_port);
+                continue;
+            }
+            unicast->answered = 1;
+            if (rcode != DTNMOS_DNS_NO_ERROR)
+            {
+                // 3 is a name the server does not know, 5 a query it refuses.
+                log_message(config, DTNMOS_LOG_DEBUG,
+                            "The DNS server %s:%u answered with response code %u.", from,
+                            from_port, rcode);
+                continue;
+            }
+            target = unicast;
+        }
+        else if (!searches[0].active)
+        {
+            continue;
+        }
+        if (!dtnmos_dns_read_response(buffer, (size_t)received, take_record,
+                                      &target->found))
         {
             log_message(config, DTNMOS_LOG_DEBUG,
                         "An answer from %s is not a DNS response.", from);
         }
     }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ask_missing -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Asks one search for the records its answers left out: multicast DNS in one query, and
+// the DNS server one question per query, as it answers no more. Returns whether it asked.
+//
+static int ask_missing(const dtnmos_discovery_config* config, dtnmos_udp* udp,
+                       const search* one, uint16_t id)
+{
+    const gathered* found = &one->found;
+    dtnmos_dns_question missing[2 * max_instances];
+    size_t missing_count = 0;
+    for (size_t i = 0; i < found->instance_count; ++i)
+    {
+        const instance* service = &found->instances[i];
+        if (!service->has_srv)
+        {
+            missing[missing_count++] =
+                (dtnmos_dns_question){service->name, DTNMOS_DNS_TYPE_SRV};
+        }
+        if (!service->has_txt)
+        {
+            missing[missing_count++] =
+                (dtnmos_dns_question){service->name, DTNMOS_DNS_TYPE_TXT};
+        }
+        else if (service->has_srv && host_named(found, service->host) == NULL &&
+                 missing_count < 2 * max_instances)
+        {
+            missing[missing_count++] =
+                (dtnmos_dns_question){service->host, DTNMOS_DNS_TYPE_A};
+        }
+    }
+    if (missing_count == 0)
+    {
+        return 0;
+    }
+    log_message(config, DTNMOS_LOG_DEBUG, "Asking again for %zu records of %s.",
+                missing_count, one->service);
+    const size_t per_query = one->kind == DTNMOS_SEARCH_UNICAST ? 1 : missing_count;
+    uint8_t* query = malloc(max_message);
+    int asked = 0;
+    for (size_t first = 0; query != NULL && first < missing_count; first += per_query)
+    {
+        const size_t length = dtnmos_dns_write_query(query, max_message, id, one->flags,
+                                                     missing + first, per_query);
+        asked |=
+            length > 0 && dtnmos_udp_send(udp, one->address, one->port, query, length);
+    }
+    free(query);
+    return asked;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- instance_label -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -375,6 +478,10 @@ static int compare_registries(const void* a, const void* b)
     if (left->priority != right->priority)
     {
         return left->priority < right->priority ? -1 : 1;
+    }
+    if (left->found_by != right->found_by)
+    {
+        return left->found_by == DTNMOS_SEARCH_UNICAST ? -1 : 1;
     }
     return strcmp(dtnmos_string_get(&left->instance),
                   dtnmos_string_get(&right->instance));
@@ -466,6 +573,124 @@ static int read_destination(const char* text, char* address, size_t size, uint16
     return 1;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- prepare_unicast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Sets up the search of the DNS server, of the config or of the host; leaves it inactive
+// when there is no server or no domain. Fails for a malformed server or domain.
+//
+static dtnmos_result prepare_unicast(const dtnmos_discovery_config* config,
+                                     const char* service_type, search* unicast,
+                                     dtnmos_error* error)
+{
+    unicast->kind = DTNMOS_SEARCH_UNICAST;
+    unicast->flags = DTNMOS_DNS_RECURSION_DESIRED;
+    unicast->port = dns_port;
+    if (config->dns_server != NULL &&
+        !read_destination(config->dns_server, unicast->address, sizeof(unicast->address),
+                          &unicast->port))
+    {
+        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+                           "The DNS server %s is no <IPv4 address>:<port>.",
+                           config->dns_server);
+    }
+    if (config->searches != 0 && (config->searches & DTNMOS_SEARCH_UNICAST) == 0)
+    {
+        return DTNMOS_OK;
+    }
+    char system_server[64] = "";
+    char domain[DTNMOS_DNS_NAME_SIZE] = "";
+    if (config->dns_server == NULL || config->dns_domain == NULL)
+    {
+        dtnmos_system_dns(system_server, sizeof(system_server), domain, sizeof(domain));
+        if (config->dns_server == NULL)
+        {
+            snprintf(unicast->address, sizeof(unicast->address), "%s", system_server);
+        }
+    }
+    if (config->dns_domain != NULL)
+    {
+        snprintf(domain, sizeof(domain), "%s", config->dns_domain);
+    }
+    size_t length = strlen(domain);
+    if (length > 1 && domain[length - 1] == '.')
+    {
+        domain[--length] = '\0';
+    }
+    if (unicast->address[0] == '\0' || domain[0] == '\0')
+    {
+        log_message(config, DTNMOS_LOG_DEBUG,
+                    "The host names no DNS server or no domain; only multicast DNS is "
+                    "asked.");
+        return DTNMOS_OK;
+    }
+    // A name the query cannot hold is no domain.
+    uint8_t query[512];
+    const dtnmos_dns_question question = {unicast->service, DTNMOS_DNS_TYPE_PTR};
+    if (snprintf(unicast->service, sizeof(unicast->service), "%s.%s", service_type,
+                 domain) >= (int)sizeof(unicast->service) ||
+        dtnmos_dns_write_query(query, sizeof(query), 0, 0, &question, 1) == 0)
+    {
+        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+                           "The domain %s is no domain.", domain);
+    }
+    unicast->active = 1;
+    unicast->found.service = unicast->service;
+    log_message(config, DTNMOS_LOG_DEBUG, "Asking the DNS server %s:%u for %s.",
+                unicast->address, unicast->port, unicast->service);
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- list_registries -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Makes the list of the complete instances that both searches found, sorted.
+//
+static dtnmos_result list_registries(const dtnmos_discovery_config* config,
+                                     const search* searches, dtnmos_registry_list** list,
+                                     dtnmos_error* error)
+{
+    const size_t total =
+        searches[0].found.instance_count + searches[1].found.instance_count;
+    dtnmos_registry_list* result_list = calloc(1, sizeof(*result_list));
+    if (result_list == NULL ||
+        (total > 0 && (result_list->registries =
+                           calloc(total, sizeof(*result_list->registries))) == NULL))
+    {
+        free(result_list);
+        return dtnmos_fail_memory(error);
+    }
+    for (int s = 0; s < 2; ++s)
+    {
+        const gathered* found = &searches[s].found;
+        for (size_t i = 0; i < found->instance_count; ++i)
+        {
+            const instance* service = &found->instances[i];
+            if (!service->has_srv)
+            {
+                log_message(config, DTNMOS_LOG_DEBUG, "%s did not say where it is.",
+                            service->name);
+                continue;
+            }
+            dtnmos_registry_info* registry = &result_list->registries[result_list->count];
+            if (!describe(found, service, config->service, registry))
+            {
+                dtnmos_registry_info_clear(registry);
+                dtnmos_registry_list_free(result_list);
+                return dtnmos_fail_memory(error);
+            }
+            registry->found_by = searches[s].kind;
+            ++result_list->count;
+        }
+    }
+    // qsort() takes no null array, which an empty list has.
+    if (result_list->count > 1)
+    {
+        qsort(result_list->registries, result_list->count,
+              sizeof(*result_list->registries), compare_registries);
+    }
+    *list = result_list;
+    return DTNMOS_OK;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
@@ -484,36 +709,49 @@ dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
             error, DTNMOS_E_INVALID_ARGUMENT,
             "dtnmos_discover() needs a config of a known service and a list.");
     }
-    char address[64];
-    uint16_t port = mdns_port;
-    snprintf(address, sizeof(address), "%s", mdns_address);
-    if (config->destination != NULL &&
-        !read_destination(config->destination, address, sizeof(address), &port))
-    {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "The destination %s is no <IPv4 address>:<port>.",
-                           config->destination);
-    }
     if (config->interface_address != NULL && !is_ipv4(config->interface_address))
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                            "The interface address %s is no IPv4 address.",
                            config->interface_address);
     }
-    gathered* found = calloc(1, sizeof(*found));
+    search* searches = calloc(2, sizeof(*searches));
     uint8_t* buffer = malloc(max_message);
-    if (found == NULL || buffer == NULL)
+    if (searches == NULL || buffer == NULL)
     {
-        free(found);
+        free(searches);
         free(buffer);
         return dtnmos_fail_memory(error);
     }
-    found->service = config->service == DTNMOS_SERVICE_QUERY
-                         ? "_nmos-query._tcp.local"
-                         : "_nmos-register._tcp.local";
+    const char* service_type = config->service == DTNMOS_SERVICE_QUERY
+                                   ? "_nmos-query._tcp"
+                                   : "_nmos-register._tcp";
     dtnmos_result result = DTNMOS_OK;
-    dtnmos_udp* udp = dtnmos_udp_open(NULL, config->interface_address);
-    if (udp == NULL)
+
+    // The search of multicast DNS, in the domain local.
+    search* multicast = &searches[0];
+    multicast->kind = DTNMOS_SEARCH_MULTICAST;
+    multicast->active =
+        config->searches == 0 || (config->searches & DTNMOS_SEARCH_MULTICAST) != 0;
+    multicast->port = mdns_port;
+    snprintf(multicast->address, sizeof(multicast->address), "%s", mdns_address);
+    snprintf(multicast->service, sizeof(multicast->service), "%s.local", service_type);
+    multicast->found.service = multicast->service;
+    if (config->destination != NULL &&
+        !read_destination(config->destination, multicast->address,
+                          sizeof(multicast->address), &multicast->port))
+    {
+        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+                             "The destination %s is no <IPv4 address>:<port>.",
+                             config->destination);
+    }
+    if (result == DTNMOS_OK)
+    {
+        result = prepare_unicast(config, service_type, &searches[1], error);
+    }
+    dtnmos_udp* udp = NULL;
+    if (result == DTNMOS_OK &&
+        (udp = dtnmos_udp_open(NULL, config->interface_address)) == NULL)
     {
         result = dtnmos_fail(
             error, DTNMOS_E_NETWORK, "No socket for multicast DNS could be opened%s%s.",
@@ -524,114 +762,73 @@ dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
         config->timeout_ms != 0 ? config->timeout_ms : default_timeout_ms;
     const uint16_t id = (uint16_t)(dtnmos_monotonic_ms() | 1u);
 
-    // The first query, three times within the timeout.
-    const dtnmos_dns_question question = {found->service, DTNMOS_DNS_TYPE_PTR};
+    // The first query, three times within the timeout; to a DNS server till it answers.
     const uint64_t start = dtnmos_monotonic_ms();
     for (int send = 0; result == DTNMOS_OK && send < sends; ++send)
     {
-        uint8_t query[512];
-        const size_t length =
-            dtnmos_dns_write_query(query, sizeof(query), id, &question, 1);
-        if (!dtnmos_udp_send(udp, address, port, query, length) && send == 0)
+        for (int s = 0; s < 2; ++s)
         {
-            result = dtnmos_fail(error, DTNMOS_E_NETWORK,
-                                 "The query for %s could not be sent to %s:%u.",
-                                 found->service, address, port);
-            break;
+            search* one = &searches[s];
+            if (!one->active || one->answered)
+            {
+                continue;
+            }
+            uint8_t query[512];
+            const dtnmos_dns_question question = {one->service, DTNMOS_DNS_TYPE_PTR};
+            const size_t length = dtnmos_dns_write_query(query, sizeof(query), id,
+                                                         one->flags, &question, 1);
+            if (dtnmos_udp_send(udp, one->address, one->port, query, length) || send > 0)
+            {
+                continue;
+            }
+            if (one->kind == DTNMOS_SEARCH_MULTICAST)
+            {
+                result = dtnmos_fail(error, DTNMOS_E_NETWORK,
+                                     "The query for %s could not be sent to %s:%u.",
+                                     one->service, one->address, one->port);
+                break;
+            }
+            log_message(config, DTNMOS_LOG_WARNING,
+                        "The query for %s could not be sent to the DNS server %s:%u.",
+                        one->service, one->address, one->port);
+            one->active = 0;
         }
-        collect(config, udp, found, buffer,
-                start + (uint64_t)timeout * (uint64_t)(send + 1) / sends);
+        if (result == DTNMOS_OK)
+        {
+            collect(config, udp, searches, id, buffer,
+                    start + (uint64_t)timeout * (uint64_t)(send + 1) / sends);
+        }
     }
 
-    // One more query for the records the answers left out.
+    // One more query of each search for the records its answers left out.
     if (result == DTNMOS_OK)
     {
-        dtnmos_dns_question missing[2 * max_instances];
-        size_t missing_count = 0;
-        for (size_t i = 0; i < found->instance_count; ++i)
+        int asked = 0;
+        for (int s = 0; s < 2; ++s)
         {
-            const instance* service = &found->instances[i];
-            if (!service->has_srv)
+            if (searches[s].active)
             {
-                missing[missing_count++] =
-                    (dtnmos_dns_question){service->name, DTNMOS_DNS_TYPE_SRV};
-            }
-            if (!service->has_txt)
-            {
-                missing[missing_count++] =
-                    (dtnmos_dns_question){service->name, DTNMOS_DNS_TYPE_TXT};
-            }
-            else if (service->has_srv && host_named(found, service->host) == NULL &&
-                     missing_count < 2 * max_instances)
-            {
-                missing[missing_count++] =
-                    (dtnmos_dns_question){service->host, DTNMOS_DNS_TYPE_A};
+                asked |= ask_missing(config, udp, &searches[s], id);
             }
         }
-        if (missing_count > 0)
+        if (asked)
         {
-            log_message(config, DTNMOS_LOG_DEBUG, "Asking again for %zu records of %s.",
-                        missing_count, found->service);
-            const size_t length =
-                dtnmos_dns_write_query(buffer, max_message, id, missing, missing_count);
-            if (length > 0 && dtnmos_udp_send(udp, address, port, buffer, length))
-            {
-                collect(config, udp, found, buffer, dtnmos_monotonic_ms() + timeout / 2);
-            }
+            collect(config, udp, searches, id, buffer,
+                    dtnmos_monotonic_ms() + timeout / 2);
         }
     }
     dtnmos_udp_close(udp);
 
-    // The list of the complete instances.
-    dtnmos_registry_list* result_list = NULL;
     if (result == DTNMOS_OK)
     {
-        result_list = calloc(1, sizeof(*result_list));
-        if (result_list == NULL ||
-            (found->instance_count > 0 &&
-             (result_list->registries = calloc(
-                  found->instance_count, sizeof(*result_list->registries))) == NULL))
-        {
-            free(result_list);
-            result_list = NULL;
-            result = dtnmos_fail_memory(error);
-        }
-    }
-    for (size_t i = 0; result == DTNMOS_OK && i < found->instance_count; ++i)
-    {
-        const instance* service = &found->instances[i];
-        if (!service->has_srv)
-        {
-            log_message(config, DTNMOS_LOG_DEBUG, "%s did not say where it is.",
-                        service->name);
-            continue;
-        }
-        if (!describe(found, service, config->service,
-                      &result_list->registries[result_list->count]))
-        {
-            dtnmos_registry_info_clear(&result_list->registries[result_list->count]);
-            result = dtnmos_fail_memory(error);
-            break;
-        }
-        ++result_list->count;
+        result = list_registries(config, searches, list, error);
     }
     if (result == DTNMOS_OK)
     {
-        // qsort() takes no null array, which an empty list has.
-        if (result_list->count > 1)
-        {
-            qsort(result_list->registries, result_list->count,
-                  sizeof(*result_list->registries), compare_registries);
-        }
         log_message(config, DTNMOS_LOG_INFO, "Found %zu instances of %s.",
-                    result_list->count, found->service);
-        *list = result_list;
+                    dtnmos_registry_list_count(*list), service_type);
     }
-    else
-    {
-        dtnmos_registry_list_free(result_list);
-    }
-    free(found);
+    free(searches);
     free(buffer);
     return result;
 }

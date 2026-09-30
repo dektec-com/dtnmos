@@ -8,6 +8,7 @@
 
 #include "dns.h"
 
+#include <stdio.h>
 #include <string.h>
 
 // The header of a message is 12 bytes; its flags have the QR bit for a response.
@@ -89,7 +90,7 @@ static int write_name(uint8_t* buffer, size_t size, size_t* offset, const char* 
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_write_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
+size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id, uint16_t flags,
                               const dtnmos_dns_question* questions, size_t count)
 {
     if (buffer == NULL || size < header_size || count == 0 || count > 0xFFFF)
@@ -98,6 +99,7 @@ size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id,
     }
     memset(buffer, 0, header_size);
     put16(buffer, id);
+    put16(buffer + 2, (uint16_t)(flags & ~flag_response));
     put16(buffer + 4, (uint16_t)count);
     size_t offset = header_size;
     for (size_t i = 0; i < count; ++i)
@@ -329,4 +331,101 @@ int dtnmos_dns_txt_value(const uint8_t* txt, size_t length, const char* key, cha
         return 1;
     }
     return 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+int dtnmos_dns_read_header(const uint8_t* message, size_t length, uint16_t* id,
+                           unsigned* rcode)
+{
+    if (message == NULL || length < header_size)
+    {
+        return 0;
+    }
+    *id = get16(message);
+    *rcode = get16(message + 2) & 0x000Fu;
+    return 1;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_space -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+static int is_space(char c)
+{
+    return c == ' ' || c == '\t' || c == '\r';
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Copies the word at *at, up to the end of the line, into word, and moves *at past it;
+// returns its length, 0 at the end of the line, or when it does not fit.
+//
+static size_t next_word(const char** at, char* word, size_t size)
+{
+    while (is_space(**at))
+    {
+        ++*at;
+    }
+    const char* start = *at;
+    while (**at != '\0' && **at != '\n' && !is_space(**at))
+    {
+        ++*at;
+    }
+    const size_t length = (size_t)(*at - start);
+    if (length == 0 || length >= size)
+    {
+        return 0;
+    }
+    memcpy(word, start, length);
+    word[length] = '\0';
+    return length;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv4_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Whether text is an IPv4 address in dotted decimal, four numbers up to 255.
+//
+static int is_ipv4_text(const char* text)
+{
+    unsigned parts[4];
+    char rest = '\0';
+    return sscanf(text, "%3u.%3u.%3u.%3u%c", &parts[0], &parts[1], &parts[2], &parts[3],
+                  &rest) == 4 &&
+           parts[0] <= 255 && parts[1] <= 255 && parts[2] <= 255 && parts[3] <= 255;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void dtnmos_dns_read_resolv_conf(const char* text, char* server, size_t server_size,
+                                 char* domain, size_t domain_size)
+{
+    server[0] = '\0';
+    domain[0] = '\0';
+    const char* at = text;
+    while (at != NULL && *at != '\0')
+    {
+        char keyword[16];
+        char word[DTNMOS_DNS_NAME_SIZE];
+        if (next_word(&at, keyword, sizeof(keyword)) > 0 &&
+            next_word(&at, word, sizeof(word)) > 0)
+        {
+            if (strcmp(keyword, "nameserver") == 0 && server[0] == '\0' &&
+                is_ipv4_text(word) && strlen(word) < server_size)
+            {
+                memcpy(server, word, strlen(word) + 1);
+            }
+            else if (strcmp(keyword, "search") == 0 || strcmp(keyword, "domain") == 0)
+            {
+                // The last line wins, and "." is the root, which is no domain to browse.
+                size_t length = strlen(word);
+                if (length > 1 && word[length - 1] == '.')
+                {
+                    word[--length] = '\0';
+                }
+                const int fits = length < domain_size && strcmp(word, ".") != 0;
+                memcpy(domain, fits ? word : "", fits ? length + 1 : 1);
+            }
+        }
+        at = strchr(at, '\n');
+        at = at != NULL ? at + 1 : NULL;
+    }
 }

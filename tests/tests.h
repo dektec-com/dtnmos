@@ -57,7 +57,10 @@
     DTNMOS_TEST(dns_refuses_malformed_messages)                                          \
     DTNMOS_TEST(discovery_finds_registries_by_priority)                                  \
     DTNMOS_TEST(discovery_asks_again_for_what_is_missing)                                \
-    DTNMOS_TEST(discovery_finds_nothing_in_silence)
+    DTNMOS_TEST(discovery_finds_nothing_in_silence)                                      \
+    DTNMOS_TEST(dns_reads_resolv_conf)                                                   \
+    DTNMOS_TEST(discovery_asks_a_dns_server_too)                                         \
+    DTNMOS_TEST(discovery_takes_only_the_dns_server)
 
 #define DTNMOS_TEST(name) void name(void);
 DTNMOS_TESTS

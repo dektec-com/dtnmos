@@ -227,7 +227,7 @@ void dns_writes_a_query(void)
     uint8_t buffer[512];
     const dtnmos_dns_question question = {"_nmos-query._tcp.local", DTNMOS_DNS_TYPE_PTR};
     const size_t length =
-        dtnmos_dns_write_query(buffer, sizeof(buffer), 0x1234, &question, 1);
+        dtnmos_dns_write_query(buffer, sizeof(buffer), 0x1234, 0, &question, 1);
     static const uint8_t expected[] = {
         0x12, 0x34, 0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   // header
         11,   '_',  'n', 'm', 'o', 's', '-', 'q', 'u', 'e', 'r', 'y', // _nmos-query
@@ -235,9 +235,9 @@ void dns_writes_a_query(void)
         0,    12,   0,   1}; // PTR IN
     REQUIRE(length == sizeof(expected));
     CHECK(memcmp(buffer, expected, length) == 0);
-    CHECK_EQ(dtnmos_dns_write_query(buffer, 20, 1, &question, 1), 0);
+    CHECK_EQ(dtnmos_dns_write_query(buffer, 20, 1, 0, &question, 1), 0);
     const dtnmos_dns_question empty_label = {"a..local", DTNMOS_DNS_TYPE_A};
-    CHECK_EQ(dtnmos_dns_write_query(buffer, sizeof(buffer), 1, &empty_label, 1), 0);
+    CHECK_EQ(dtnmos_dns_write_query(buffer, sizeof(buffer), 1, 0, &empty_label, 1), 0);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_records_and_compression -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -305,7 +305,8 @@ void dns_escapes_dots_within_labels(void)
     // Written back, the escaped dot stays within its label.
     uint8_t buffer[128];
     const dtnmos_dns_question question = {kept.found[0].target, DTNMOS_DNS_TYPE_SRV};
-    const size_t length = dtnmos_dns_write_query(buffer, sizeof(buffer), 1, &question, 1);
+    const size_t length =
+        dtnmos_dns_write_query(buffer, sizeof(buffer), 1, 0, &question, 1);
     REQUIRE(length > 12 + 14);
     CHECK_EQ(buffer[12], 13);
     CHECK(memcmp(buffer + 13, "Registry v1.3", 13) == 0);
@@ -357,6 +358,11 @@ typedef struct responder
     size_t count;
     int answer; // 0: none, 1: everything, 2: PTR first, the rest when asked
     char destination[32];
+    const char* service; // that it announces, "_nmos-query._tcp.local" by default
+    // A DNS server, which counts a query without recursion desired or of more than one
+    // question as a fault, guarded by mutex, and answers it with FORMERR.
+    int dns;
+    int faults;
 } responder;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -413,10 +419,19 @@ static void respond(void* argument)
         {
             continue;
         }
+        const int fault =
+            r->dns && ((bytes[2] & 0x01) == 0 || bytes[4] != 0 || bytes[5] != 1);
         dtnmos_mutex_lock(r->mutex);
         ++r->queries;
         r->asked_srv_txt |= asks_srv_txt;
+        r->faults += fault;
         dtnmos_mutex_unlock(r->mutex);
+        if (fault)
+        {
+            const uint8_t formerr[12] = {bytes[0], bytes[1], 0x81, 0x01};
+            dtnmos_udp_send(r->socket, from, from_port, formerr, sizeof(formerr));
+            continue;
+        }
         if (r->answer == 0)
         {
             continue;
@@ -424,7 +439,7 @@ static void respond(void* argument)
         // A one-shot query is answered with its ID, to the port it came from.
         message m;
         const unsigned id = ((unsigned)bytes[0] << 8) | bytes[1];
-        answer_with(&m, id, "_nmos-query._tcp.local", r->instances, r->count,
+        answer_with(&m, id, r->service, r->instances, r->count,
                     r->answer == 2 && !asks_srv_txt);
         dtnmos_udp_send(r->socket, from, from_port, m.bytes, m.length);
     }
@@ -439,6 +454,7 @@ static int start_responder(responder* r, const announced* instances, size_t coun
     r->instances = instances;
     r->count = count;
     r->answer = answer;
+    r->service = "_nmos-query._tcp.local";
     r->socket = dtnmos_udp_open("127.0.0.1", NULL);
     r->mutex = dtnmos_mutex_create();
     if (r->socket == NULL || r->mutex == NULL)
@@ -475,6 +491,7 @@ static dtnmos_discovery_config config_for(const responder* r, uint32_t timeout_m
     config.size = sizeof(config);
     config.service = DTNMOS_SERVICE_QUERY;
     config.destination = r->destination;
+    config.searches = DTNMOS_SEARCH_MULTICAST;
     config.timeout_ms = timeout_ms;
     return config;
 }
@@ -600,4 +617,170 @@ void discovery_finds_nothing_in_silence(void)
     wrong.interface_address = "192.0.2.1";
     CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_NETWORK);
     CHECK(dtnmos_discover(&config, NULL, &error) == DTNMOS_E_INVALID_ARGUMENT);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void dns_reads_resolv_conf(void)
+{
+    char server[64];
+    char domain[256];
+    // The first IPv4 nameserver, and the first domain of the last search or domain line.
+    dtnmos_dns_read_resolv_conf("# written by DHCP\n"
+                                "nameserver 2001:db8::1\n"
+                                "nameserver 192.0.2.53\n"
+                                "nameserver 192.0.2.54\n"
+                                "domain first.example\n"
+                                "search\tstudio.example. other.example\n"
+                                "options edns0\n",
+                                server, sizeof(server), domain, sizeof(domain));
+    CHECK_STR(server, "192.0.2.53");
+    CHECK_STR(domain, "studio.example");
+    // No server, and the root, which is no domain.
+    dtnmos_dns_read_resolv_conf("search .\r\n", server, sizeof(server), domain,
+                                sizeof(domain));
+    CHECK_STR(server, "");
+    CHECK_STR(domain, "");
+    // Nothing that fits, and nothing at all.
+    dtnmos_dns_read_resolv_conf("nameserver 192.0.2.53\ndomain studio.example", server, 8,
+                                domain, 8);
+    CHECK_STR(server, "");
+    CHECK_STR(domain, "");
+    dtnmos_dns_read_resolv_conf("", server, sizeof(server), domain, sizeof(domain));
+    CHECK_STR(server, "");
+    // The query to a DNS server asks it to recurse.
+    uint8_t buffer[64];
+    const dtnmos_dns_question question = {"_nmos-query._tcp.studio.example",
+                                          DTNMOS_DNS_TYPE_PTR};
+    REQUIRE(dtnmos_dns_write_query(buffer, sizeof(buffer), 7,
+                                   DTNMOS_DNS_RECURSION_DESIRED, &question, 1) > 0);
+    CHECK_EQ(buffer[2], 0x01);
+    uint16_t id = 0;
+    unsigned rcode = 9;
+    const uint8_t refused[12] = {0x12, 0x34, 0x81, 0x85};
+    REQUIRE(dtnmos_dns_read_header(refused, sizeof(refused), &id, &rcode));
+    CHECK_EQ(id, 0x1234);
+    CHECK_EQ(rcode, 5);
+    CHECK(!dtnmos_dns_read_header(refused, 11, &id, &rcode));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- discovery_asks_a_dns_server_too -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Multicast DNS and a DNS server announce a registry each of the same priority: both
+// come back, the one of the DNS server first, which the DNS server gave the PTR record
+// first, and its other records one question at a time.
+//
+void discovery_asks_a_dns_server_too(void)
+{
+    static const announced on_link = {
+        "On link", "on-link.local", 8080, {"api_proto=http", "api_ver=v1.3", "pri=10"},
+        3,         {127, 0, 0, 2}};
+    static const announced in_dns[] = {
+        {"Studio",
+         "registry.studio.example",
+         8081,
+         {"api_proto=http", "api_ver=v1.3", "pri=10"},
+         3,
+         {127, 0, 0, 3}},
+        {"Backup",
+         "backup.studio.example",
+         8082,
+         {"api_proto=http", "api_ver=v1.3", "pri=20"},
+         3,
+         {127, 0, 0, 4}},
+    };
+    responder mdns;
+    REQUIRE(start_responder(&mdns, &on_link, 1, 1));
+    responder dns;
+    REQUIRE(start_responder(&dns, in_dns, 2, 2));
+    dtnmos_mutex_lock(dns.mutex);
+    dns.service = "_nmos-query._tcp.studio.example";
+    dns.dns = 1;
+    dtnmos_mutex_unlock(dns.mutex);
+
+    dtnmos_discovery_config config = config_for(&mdns, 300);
+    config.searches = 0;
+    config.dns_server = dns.destination;
+    config.dns_domain = "studio.example.";
+    dtnmos_registry_list* list = NULL;
+    dtnmos_error error = {DTNMOS_OK, ""};
+    const dtnmos_result result = dtnmos_discover(&config, &list, &error);
+    dtnmos_mutex_lock(dns.mutex);
+    const int faults = dns.faults;
+    const int asked = dns.asked_srv_txt;
+    dtnmos_mutex_unlock(dns.mutex);
+    stop_responder(&dns);
+    stop_responder(&mdns);
+    REQUIRE(result == DTNMOS_OK);
+    CHECK_EQ(faults, 0);
+    CHECK(asked);
+    REQUIRE(dtnmos_registry_list_count(list) == 3);
+    const dtnmos_registry_info* first = dtnmos_registry_list_at(list, 0);
+    CHECK_STR(dtnmos_string_get(&first->instance), "Studio");
+    CHECK_STR(dtnmos_string_get(&first->url), "http://127.0.0.3:8081");
+    CHECK_EQ(first->found_by, DTNMOS_SEARCH_UNICAST);
+    const dtnmos_registry_info* second = dtnmos_registry_list_at(list, 1);
+    CHECK_STR(dtnmos_string_get(&second->instance), "On link");
+    CHECK_EQ(second->found_by, DTNMOS_SEARCH_MULTICAST);
+    const dtnmos_registry_info* third = dtnmos_registry_list_at(list, 2);
+    CHECK_STR(dtnmos_string_get(&third->instance), "Backup");
+    CHECK_STR(dtnmos_string_get(&third->host), "backup.studio.example");
+    CHECK_EQ(third->found_by, DTNMOS_SEARCH_UNICAST);
+    dtnmos_registry_info copy;
+    memset(&copy, 0, sizeof(copy));
+    REQUIRE(dtnmos_registry_info_copy(&copy, third) == DTNMOS_OK);
+    CHECK_EQ(copy.found_by, DTNMOS_SEARCH_UNICAST);
+    dtnmos_registry_info_clear(&copy);
+    dtnmos_registry_list_free(list);
+
+    // What it refuses.
+    config.dns_server = "no-address:53";
+    CHECK(dtnmos_discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    config.dns_server = "127.0.0.1:53";
+    config.dns_domain = "studio..example";
+    CHECK(dtnmos_discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(error.message, "studio..example") != NULL);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.- discovery_takes_only_the_dns_server -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Only the unicast search: the multicast responder is not asked, and records of another
+// domain than the one asked for are not taken.
+//
+void discovery_takes_only_the_dns_server(void)
+{
+    responder mdns;
+    REQUIRE(start_responder(&mdns, &registry_b, 1, 1));
+    responder dns;
+    REQUIRE(start_responder(&dns, &registry_b, 1, 1));
+    dtnmos_mutex_lock(dns.mutex);
+    dns.service = "_nmos-query._tcp.studio.example";
+    dns.dns = 1;
+    dtnmos_mutex_unlock(dns.mutex);
+    dtnmos_discovery_config config = config_for(&mdns, 200);
+    config.searches = DTNMOS_SEARCH_UNICAST;
+    config.dns_server = dns.destination;
+    config.dns_domain = "studio.example";
+    dtnmos_registry_list* list = NULL;
+    REQUIRE(dtnmos_discover(&config, &list, NULL) == DTNMOS_OK);
+    dtnmos_mutex_lock(mdns.mutex);
+    const int multicast_queries = mdns.queries;
+    dtnmos_mutex_unlock(mdns.mutex);
+    dtnmos_mutex_lock(dns.mutex);
+    const int dns_queries = dns.queries;
+    dtnmos_mutex_unlock(dns.mutex);
+    CHECK_EQ(multicast_queries, 0);
+    // It answered the first query at once, so that was sent once.
+    CHECK_EQ(dns_queries, 1);
+    REQUIRE(dtnmos_registry_list_count(list) == 1);
+    CHECK_EQ(dtnmos_registry_list_at(list, 0)->found_by, DTNMOS_SEARCH_UNICAST);
+    dtnmos_registry_list_free(list);
+
+    // Records of another domain than the one asked for are not taken.
+    config.dns_domain = "elsewhere.example";
+    REQUIRE(dtnmos_discover(&config, &list, NULL) == DTNMOS_OK);
+    CHECK_EQ(dtnmos_registry_list_count(list), 0);
+    dtnmos_registry_list_free(list);
+    stop_responder(&dns);
+    stop_responder(&mdns);
 }

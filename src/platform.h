@@ -66,3 +66,10 @@ long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t tim
                         char* from_address, size_t from_size, uint16_t* from_port);
 
 void dtnmos_udp_close(dtnmos_udp* udp);
+
+// Writes the first IPv4 DNS server of the host into server, and the domain it searches
+// into domain, as DHCP or the administrator gave them: of /etc/resolv.conf on POSIX, and
+// of the first adapter with a gateway on Windows. Each is left empty when the host has
+// none.
+void dtnmos_system_dns(char* server, size_t server_size, char* domain,
+                       size_t domain_size);
