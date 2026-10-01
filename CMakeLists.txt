@@ -25,6 +25,7 @@ include(GNUInstallDirs)
 
 option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
 option(DTNMOS_BUILD_EXAMPLES "Build the example programs" ${PROJECT_IS_TOP_LEVEL})
+option(DTNMOS_INTEROP_TESTS "Build the interop tests against the AMWA NMOS Testing Tool and a registry" OFF)
 option(
   DTNMOS_INSTALL
   "Install the dtnmos library, headers, CMake package and pkg-config file"

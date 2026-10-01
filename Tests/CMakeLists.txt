@@ -39,6 +39,18 @@ dtnmos_add_test(Query Loopback/TestQuery.c)
 dtnmos_add_test(Sdp Unit/TestSdp.c)
 dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 
+# The interop tests run the suites of the AMWA NMOS Testing Tool against a node of
+# dtnmos, and use a registry as a client: they take minutes, and need the test bed, whose
+# addresses DTNMOS_TESTING_TOOL and DTNMOS_TEST_REGISTRY give at run time. They are built
+# only when asked for, and run with "ctest -L interop".
+if(DTNMOS_INTEROP_TESTS)
+  if(NOT DTNMOS_WITH_CURL OR NOT DTNMOS_WITH_SERVER)
+    message(FATAL_ERROR "DTNMOS_INTEROP_TESTS needs DTNMOS_WITH_CURL and DTNMOS_WITH_SERVER")
+  endif()
+  dtnmos_add_test(Interop Interop/TestInterop.c)
+  set_tests_properties(dtnmos.Interop PROPERTIES LABELS interop TIMEOUT 3600)
+endif()
+
 # The package tests install dtnmos into the build tree and build a consumer of it.
 if(DTNMOS_INSTALL)
   set(_package_dir "${PROJECT_BINARY_DIR}/package-test")
