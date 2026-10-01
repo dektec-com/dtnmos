@@ -18,6 +18,10 @@
 #   nmos-testbed logs registry|testing      follow the log, Ctrl+C to leave
 #   nmos-testbed update [registry|testing|all]   pull the latest image and restart
 #   nmos-testbed autostart on|off [registry|testing|all]   start at boot or not
+#   nmos-testbed pause|resume
+#                       stop and resume the registry's answers to DNS-SD, which stays
+#                       reachable at its URL: no other registry may be found while
+#                       the Testing Tool runs IS-04-01
 #
 # Without a service name, a command applies to both. The registry's settings are in
 # ~/nmos/registry.json; restart it after changing them. Needs podman 4.4 or later.
@@ -32,7 +36,7 @@ TESTING_IMAGE=docker.io/amwa/nmos-testing:latest
 
 usage()
 {
-    sed -n '8,23p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '8,27p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 }
 
@@ -249,6 +253,24 @@ autostart()
     done
 }
 
+# +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Pause +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+
+# The registry announces itself through the mDNS daemon in its container. Stopping that
+# daemon with SIGSTOP leaves the registry serving at its URL while nothing answers for
+# it on DNS-SD; SIGCONT resumes it, with the announcements nmos-cpp made.
+pause_registry()
+{
+    local signal="$1"
+    check_installed
+    podman exec nmos-registry sh -c "kill -$signal \$(pidof mdnsd)" ||
+        die "the registry is not running"
+    if [ "$signal" = STOP ]; then
+        echo "nmos-registry: not answering DNS-SD; 'nmos-testbed resume' to undo"
+    else
+        echo "nmos-registry: answering DNS-SD"
+    fi
+}
+
 # +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Commands +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
 command="${1:-}"
@@ -261,6 +283,12 @@ case "$command" in
         ;;
     uninstall)
         uninstall
+        ;;
+    pause)
+        pause_registry STOP
+        ;;
+    resume)
+        pause_registry CONT
         ;;
     start|stop|restart)
         check_installed
