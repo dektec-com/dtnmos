@@ -680,7 +680,12 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
         {
             snprintf(t->SourceIp, sizeof(t->SourceIp), "%s", s->SourceIp);
         }
-        snprintf(s->ActiveSourceIp, sizeof(s->ActiveSourceIp), "%s", t->SourceIp);
+        if (strcmp(s->ActiveSourceIp, t->SourceIp) != 0)
+        {
+            // The node lists the interface of the address its sender sends from.
+            snprintf(s->ActiveSourceIp, sizeof(s->ActiveSourceIp), "%s", t->SourceIp);
+            NmosNode_Touch(Node);
+        }
         s->MasterEnable = c->Active.MasterEnable && t->RtpEnabled;
         // A sender that is parked is subscribed to no receiver in IS-04.
         snprintf(s->ReceiverId.Text, sizeof(s->ReceiverId.Text), "%s",

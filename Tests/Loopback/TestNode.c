@@ -418,14 +418,15 @@ NMOS_TEST(NodeDeletesWhatIsRemovedAndWhatItHad)
     NMOS_ASSERT(DtNmosNode_Remove(Node, &Sender) == DTNMOS_OK);
     NMOS_ASSERT(DtNmosNode_Remove(Node, &Sender) == DTNMOS_E_NOT_FOUND);
     NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
-    // The sender, its flow and its source go, and the device that listed it registers
-    // anew.
+    // The sender, its flow and its source go, and the node, which listed the interface
+    // of the sender, and the device that listed the sender register anew.
     NMOS_ASSERT_STR(Registry.Requests[Before].Method, "DELETE");
     NMOS_ASSERT(strstr(Registry.Requests[Before].Url, "resource/senders/" SENDER_ID) !=
                 NULL);
     NMOS_ASSERT(strstr(Registry.Requests[Before + 1].Url, "resource/flows/") != NULL);
     NMOS_ASSERT(strstr(Registry.Requests[Before + 2].Url, "resource/sources/") != NULL);
-    NMOS_ASSERT_STR(Registry.Requests[Before + 3].Type, "device");
+    NMOS_ASSERT_STR(Registry.Requests[Before + 3].Type, "node");
+    NMOS_ASSERT_STR(Registry.Requests[Before + 4].Type, "device");
     const int Kept = Registry.Count;
     DtNmosNode_Free(Node);
     // The end of the node deletes the receiver, the device and the node.
@@ -594,6 +595,15 @@ NMOS_TEST(NodeBindsToTheInterfaceOfItsAddress)
     NMOS_ASSERT(Node != NULL);
     NMOS_ASSERT_EQ(BindingOf(Node, "/x-nmos/node/v1.3/senders/", Sender, sizeof(Sender)),
                    0);
+    // The node lists only the interfaces its senders and receivers are bound to.
+    Response = Ask(Node, "GET", "/x-nmos/node/v1.3/self");
+    Body = DtNmosHttpResponse_Body(Response, &Length);
+    const int ParsedAgain = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
+    DtNmosHttpResponse_Free(Response);
+    NMOS_ASSERT(ParsedAgain);
+    const size_t None = NmosJson_Member(Json, "interfaces")->Count;
+    NmosJson_Free(Json);
+    NMOS_ASSERT_EQ(None, 0);
     DtNmosNode_Free(Node);
 }
 

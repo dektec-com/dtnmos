@@ -95,7 +95,8 @@ struct DtNmosNode
     void* LogUser;
     char Version[32];
     uint64_t LastVersion;
-    int NodeRegistered;
+    int NodeRegistered;    // the registry holds this version
+    int NodeWasRegistered; // the registry held a version, which closing deletes
     int Closing; // the node deletes what it registered and registers nothing more
     uint64_t NextHeartbeatMs;
     DtNmosRegistryFailedFunc RegistryFailed;
@@ -121,6 +122,9 @@ void NmosNode_Lock(DtNmosNode* Node);
 void NmosNode_Unlock(DtNmosNode* Node);
 // Frees what node holds and leaves it empty and closed.
 void NmosNode_Release(DtNmosNode* Node);
+// Gives the node a new version, which the next poll registers, after what it lists of
+// its senders and receivers changed; the caller holds the lock.
+void NmosNode_Touch(DtNmosNode* Node);
 // Fails with DTNMOS_E_STATE, naming function, when node is not open.
 DtNmosResult NmosNode_CheckOpen(const DtNmosNode* Node, const char* Function);
 

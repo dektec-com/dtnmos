@@ -377,11 +377,37 @@ void NmosNode_WriteBaseUrl(const DtNmosNode* Node, NmosBuffer* b)
                       Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsBound -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Whether a sender of the node sends from Address or a receiver receives on it.
+//
+static int IsBound(const DtNmosNode* Node, const char* Address)
+{
+    for (size_t i = 0; i < Node->SenderCount; ++i)
+    {
+        if (strcmp(Node->Senders[i].ActiveSourceIp, Address) == 0)
+        {
+            return 1;
+        }
+    }
+    for (size_t i = 0; i < Node->ReceiverCount; ++i)
+    {
+        if (strcmp(Node->Receivers[i].InterfaceIp, Address) == 0)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Writes the network interfaces of the host, each once, as IS-04 lists them in a node.
+// Writes the network interfaces of the host that the senders and receivers of the node
+// are bound to, each once, as IS-04 lists them in a node: those that the node makes
+// available to its devices, and not every interface of the host. The caller holds the
+// lock.
 //
-static void WriteInterfaces(NmosBuffer* b)
+static void WriteInterfaces(const DtNmosNode* Node, NmosBuffer* b)
 {
     size_t Count = 0;
     NmosInterface* List = NmosOs_Interfaces(&Count);
@@ -389,10 +415,15 @@ static void WriteInterfaces(NmosBuffer* b)
     int First = 1;
     for (size_t i = 0; i < Count; ++i)
     {
+        if (!IsBound(Node, List[i].Address))
+        {
+            continue;
+        }
         int Listed = 0;
         for (size_t j = 0; j < i && !Listed; ++j)
         {
-            Listed = strcmp(List[j].Name, List[i].Name) == 0;
+            Listed =
+                strcmp(List[j].Name, List[i].Name) == 0 && IsBound(Node, List[j].Address);
         }
         if (Listed)
         {
@@ -449,7 +480,7 @@ void NmosNode_WriteSelf(const DtNmosNode* Node, NmosBuffer* b)
         "[], \"clocks\": [{\"name\": \"clk0\", \"ref_type\": \"internal\"}], "
         "\"interfaces\": ",
         (unsigned)Node->ApiPort);
-    WriteInterfaces(b);
+    WriteInterfaces(Node, b);
     DTNMOS_APPEND_LITERAL(b, "}");
 }
 
@@ -791,7 +822,8 @@ static int Grow(void** Array, size_t* Capacity, size_t Count, size_t Size)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TouchDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The device of a sender or receiver changes with it, as it lists them.
+// The device of a sender or receiver changes with it, as it lists them, and so does the
+// node, whose interfaces are those of its senders and receivers.
 //
 static void TouchDevice(DtNmosNode* Node, const DtNmosId* Id)
 {
@@ -801,6 +833,15 @@ static void TouchDevice(DtNmosNode* Node, const DtNmosId* Id)
         NewVersion(Node, Device->Version, sizeof(Device->Version));
         Device->Registered = 0;
     }
+    NmosNode_Touch(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_Touch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void NmosNode_Touch(DtNmosNode* Node)
+{
+    NewVersion(Node, Node->Version, sizeof(Node->Version));
+    Node->NodeRegistered = 0;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_AddDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1341,6 +1382,8 @@ static int NextPending(DtNmosNode* Node, NmosPending* p)
 //
 static void MarkRegistered(DtNmosNode* Node, const NmosPending* p)
 {
+    // The registry holds the node, in this version or an older one.
+    Node->NodeWasRegistered |= p->Kind == 0;
     if (p->Kind == 0 && strcmp(Node->Version, p->Version) == 0)
     {
         Node->NodeRegistered = 1;
@@ -1555,10 +1598,9 @@ static void UnregisterAll(DtNmosNode* Node)
             ScheduleRemoval(Node, "devices", &Node->Devices[i].Id);
         }
     }
-    const int Registered = Node->NodeRegistered;
     Node->NodeRegistered = 0;
     Node->Closing = 1;
-    if (Registered)
+    if (Node->NodeWasRegistered)
     {
         ScheduleRemoval(Node, "nodes", &Node->Id);
     }
