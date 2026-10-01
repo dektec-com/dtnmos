@@ -136,26 +136,25 @@ static char* copy_text(const char* text, size_t length)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** query,
-                                DtNmosError* error)
+DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** query)
 {
     if (query == NULL || config == NULL || config->RegistryUrl == NULL ||
         config->RegistryUrl[0] == '\0' || config->Http == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A query needs the URL of a registry and an HTTP function.");
     }
     *query = NULL;
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "The Query API %s is not supported; dtnmos speaks v1.3.",
                            config->ApiVersion);
     }
     DtNmosQuery* result = calloc(1, sizeof(*result));
     if (result == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     size_t length = strlen(config->RegistryUrl);
     while (length > 0 && config->RegistryUrl[length - 1] == '/')
@@ -170,7 +169,7 @@ DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** q
     {
         dtnmos_buffer_free(&base);
         free(result);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     result->base = base.data;
     result->http = config->Http;
@@ -222,8 +221,7 @@ uint32_t dtnmos_query_timeout(const DtNmosQuery* query)
 //
 DtNmosResult dtnmos_query_request(DtNmosQuery* query, const char* method, const char* url,
                                   const char* content_type, const char* body,
-                                  size_t body_length, DtNmosHttpResponse* response,
-                                  DtNmosError* error)
+                                  size_t body_length, DtNmosHttpResponse* response)
 {
     DtNmosHttpRequest request;
     memset(&request, 0, sizeof(request));
@@ -237,14 +235,11 @@ DtNmosResult dtnmos_query_request(DtNmosQuery* query, const char* method, const 
     char message[600];
     snprintf(message, sizeof(message), "%s %s", method, url);
     log_message(query, DTNMOS_LOG_DEBUG, message);
-    if (error != NULL)
+    dtnmos_clear_error();
+    DtNmosResult result = query->http(query->http_user, &request, response);
+    if (result != DTNMOS_OK && DtNmos_GetLastError()[0] == '\0')
     {
-        error->Message[0] = '\0';
-    }
-    DtNmosResult result = query->http(query->http_user, &request, response, error);
-    if (result != DTNMOS_OK && error != NULL && error->Message[0] == '\0')
-    {
-        dtnmos_fail(error, result, "%s %s failed.", method, url);
+        dtnmos_fail(result, "%s %s failed.", method, url);
     }
     return result;
 }
@@ -254,11 +249,10 @@ DtNmosResult dtnmos_query_request(DtNmosQuery* query, const char* method, const 
 // Performs a GET of url into response; fails unless the answer is 200, with
 // DTNMOS_E_NOT_FOUND for 404.
 //
-static DtNmosResult get(DtNmosQuery* query, const char* url, DtNmosHttpResponse* response,
-                        DtNmosError* error)
+static DtNmosResult get(DtNmosQuery* query, const char* url, DtNmosHttpResponse* response)
 {
     DtNmosResult result =
-        dtnmos_query_request(query, "GET", url, NULL, NULL, 0, response, error);
+        dtnmos_query_request(query, "GET", url, NULL, NULL, 0, response);
     if (result != DTNMOS_OK)
     {
         return result;
@@ -266,13 +260,11 @@ static DtNmosResult get(DtNmosQuery* query, const char* url, DtNmosHttpResponse*
     const int status = DtNmosHttpResponse_Status(response);
     if (status == 404)
     {
-        return dtnmos_fail(error, DTNMOS_E_NOT_FOUND, "The registry has no %s (404).",
-                           url);
+        return dtnmos_fail(DTNMOS_E_NOT_FOUND, "The registry has no %s (404).", url);
     }
     if (status != 200)
     {
-        return dtnmos_fail(error, DTNMOS_E_HTTP, "GET %s was answered with %d.", url,
-                           status);
+        return dtnmos_fail(DTNMOS_E_HTTP, "GET %s was answered with %d.", url, status);
     }
     return DTNMOS_OK;
 }
@@ -283,26 +275,26 @@ static DtNmosResult get(DtNmosQuery* query, const char* url, DtNmosHttpResponse*
 // null, *next, the URL of the next page from the Link header, or null.
 //
 static DtNmosResult get_json(DtNmosQuery* query, const char* url, dtnmos_json** json,
-                             char** next, DtNmosError* error)
+                             char** next)
 {
     *json = NULL;
     DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
     if (response == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    DtNmosResult result = get(query, url, response, error);
+    DtNmosResult result = get(query, url, response);
     if (result == DTNMOS_OK)
     {
         size_t length = 0;
         const char* body = DtNmosHttpResponse_Body(response, &length);
-        result = dtnmos_json_parse(body, length, json, error);
+        result = dtnmos_json_parse(body, length, json);
         if (result != DTNMOS_OK)
         {
             char reason[512];
-            snprintf(reason, sizeof(reason), "%s", error != NULL ? error->Message : "");
-            result = dtnmos_fail(error, DTNMOS_E_PARSE,
-                                 "The answer to GET %s is no JSON: %s", url, reason);
+            snprintf(reason, sizeof(reason), "%s", DtNmos_GetLastError());
+            result = dtnmos_fail(DTNMOS_E_PARSE, "The answer to GET %s is no JSON: %s",
+                                 url, reason);
         }
     }
     if (result == DTNMOS_OK && next != NULL)
@@ -341,7 +333,7 @@ static DtNmosResult get_json(DtNmosQuery* query, const char* url, dtnmos_json** 
                 *next = copy_text(entry.data + 1, (size_t)(close - entry.data - 1));
                 if (*next == NULL)
                 {
-                    result = dtnmos_fail_memory(error);
+                    result = dtnmos_fail_memory();
                 }
                 break;
             }
@@ -359,9 +351,9 @@ static DtNmosResult get_json(DtNmosQuery* query, const char* url, dtnmos_json** 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_get_json -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult dtnmos_query_get_json(DtNmosQuery* query, const char* url,
-                                   dtnmos_json** json, DtNmosError* error)
+                                   dtnmos_json** json)
 {
-    return get_json(query, url, json, NULL, error);
+    return get_json(query, url, json, NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -407,25 +399,24 @@ static void free_pages(pages* p)
 //
 // Fetches every page of the list at url, each an array, into p.
 //
-static DtNmosResult get_pages(DtNmosQuery* query, char* url, pages* p, DtNmosError* error)
+static DtNmosResult get_pages(DtNmosQuery* query, char* url, pages* p)
 {
     for (int page = 0; url != NULL; ++page)
     {
         if (page == DTNMOS_MAX_PAGES)
         {
             free(url);
-            return dtnmos_fail(error, DTNMOS_E_HTTP,
-                               "The registry pages on beyond %d pages.",
+            return dtnmos_fail(DTNMOS_E_HTTP, "The registry pages on beyond %d pages.",
                                DTNMOS_MAX_PAGES);
         }
         dtnmos_json* json = NULL;
         char* next = NULL;
-        DtNmosResult result = get_json(query, url, &json, &next, error);
+        DtNmosResult result = get_json(query, url, &json, &next);
         if (result == DTNMOS_OK && json->type != DTNMOS_JSON_ARRAY)
         {
             dtnmos_json_free(json);
-            result = dtnmos_fail(error, DTNMOS_E_PARSE,
-                                 "The answer to GET %s is no array.", url);
+            result =
+                dtnmos_fail(DTNMOS_E_PARSE, "The answer to GET %s is no array.", url);
         }
         if (result != DTNMOS_OK)
         {
@@ -444,7 +435,7 @@ static DtNmosResult get_pages(DtNmosQuery* query, char* url, pages* p, DtNmosErr
                 dtnmos_json_free(json);
                 free(url);
                 free(next);
-                return dtnmos_fail_memory(error);
+                return dtnmos_fail_memory();
             }
             p->values = values;
             p->capacity = capacity;
@@ -540,13 +531,12 @@ static DtNmosResult read_sender(const dtnmos_json* resource, DtNmosSenderInfo* s
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Senders -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list,
-                                 DtNmosError* error)
+DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list)
 {
     if (query == NULL || list == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmosQuery_Senders() needs a query and a place for the list.");
     }
     *list = NULL;
@@ -557,14 +547,13 @@ DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list,
     char* url = make_url(query, "senders", NULL);
     if (url == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    DtNmosResult result = get_pages(query, url, &senders, error);
+    DtNmosResult result = get_pages(query, url, &senders);
     if (result == DTNMOS_OK)
     {
         url = make_url(query, "flows", NULL);
-        result = url == NULL ? dtnmos_fail_memory(error)
-                             : get_pages(query, url, &flows, error);
+        result = url == NULL ? dtnmos_fail_memory() : get_pages(query, url, &flows);
     }
     DtNmosSenderList* built = NULL;
     if (result == DTNMOS_OK)
@@ -578,7 +567,7 @@ DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list,
         if (built == NULL || (total > 0 && (built->senders = calloc(
                                                 total, sizeof(*built->senders))) == NULL))
         {
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
     }
     for (size_t p = 0; result == DTNMOS_OK && p < senders.count; ++p)
@@ -589,7 +578,7 @@ DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list,
             DtNmosSenderInfo* sender = &built->senders[built->count];
             if (read_sender(resource, sender) != DTNMOS_OK)
             {
-                result = dtnmos_fail_memory(error);
+                result = dtnmos_fail_memory();
                 break;
             }
             ++built->count;
@@ -678,8 +667,7 @@ static void read_media(DtNmosQuery* query, DtNmosSenderInfo* sender)
     memset(&url, 0, sizeof(url));
     dtnmos_buffer_printf(&url, "%sflows/%s", query->base, sender->FlowId.Text);
     dtnmos_json* flow = NULL;
-    DtNmosError ignored;
-    if (!url.failed && get_json(query, url.data, &flow, NULL, &ignored) == DTNMOS_OK)
+    if (!url.failed && get_json(query, url.data, &flow, NULL) == DTNMOS_OK)
     {
         sender->Media = media_of_flow(flow);
         dtnmos_json_free(flow);
@@ -702,7 +690,7 @@ typedef struct resource_kind
 // label it is, and reads it into info.
 //
 static DtNmosResult find_resource(DtNmosQuery* query, const resource_kind* kind,
-                                  const char* id_or_label, void* info, DtNmosError* error)
+                                  const char* id_or_label, void* info)
 {
     if (is_uuid(id_or_label))
     {
@@ -712,14 +700,14 @@ static DtNmosResult find_resource(DtNmosQuery* query, const resource_kind* kind,
         if (url.failed)
         {
             dtnmos_buffer_free(&url);
-            return dtnmos_fail_memory(error);
+            return dtnmos_fail_memory();
         }
         dtnmos_json* resource = NULL;
-        DtNmosResult result = get_json(query, url.data, &resource, NULL, error);
+        DtNmosResult result = get_json(query, url.data, &resource, NULL);
         dtnmos_buffer_free(&url);
         if (result == DTNMOS_E_NOT_FOUND)
         {
-            return dtnmos_fail(error, DTNMOS_E_NOT_FOUND, "The registry has no %s %s.",
+            return dtnmos_fail(DTNMOS_E_NOT_FOUND, "The registry has no %s %s.",
                                kind->noun, id_or_label);
         }
         if (result != DTNMOS_OK)
@@ -728,7 +716,7 @@ static DtNmosResult find_resource(DtNmosQuery* query, const resource_kind* kind,
         }
         result = kind->read(resource, info);
         dtnmos_json_free(resource);
-        return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory(error);
+        return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory();
     }
 
     // A label is matched by the registry, and again here, as the Query API compares
@@ -741,11 +729,11 @@ static DtNmosResult find_resource(DtNmosQuery* query, const resource_kind* kind,
     dtnmos_buffer_free(&parameters);
     if (url == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     pages found;
     memset(&found, 0, sizeof(found));
-    DtNmosResult result = get_pages(query, url, &found, error);
+    DtNmosResult result = get_pages(query, url, &found);
     const dtnmos_json* match = NULL;
     size_t matches = 0;
     dtnmos_buffer ids;
@@ -768,19 +756,18 @@ static DtNmosResult find_resource(DtNmosQuery* query, const resource_kind* kind,
     }
     if (result == DTNMOS_OK && matches == 0)
     {
-        result =
-            dtnmos_fail(error, DTNMOS_E_NOT_FOUND,
-                        "The registry has no %s labelled '%s'.", kind->noun, id_or_label);
+        result = dtnmos_fail(DTNMOS_E_NOT_FOUND, "The registry has no %s labelled '%s'.",
+                             kind->noun, id_or_label);
     }
     else if (result == DTNMOS_OK && matches > 1)
     {
-        result = dtnmos_fail(error, DTNMOS_E_AMBIGUOUS,
+        result = dtnmos_fail(DTNMOS_E_AMBIGUOUS,
                              "%zu %ss of the registry are labelled '%s': %s.", matches,
                              kind->noun, id_or_label, ids.data == NULL ? "" : ids.data);
     }
     else if (result == DTNMOS_OK && kind->read(match, info) != DTNMOS_OK)
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     dtnmos_buffer_free(&ids);
     free_pages(&found);
@@ -797,18 +784,17 @@ static DtNmosResult read_sender_info(const dtnmos_json* resource, void* info)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_FindSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* query, const char* id_or_label,
-                                    DtNmosSenderInfo* sender, DtNmosError* error)
+                                    DtNmosSenderInfo* sender)
 {
     if (query == NULL || id_or_label == NULL || id_or_label[0] == '\0' || sender == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmosQuery_FindSender() needs an ID or a label and a sender.");
     }
     DtNmosSenderInfo_Clear(sender);
     static const resource_kind senders = {"senders", "sender", read_sender_info};
-    const DtNmosResult result =
-        find_resource(query, &senders, id_or_label, sender, error);
+    const DtNmosResult result = find_resource(query, &senders, id_or_label, sender);
     if (result == DTNMOS_OK)
     {
         read_media(query, sender);
@@ -931,13 +917,12 @@ static DtNmosResult read_receiver(const dtnmos_json* resource, void* info)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Receivers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list,
-                                   DtNmosError* error)
+DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list)
 {
     if (query == NULL || list == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmosQuery_Receivers() needs a query and a place for the list.");
     }
     *list = NULL;
@@ -946,9 +931,9 @@ DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list
     char* url = make_url(query, "receivers", NULL);
     if (url == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    DtNmosResult result = get_pages(query, url, &receivers, error);
+    DtNmosResult result = get_pages(query, url, &receivers);
     DtNmosReceiverList* built = NULL;
     if (result == DTNMOS_OK)
     {
@@ -962,7 +947,7 @@ DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list
             (total > 0 &&
              (built->receivers = calloc(total, sizeof(*built->receivers))) == NULL))
         {
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
     }
     for (size_t p = 0; result == DTNMOS_OK && p < receivers.count; ++p)
@@ -972,7 +957,7 @@ DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list
             if (read_receiver(&receivers.values[p]->items[i],
                               &built->receivers[built->count]) != DTNMOS_OK)
             {
-                result = dtnmos_fail_memory(error);
+                result = dtnmos_fail_memory();
                 break;
             }
             ++built->count;
@@ -991,52 +976,51 @@ DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_FindReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* query, const char* id_or_label,
-                                      DtNmosReceiverInfo* receiver, DtNmosError* error)
+                                      DtNmosReceiverInfo* receiver)
 {
     if (query == NULL || id_or_label == NULL || id_or_label[0] == '\0' ||
         receiver == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmosQuery_FindReceiver() needs an ID or a label and a receiver.");
     }
     DtNmosReceiverInfo_Clear(receiver);
     static const resource_kind receivers = {"receivers", "receiver", read_receiver};
-    return find_resource(query, &receivers, id_or_label, receiver, error);
+    return find_resource(query, &receivers, id_or_label, receiver);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_SenderManifest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
                                         const DtNmosSenderInfo* sender,
-                                        DtNmosString* text, DtNmosError* error)
+                                        DtNmosString* text)
 {
     if (query == NULL || sender == NULL || text == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmosQuery_SenderManifest() needs a query, a sender and a text.");
     }
     if (DtNmosString_Length(&sender->ManifestHref) == 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_NOT_FOUND,
+        return dtnmos_fail(DTNMOS_E_NOT_FOUND,
                            "Sender %s ('%s') has no manifest_href, so it gives no SDP.",
                            sender->Id.Text, DtNmosString_Get(&sender->Label));
     }
     DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
     if (response == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    DtNmosResult result =
-        get(query, DtNmosString_Get(&sender->ManifestHref), response, error);
+    DtNmosResult result = get(query, DtNmosString_Get(&sender->ManifestHref), response);
     if (result == DTNMOS_OK)
     {
         size_t length = 0;
         const char* body = DtNmosHttpResponse_Body(response, &length);
         if (DtNmosString_Set(text, body, length) != DTNMOS_OK)
         {
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
     }
     DtNmosHttpResponse_Free(response);
@@ -1046,20 +1030,20 @@ DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_SenderSdp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* query, const DtNmosSenderInfo* sender,
-                                   DtNmosSdp** sdp, DtNmosError* error)
+                                   DtNmosSdp** sdp)
 {
     if (sdp == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosQuery_SenderSdp() needs a place for the SDP.");
     }
     *sdp = NULL;
     DtNmosString text = {0};
-    DtNmosResult result = DtNmosQuery_SenderManifest(query, sender, &text, error);
+    DtNmosResult result = DtNmosQuery_SenderManifest(query, sender, &text);
     if (result == DTNMOS_OK)
     {
-        result = DtNmosSdp_Parse(DtNmosString_Get(&text), DtNmosString_Length(&text), sdp,
-                                 error);
+        result =
+            DtNmosSdp_Parse(DtNmosString_Get(&text), DtNmosString_Length(&text), sdp);
     }
     DtNmosString_Clear(&text);
     return result;
@@ -1068,22 +1052,22 @@ DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* query, const DtNmosSenderInfo* s
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSenderInfo_Parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult DtNmosSenderInfo_Parse(const char* json, size_t length,
-                                    DtNmosSenderInfo* sender, DtNmosError* error)
+                                    DtNmosSenderInfo* sender)
 {
     if (json == NULL || sender == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosSenderInfo_Parse() needs JSON and a sender.");
     }
     DtNmosSenderInfo_Clear(sender);
     dtnmos_json* resource = NULL;
-    if (dtnmos_json_parse(json, length, &resource, error) != DTNMOS_OK ||
+    if (dtnmos_json_parse(json, length, &resource) != DTNMOS_OK ||
         resource->type != DTNMOS_JSON_OBJECT)
     {
         dtnmos_json_free(resource);
-        return dtnmos_fail(error, DTNMOS_E_PARSE, "The JSON of a sender is no object.");
+        return dtnmos_fail(DTNMOS_E_PARSE, "The JSON of a sender is no object.");
     }
     const DtNmosResult result = read_sender(resource, sender);
     dtnmos_json_free(resource);
-    return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory(error);
+    return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory();
 }

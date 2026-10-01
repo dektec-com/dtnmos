@@ -45,8 +45,7 @@ typedef struct activations
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- activate_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult activate_sender(void* user, const DtNmosId* sender,
-                                    const DtNmosSenderActivation* activation,
-                                    DtNmosError* error)
+                                    const DtNmosSenderActivation* activation)
 {
     activations* seen = user;
     CHECK_STR(sender->Text, SENDER_ID);
@@ -59,7 +58,7 @@ static DtNmosResult activate_sender(void* user, const DtNmosId* sender,
              DtNmosString_Get(&activation->SourceIp));
     if (seen->answer != DTNMOS_OK)
     {
-        snprintf(error->Message, sizeof(error->Message), "the card refused it");
+        return DtNmos_SetLastError(seen->answer, "the card refused it");
     }
     return seen->answer;
 }
@@ -67,10 +66,8 @@ static DtNmosResult activate_sender(void* user, const DtNmosId* sender,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- activate_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult activate_receiver(void* user, const DtNmosId* receiver,
-                                      const DtNmosReceiverActivation* activation,
-                                      DtNmosError* error)
+                                      const DtNmosReceiverActivation* activation)
 {
-    (void)error;
     activations* seen = user;
     CHECK_STR(receiver->Text, RECEIVER_ID);
     ++seen->receiver_calls;
@@ -89,16 +86,14 @@ static DtNmosResult activate_receiver(void* user, const DtNmosId* receiver,
 // The registry records the type of what is registered, and accepts it all.
 //
 static DtNmosResult registry_http(void* user, const DtNmosHttpRequest* request,
-                                  DtNmosHttpResponse* response, DtNmosError* error)
+                                  DtNmosHttpResponse* response)
 {
-    (void)error;
     activations* seen = user;
     int status = 200;
     if (strcmp(request->Method, "POST") == 0 && strstr(request->Url, "/resource") != NULL)
     {
         dtnmos_json* json = NULL;
-        if (dtnmos_json_parse(request->Body, request->BodyLength, &json, NULL) ==
-            DTNMOS_OK)
+        if (dtnmos_json_parse(request->Body, request->BodyLength, &json) == DTNMOS_OK)
         {
             const char* type = dtnmos_json_member_text(json, "type");
             snprintf(seen->last_registered, sizeof(seen->last_registered), "%s",
@@ -134,14 +129,13 @@ static DtNmosNode* make_node(activations* seen)
     config.Http = registry_http;
     config.HttpUser = seen;
     DtNmosNode* node = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
-    if (DtNmosNode_Create(&config, &node, &error) != DTNMOS_OK)
+    if (DtNmosNode_Create(&config, &node) != DTNMOS_OK)
     {
-        printf("  %s\n", error.Message);
+        printf("  %s\n", DtNmos_GetLastError());
         return NULL;
     }
     DtNmosDeviceConfig device = {sizeof(device), {DEVICE_ID}, "a card", ""};
-    CHECK(DtNmosNode_AddDevice(node, &device, &error) == DTNMOS_OK);
+    CHECK(DtNmosNode_AddDevice(node, &device) == DTNMOS_OK);
     DtNmosFlow flow = {0};
     flow.Size = sizeof(flow);
     flow.Media = DTNMOS_MEDIA_VIDEO;
@@ -157,14 +151,12 @@ static DtNmosNode* make_node(activations* seen)
     DtNmosString_SetText(&flow.Format.Video.Sampling, "YCbCr-4:2:2");
     DtNmosSenderConfig sender = {sizeof(sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
                                  &flow,          "192.168.1.5"};
-    CHECK(DtNmosNode_AddSender(node, &sender, activate_sender, seen, &error) ==
-          DTNMOS_OK);
+    CHECK(DtNmosNode_AddSender(node, &sender, activate_sender, seen) == DTNMOS_OK);
     DtNmosFlow_Clear(&flow);
     DtNmosReceiverConfig receiver = {
         sizeof(receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
-    CHECK(DtNmosNode_AddReceiver(node, &receiver, activate_receiver, seen, &error) ==
-          DTNMOS_OK);
-    CHECK(DtNmosNode_Poll(node, NULL, &error) == DTNMOS_OK);
+    CHECK(DtNmosNode_AddReceiver(node, &receiver, activate_receiver, seen) == DTNMOS_OK);
+    CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
     CHECK(DtNmosNode_IsRegistered(node));
     return node;
 }
@@ -189,15 +181,14 @@ static int ask(DtNmosNode* node, const char* method, const char* path, const cha
         request.BodyLength = strlen(body);
     }
     DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
-    DtNmosError error = {DTNMOS_OK, ""};
-    CHECK(DtNmosNode_Handle(node, &request, response, &error) == DTNMOS_OK);
+    CHECK(DtNmosNode_Handle(node, &request, response) == DTNMOS_OK);
     const int status = DtNmosHttpResponse_Status(response);
     if (json != NULL)
     {
         size_t length = 0;
         const char* text = DtNmosHttpResponse_Body(response, &length);
         *json = NULL;
-        if (dtnmos_json_parse(text, length, json, NULL) != DTNMOS_OK)
+        if (dtnmos_json_parse(text, length, json) != DTNMOS_OK)
         {
             printf("  no JSON from %s %s: %.*s\n", method, path, (int)length, text);
         }
@@ -348,7 +339,7 @@ void connection_connects_a_receiver(void)
     CHECK(dtnmos_json_member(subscription, "active")->type == DTNMOS_JSON_TRUE);
     dtnmos_json_free(json);
     CHECK(!DtNmosNode_IsRegistered(node));
-    CHECK(DtNmosNode_Poll(node, NULL, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
     CHECK_EQ(seen.registrations, registered + 1);
     CHECK_STR(seen.last_registered, "receiver");
 
@@ -417,11 +408,11 @@ void connection_moves_a_sender(void)
     request.Method = "GET";
     request.Url = CONNECTION "senders/" SENDER_ID "/transportfile";
     DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
-    CHECK(DtNmosNode_Handle(node, &request, response, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_Handle(node, &request, response) == DTNMOS_OK);
     size_t length = 0;
     const char* text = DtNmosHttpResponse_Body(response, &length);
     DtNmosSdp* sdp = NULL;
-    REQUIRE(DtNmosSdp_Parse(text, length, &sdp, NULL) == DTNMOS_OK);
+    REQUIRE(DtNmosSdp_Parse(text, length, &sdp) == DTNMOS_OK);
     CHECK_STR(DtNmosString_Get(&DtNmosSdp_Flow(sdp, 0)->DestinationIp), "192.168.1.9");
     CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->DestinationPort, 6000);
     CHECK_EQ(DtNmosSdp_Session(sdp)->SessionVersion, 2);

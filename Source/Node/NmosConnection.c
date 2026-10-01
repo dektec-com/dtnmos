@@ -486,8 +486,8 @@ static connection* find_connection(DtNmosNode* node, const char* id, int sender,
 static int receiver_flow(DtNmosMedia media, const parameters* staged, DtNmosFlow* flow)
 {
     DtNmosSdp* sdp = NULL;
-    if (DtNmosSdp_Parse(staged->transport_file, strlen(staged->transport_file), &sdp,
-                        NULL) != DTNMOS_OK)
+    if (DtNmosSdp_Parse(staged->transport_file, strlen(staged->transport_file), &sdp) !=
+        DTNMOS_OK)
     {
         return 0;
     }
@@ -647,7 +647,7 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
 {
     dtnmos_json* body = NULL;
     if (request->Body == NULL ||
-        dtnmos_json_parse(request->Body, request->BodyLength, &body, NULL) != DTNMOS_OK)
+        dtnmos_json_parse(request->Body, request->BodyLength, &body) != DTNMOS_OK)
     {
         dtnmos_node_answer_error(response, 400, "The body of the PATCH is no JSON.");
         return;
@@ -686,23 +686,24 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
     dtnmos_node_unlock(node);
     dtnmos_json_free(body);
 
-    // The callback applies the activation without the lock, for as long as that takes.
-    DtNmosError applied;
-    memset(&applied, 0, sizeof(applied));
+    // The callback applies the activation without the lock, for as long as that takes. A
+    // callback that fails leaves its message with DtNmos_SetLastError(), on this thread.
+    dtnmos_clear_error();
     DtNmosResult result = DTNMOS_OK;
     if (failure == NULL && a.sender_callback != NULL)
     {
-        result = a.sender_callback(a.user, &a.resource, &a.sender, &applied);
+        result = a.sender_callback(a.user, &a.resource, &a.sender);
     }
     else if (failure == NULL && a.receiver_callback != NULL)
     {
-        result = a.receiver_callback(a.user, &a.resource, &a.receiver, &applied);
+        result = a.receiver_callback(a.user, &a.resource, &a.receiver);
     }
     clear_activation(&a);
     if (result != DTNMOS_OK)
     {
         status = 500;
-        failure = applied.Message[0] != '\0' ? applied.Message : "The activation failed.";
+        failure = DtNmos_GetLastError()[0] != '\0' ? DtNmos_GetLastError()
+                                                   : "The activation failed.";
     }
 
     dtnmos_buffer b;
@@ -746,10 +747,9 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
 static void answer_transport_file(const node_sender* s, DtNmosHttpResponse* response)
 {
     DtNmosString text = {0};
-    DtNmosError error;
-    if (dtnmos_node_write_transport_file(s, &text, &error) != DTNMOS_OK)
+    if (dtnmos_node_write_transport_file(s, &text) != DTNMOS_OK)
     {
-        dtnmos_node_answer_error(response, 500, error.Message);
+        dtnmos_node_answer_error(response, 500, DtNmos_GetLastError());
         return;
     }
     DtNmosHttpResponse_SetStatus(response, 200);
@@ -854,9 +854,8 @@ static void answer_single(DtNmosNode* node, char** segments, size_t count,
 //
 DtNmosResult dtnmos_connection_handle(DtNmosNode* node, const DtNmosHttpRequest* request,
                                       char** segments, size_t count,
-                                      DtNmosHttpResponse* response, DtNmosError* error)
+                                      DtNmosHttpResponse* response)
 {
-    (void)error;
     const int single = count >= 1 && strcmp(segments[0], "single") == 0;
     const int bulk = count >= 1 && strcmp(segments[0], "bulk") == 0;
     if (strcmp(request->Method, "PATCH") == 0)

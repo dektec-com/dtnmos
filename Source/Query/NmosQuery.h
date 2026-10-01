@@ -24,10 +24,9 @@ uint32_t dtnmos_query_timeout(const DtNmosQuery* query);
 // may be null. Fails only when the HTTP function does, whatever status the answer has.
 DtNmosResult dtnmos_query_request(DtNmosQuery* query, const char* method, const char* url,
                                   const char* content_type, const char* body,
-                                  size_t body_length, DtNmosHttpResponse* response,
-                                  DtNmosError* error);
+                                  size_t body_length, DtNmosHttpResponse* response);
 
 // Performs a GET of url and parses its JSON, which the caller frees. Fails unless the
 // answer is 200, with DTNMOS_E_NOT_FOUND for 404.
 DtNmosResult dtnmos_query_get_json(DtNmosQuery* query, const char* url,
-                                   dtnmos_json** json, DtNmosError* error);
+                                   dtnmos_json** json);

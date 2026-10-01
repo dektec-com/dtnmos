@@ -21,13 +21,16 @@
     #define DTNMOS_PRINTF(format_index, first_argument)
 #endif
 
-// Fills error, when it is not null, with code and the message of format, and returns
-// code.
-DtNmosResult dtnmos_fail(DtNmosError* error, DtNmosResult code, const char* format, ...)
-    DTNMOS_PRINTF(3, 4);
+// Makes the message of format the last error of this thread, which DtNmos_GetLastError()
+// returns, and returns code.
+DtNmosResult dtnmos_fail(DtNmosResult code, const char* format, ...) DTNMOS_PRINTF(2, 3);
 
-// Fills error with DTNMOS_E_NO_MEMORY and returns it.
-DtNmosResult dtnmos_fail_memory(DtNmosError* error);
+// Makes "Out of memory." the last error of this thread, and returns DTNMOS_E_NO_MEMORY.
+DtNmosResult dtnmos_fail_memory(void);
+
+// Empties the last error of this thread, before a callback whose message is passed on,
+// so that a callback that fails without one does not pass on an older one.
+void dtnmos_clear_error(void);
 
 // A text that grows as it is appended to. A failed allocation sets failed and makes every
 // later append do nothing, so that a writer checks once at the end.

@@ -13,6 +13,7 @@
     DTNMOS_TEST(id_is_the_uuid_of_version_5)                                             \
     DTNMOS_TEST(id_refuses_a_namespace_of_no_uuid)                                       \
     DTNMOS_TEST(names_results_and_media)                                                 \
+    DTNMOS_TEST(keeps_the_last_error_of_the_thread)                                      \
     DTNMOS_TEST(sdp_reads_video_on_two_paths)                                            \
     DTNMOS_TEST(sdp_reads_audio)                                                         \
     DTNMOS_TEST(sdp_reads_compressed_video)                                              \

@@ -17,7 +17,7 @@ int main(void)
         "v=0\r\no=- 1 1 IN IP4 10.0.0.1\r\ns=x\r\nt=0 0\r\n"
         "m=audio 5004 RTP/AVP 97\r\nc=IN IP4 239.0.0.2/64\r\na=rtpmap:97 L24/48000/2\r\n";
     DtNmosSdp* sdp = NULL;
-    if (DtNmosSdp_Parse(text, strlen(text), &sdp, NULL) != DTNMOS_OK)
+    if (DtNmosSdp_Parse(text, strlen(text), &sdp) != DTNMOS_OK)
     {
         return 1;
     }

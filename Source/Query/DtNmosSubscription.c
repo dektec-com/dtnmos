@@ -47,14 +47,13 @@ const char* DtNmosChangeKind_Name(DtNmosChangeKind kind)
 //
 DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
                                        const DtNmosSubscriptionConfig* config,
-                                       DtNmosSubscription** subscription,
-                                       DtNmosError* error)
+                                       DtNmosSubscription** subscription)
 {
     if (query == NULL || config == NULL || config->ResourcePath == NULL ||
         config->ResourcePath[0] != '/' || config->OnChange == NULL ||
         subscription == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A subscription needs a query, a resource path such as "
                            "\"/senders\", a function for the changes and a place for "
                            "itself.");
@@ -81,12 +80,12 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
     DtNmosResult result = DTNMOS_OK;
     if (body.failed || url.failed || response == NULL)
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     else
     {
         result = dtnmos_query_request(query, "POST", url.data, "application/json",
-                                      body.data, body.length, response, error);
+                                      body.data, body.length, response);
     }
     dtnmos_json* answer = NULL;
     if (result == DTNMOS_OK)
@@ -96,14 +95,14 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
         const char* text = DtNmosHttpResponse_Body(response, &length);
         if (status != 200 && status != 201)
         {
-            result = dtnmos_fail(error, DTNMOS_E_HTTP,
+            result = dtnmos_fail(DTNMOS_E_HTTP,
                                  "The registry answered the subscription to %s with %d.",
                                  config->ResourcePath, status);
         }
-        else if (dtnmos_json_parse(text, length, &answer, NULL) != DTNMOS_OK ||
+        else if (dtnmos_json_parse(text, length, &answer) != DTNMOS_OK ||
                  dtnmos_json_member_text(answer, "ws_href") == NULL)
         {
-            result = dtnmos_fail(error, DTNMOS_E_PARSE,
+            result = dtnmos_fail(DTNMOS_E_PARSE,
                                  "The registry answered the subscription to %s without "
                                  "the ws_href of its WebSocket.",
                                  config->ResourcePath);
@@ -117,7 +116,7 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
         const size_t length = strlen(href);
         if (made == NULL || (made->url = malloc(length + 1)) == NULL)
         {
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
         else
         {
@@ -125,9 +124,8 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
             made->websocket = *websocket;
             made->on_change = config->OnChange;
             made->on_change_user = config->OnChangeUser;
-            result =
-                websocket->Connect(websocket->User, made->url,
-                                   dtnmos_query_timeout(query), &made->connection, error);
+            result = websocket->Connect(websocket->User, made->url,
+                                        dtnmos_query_timeout(query), &made->connection);
         }
     }
     dtnmos_json_free(answer);
@@ -153,7 +151,7 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
 // is skipped.
 //
 static DtNmosResult report_change(DtNmosSubscription* subscription,
-                                  const dtnmos_json* item, DtNmosError* error)
+                                  const dtnmos_json* item)
 {
     const dtnmos_json* pre = dtnmos_json_member(item, "pre");
     const dtnmos_json* post = dtnmos_json_member(item, "post");
@@ -179,7 +177,7 @@ static DtNmosResult report_change(DtNmosSubscription* subscription,
     {
         dtnmos_buffer_free(&before);
         dtnmos_buffer_free(&after);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     DtNmosChange change;
     memset(&change, 0, sizeof(change));
@@ -210,16 +208,16 @@ static DtNmosResult report_change(DtNmosSubscription* subscription,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
-                                     uint32_t timeout_ms, DtNmosError* error)
+                                     uint32_t timeout_ms)
 {
     if (subscription == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosSubscription_Poll() needs a subscription.");
     }
     DtNmosResult result = subscription->websocket.Receive(
         subscription->websocket.User, subscription->connection, timeout_ms,
-        &subscription->message, error);
+        &subscription->message);
     if (result != DTNMOS_OK)
     {
         return result;
@@ -229,21 +227,21 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
     dtnmos_json* json = NULL;
     const dtnmos_json* data = NULL;
     if (dtnmos_json_parse(DtNmosString_Get(&subscription->message),
-                          DtNmosString_Length(&subscription->message), &json,
-                          NULL) == DTNMOS_OK)
+                          DtNmosString_Length(&subscription->message),
+                          &json) == DTNMOS_OK)
     {
         data = dtnmos_json_member(dtnmos_json_member(json, "grain"), "data");
     }
     if (data == NULL || data->type != DTNMOS_JSON_ARRAY)
     {
         dtnmos_json_free(json);
-        return dtnmos_fail(error, DTNMOS_E_PARSE,
+        return dtnmos_fail(DTNMOS_E_PARSE,
                            "A message of the WebSocket %s is no grain with data.",
                            subscription->url);
     }
     for (size_t i = 0; result == DTNMOS_OK && i < data->count; ++i)
     {
-        result = report_change(subscription, &data->items[i], error);
+        result = report_change(subscription, &data->items[i]);
     }
     dtnmos_json_free(json);
     return result;

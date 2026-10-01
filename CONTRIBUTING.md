@@ -25,7 +25,8 @@ about structs is added.
 8. **A header guards itself with `#pragma once`**, as the first line after the file
    header, rather than with an `#ifndef` guard.
 9. **A variable is declared where it is first needed**, with its first value when it has
-   one, one declaration per line; a loop counter in its `for`. No `goto`: a function that
+   one, one declaration per line; a loop counter in its `for`. Results are `DtNmosResult`,
+   and a failure leaves its message for `DtNmos_GetLastError()`. No `goto`: a function that
    must clean up after failures hands the steps to a helper and cleans up after it.
 10. **A function that is not static is named `Class_Function`**: the type it works on,
     or the component it belongs to, then an underscore.

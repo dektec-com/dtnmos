@@ -66,13 +66,12 @@ DTNMOS_API void DtNmosSenderList_Free(DtNmosSenderList* list);
 // DTNMOS_E_INVALID_ARGUMENT without a registry URL or HTTP function, or with another
 // API version than v1.3.
 DTNMOS_API DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config,
-                                           DtNmosQuery** query, DtNmosError* error);
+                                           DtNmosQuery** query);
 DTNMOS_API void DtNmosQuery_Destroy(DtNmosQuery* query);
 
 // Lists the senders of the registry, following its paging, each with the media of its
 // flow.
-DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list,
-                                            DtNmosError* error);
+DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list);
 
 // Finds the sender whose ID is id_or_label when it is a UUID, or else whose label it
 // is, into sender, which is cleared first and which the caller clears. Fails with
@@ -80,20 +79,18 @@ DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList
 // listing their IDs.
 DTNMOS_API DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* query,
                                                const char* id_or_label,
-                                               DtNmosSenderInfo* sender,
-                                               DtNmosError* error);
+                                               DtNmosSenderInfo* sender);
 
 // Fetches the SDP of sender from its manifest_href into text, which is cleared first.
 // Fails with DTNMOS_E_NOT_FOUND when the sender has no manifest.
 DTNMOS_API DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
                                                    const DtNmosSenderInfo* sender,
-                                                   DtNmosString* text,
-                                                   DtNmosError* error);
+                                                   DtNmosString* text);
 
 // Fetches the SDP of sender and parses it as DtNmosSdp_Parse() does.
 DTNMOS_API DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* query,
                                               const DtNmosSenderInfo* sender,
-                                              DtNmosSdp** sdp, DtNmosError* error);
+                                              DtNmosSdp** sdp);
 
 // A receiver as the registry lists it. Strings the registry leaves out are empty.
 typedef struct DtNmosReceiverInfo
@@ -122,15 +119,13 @@ DTNMOS_API void DtNmosReceiverList_Free(DtNmosReceiverList* list);
 
 // Lists the receivers of the registry, following its paging.
 DTNMOS_API DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query,
-                                              DtNmosReceiverList** list,
-                                              DtNmosError* error);
+                                              DtNmosReceiverList** list);
 
 // Finds the receiver whose ID is id_or_label when it is a UUID, or else whose label it
 // is, as DtNmosQuery_FindSender() finds a sender, with the same errors.
 DTNMOS_API DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* query,
                                                  const char* id_or_label,
-                                                 DtNmosReceiverInfo* receiver,
-                                                 DtNmosError* error);
+                                                 DtNmosReceiverInfo* receiver);
 
 // +=+=+=+=+=+=+=+=+= A controller that connects receivers (IS-05 v1.1) +=+=+=+=+=+=+=+=+=
 
@@ -161,16 +156,14 @@ DTNMOS_API void DtNmosConnection_Clear(DtNmosConnection* connection);
 // answers with another status than 200, the message holding the error it gave.
 DTNMOS_API DtNmosResult DtNmosQuery_Connect(DtNmosQuery* query, const char* receiver,
                                             const char* sender,
-                                            DtNmosConnection* connection,
-                                            DtNmosError* error);
+                                            DtNmosConnection* connection);
 
 // Disconnects the receiver of the registry of query, given by its ID or label: activates
 // at once its staged parameters with master_enable false and no sender. disconnected,
 // when not null, is cleared first and receives the receiver as the registry lists it.
 // Fails as DtNmosQuery_Connect() does.
 DTNMOS_API DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* query, const char* receiver,
-                                               DtNmosReceiverInfo* disconnected,
-                                               DtNmosError* error);
+                                               DtNmosReceiverInfo* disconnected);
 
 // Moves a sender of the registry of query, given by its ID or label, to destination_ip
 // and destination_port, as a controller of IS-05 does: through the Connection API of the
@@ -182,8 +175,7 @@ DTNMOS_API DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* query, const char* r
 DTNMOS_API DtNmosResult DtNmosQuery_MoveSender(DtNmosQuery* query, const char* sender,
                                                const char* destination_ip,
                                                uint16_t destination_port,
-                                               DtNmosSenderInfo* moved,
-                                               DtNmosError* error);
+                                               DtNmosSenderInfo* moved);
 
 // +=+=+=+=+=+=+=+=+=+= A subscription to the resources of a registry +=+=+=+=+=+=+=+=+=+=
 
@@ -233,8 +225,7 @@ typedef struct DtNmosSubscription DtNmosSubscription;
 // WebSocket, and as the connect of the WebSocket does.
 DTNMOS_API DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
                                                   const DtNmosSubscriptionConfig* config,
-                                                  DtNmosSubscription** subscription,
-                                                  DtNmosError* error);
+                                                  DtNmosSubscription** subscription);
 
 // Waits at most timeout_ms for a message, and calls on_change for each change in it, on
 // the thread of the caller. The first message holds every resource as it is, each a
@@ -243,7 +234,7 @@ DTNMOS_API DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
 // with DTNMOS_E_NETWORK when the WebSocket closed or failed, after which a new
 // subscription starts again from the first message.
 DTNMOS_API DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
-                                                uint32_t timeout_ms, DtNmosError* error);
+                                                uint32_t timeout_ms);
 
 // The URL of the WebSocket of the subscription.
 DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* subscription);
@@ -256,8 +247,7 @@ DTNMOS_API void DtNmosSubscription_Destroy(DtNmosSubscription* subscription);
 // and which the caller clears. Its media stays DTNMOS_MEDIA_OTHER: it is a property of
 // its flow. Fails with DTNMOS_E_PARSE for what is no JSON object.
 DTNMOS_API DtNmosResult DtNmosSenderInfo_Parse(const char* json, size_t length,
-                                               DtNmosSenderInfo* sender,
-                                               DtNmosError* error);
+                                               DtNmosSenderInfo* sender);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+= Finding registries through DNS-SD +=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -346,7 +336,7 @@ DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* list);
 // and with DTNMOS_E_NETWORK when the socket cannot be opened or the query of multicast
 // DNS cannot be sent; a DNS server that cannot be reached is only logged.
 DTNMOS_API DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
-                                        DtNmosRegistryList** list, DtNmosError* error);
+                                        DtNmosRegistryList** list);
 
 #ifdef __cplusplus
 }

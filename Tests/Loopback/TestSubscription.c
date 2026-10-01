@@ -70,9 +70,8 @@ typedef struct fake_subscription
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
-                              DtNmosHttpResponse* response, DtNmosError* error)
+                              DtNmosHttpResponse* response)
 {
-    (void)error;
     fake_subscription* fake = user;
     CHECK_STR(request->Method, "POST");
     CHECK_STR(request->ContentType, "application/json");
@@ -88,14 +87,14 @@ static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult fake_connect(void* user, const char* url, uint32_t timeout_ms,
-                                 void** connection, DtNmosError* error)
+                                 void** connection)
 {
     fake_subscription* fake = user;
     CHECK_EQ(timeout_ms, 2000);
     snprintf(fake->connected, sizeof(fake->connected), "%s", url);
     if (fake->connect_fails)
     {
-        return dtnmos_fail(error, DTNMOS_E_NETWORK, "connection refused");
+        return dtnmos_fail(DTNMOS_E_NETWORK, "connection refused");
     }
     *connection = fake;
     return DTNMOS_OK;
@@ -104,7 +103,7 @@ static DtNmosResult fake_connect(void* user, const char* url, uint32_t timeout_m
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_ms,
-                                 DtNmosString* message, DtNmosError* error)
+                                 DtNmosString* message)
 {
     (void)connection;
     fake_subscription* fake = user;
@@ -113,12 +112,12 @@ static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_
         const char* text = fake->messages[fake->next++];
         if (text == NULL)
         {
-            return dtnmos_fail(error, DTNMOS_E_TIMEOUT, "No message came within %u ms.",
+            return dtnmos_fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
                                (unsigned)timeout_ms);
         }
         return DtNmosString_SetText(message, text);
     }
-    return dtnmos_fail(error, DTNMOS_E_NETWORK, "The server closed the WebSocket.");
+    return dtnmos_fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -145,12 +144,12 @@ static void record_change(void* user, const DtNmosChange* change)
     DtNmosSenderInfo after = {0};
     if (change->Pre != NULL)
     {
-        CHECK(DtNmosSenderInfo_Parse(change->Pre, change->PreLength, &before, NULL) ==
+        CHECK(DtNmosSenderInfo_Parse(change->Pre, change->PreLength, &before) ==
               DTNMOS_OK);
     }
     if (change->Post != NULL)
     {
-        CHECK(DtNmosSenderInfo_Parse(change->Post, change->PostLength, &after, NULL) ==
+        CHECK(DtNmosSenderInfo_Parse(change->Post, change->PostLength, &after) ==
               DTNMOS_OK);
         CHECK_STR(after.Id.Text, change->Id);
     }
@@ -171,8 +170,7 @@ static void record_change(void* user, const DtNmosChange* change)
 // the WebSocket of fake; returns the result of creating it.
 //
 static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorded,
-                              DtNmosQuery** query, DtNmosSubscription** subscription,
-                              DtNmosError* error)
+                              DtNmosQuery** query, DtNmosSubscription** subscription)
 {
     static DtNmosWebSocketTransport websocket;
     websocket.Size = sizeof(websocket);
@@ -189,7 +187,7 @@ static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorde
     config.TimeoutMs = 2000;
     *query = NULL;
     *subscription = NULL;
-    if (DtNmosQuery_Create(&config, query, error) != DTNMOS_OK)
+    if (DtNmosQuery_Create(&config, query) != DTNMOS_OK)
     {
         return DTNMOS_E_INTERNAL;
     }
@@ -200,7 +198,7 @@ static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorde
     wanted.WebSocket = &websocket;
     wanted.OnChange = record_change;
     wanted.OnChangeUser = recorded;
-    return DtNmosSubscription_Create(*query, &wanted, subscription, error);
+    return DtNmosSubscription_Create(*query, &wanted, subscription);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- subscription_reports_what_changes -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -227,19 +225,17 @@ void subscription_reports_what_changes(void)
     memset(&recorded, 0, sizeof(recorded));
     DtNmosQuery* query = NULL;
     DtNmosSubscription* subscription = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
-    const DtNmosResult created =
-        subscribe(&fake, &recorded, &query, &subscription, &error);
+    const DtNmosResult created = subscribe(&fake, &recorded, &query, &subscription);
     if (created != DTNMOS_OK)
     {
-        printf("  %s\n", error.Message);
+        printf("  %s\n", DtNmos_GetLastError());
     }
     REQUIRE(created == DTNMOS_OK);
     CHECK_STR(fake.url, BASE "subscriptions");
     CHECK_STR(fake.connected, WS_HREF);
     CHECK_STR(DtNmosSubscription_Url(subscription), WS_HREF);
     dtnmos_json* body = NULL;
-    REQUIRE(dtnmos_json_parse(fake.body, strlen(fake.body), &body, NULL) == DTNMOS_OK);
+    REQUIRE(dtnmos_json_parse(fake.body, strlen(fake.body), &body) == DTNMOS_OK);
     CHECK_STR(dtnmos_json_member_text(body, "resource_path"), "/senders");
     CHECK_EQ(dtnmos_json_member(body, "max_update_rate_ms")->number, 100);
     CHECK_EQ(dtnmos_json_member(body, "persist")->type, DTNMOS_JSON_FALSE);
@@ -247,12 +243,12 @@ void subscription_reports_what_changes(void)
     CHECK_EQ(dtnmos_json_member(body, "params")->type, DTNMOS_JSON_OBJECT);
     dtnmos_json_free(body);
 
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_E_TIMEOUT);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_E_NETWORK);
-    CHECK(strstr(error.Message, "closed") != NULL);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_TIMEOUT);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_NETWORK);
+    CHECK(strstr(DtNmos_GetLastError(), "closed") != NULL);
     const char* const expected[] = {
         "present " CAMERA_ID " camera 1 camera 1",
         "present " MIC_ID " mic mic",
@@ -282,26 +278,25 @@ void subscription_names_what_went_wrong(void)
     memset(&recorded, 0, sizeof(recorded));
     DtNmosQuery* query = NULL;
     DtNmosSubscription* subscription = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
 
     // A registry that refuses, and one that names no WebSocket.
     fake.status = 400;
     fake.answer = "{\"code\": 400, \"error\": \"bad path\"}";
-    CHECK(subscribe(&fake, &recorded, &query, &subscription, &error) == DTNMOS_E_HTTP);
-    CHECK(strstr(error.Message, "answered the subscription to /senders with 400") !=
-          NULL);
+    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_HTTP);
+    CHECK(strstr(DtNmos_GetLastError(),
+                 "answered the subscription to /senders with 400") != NULL);
     CHECK(subscription == NULL);
     DtNmosQuery_Destroy(query);
     fake.status = 200;
     fake.answer = "{\"id\": \"1\"}";
-    CHECK(subscribe(&fake, &recorded, &query, &subscription, &error) == DTNMOS_E_PARSE);
-    CHECK(strstr(error.Message, "without the ws_href") != NULL);
+    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_PARSE);
+    CHECK(strstr(DtNmos_GetLastError(), "without the ws_href") != NULL);
     DtNmosQuery_Destroy(query);
     // A WebSocket that cannot be opened.
     fake.answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
     fake.connect_fails = 1;
-    CHECK(subscribe(&fake, &recorded, &query, &subscription, &error) == DTNMOS_E_NETWORK);
-    CHECK(strstr(error.Message, "connection refused") != NULL);
+    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_NETWORK);
+    CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
     DtNmosQuery_Destroy(query);
 
     // Messages that are no grain fail the poll and not the subscription, and an item
@@ -309,11 +304,11 @@ void subscription_names_what_went_wrong(void)
     fake.connect_fails = 0;
     fake.messages = messages;
     fake.count = sizeof(messages) / sizeof(messages[0]);
-    REQUIRE(subscribe(&fake, &recorded, &query, &subscription, &error) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_E_PARSE);
-    CHECK(strstr(error.Message, "is no grain with data") != NULL);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_E_PARSE);
-    CHECK(DtNmosSubscription_Poll(subscription, 50, &error) == DTNMOS_OK);
+    REQUIRE(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_PARSE);
+    CHECK(strstr(DtNmos_GetLastError(), "is no grain with data") != NULL);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_PARSE);
+    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
     CHECK_EQ(recorded.count, 0);
     DtNmosSubscription_Destroy(subscription);
     DtNmosQuery_Destroy(query);
@@ -323,7 +318,7 @@ void subscription_names_what_went_wrong(void)
     memset(&config, 0, sizeof(config));
     config.Size = sizeof(config);
     config.ResourcePath = "senders";
-    CHECK(DtNmosSubscription_Create(NULL, &config, &subscription, &error) ==
+    CHECK(DtNmosSubscription_Create(NULL, &config, &subscription) ==
           DTNMOS_E_INVALID_ARGUMENT);
 }
 
@@ -334,7 +329,7 @@ void json_writes_what_it_reads_back(void)
     const char* text = "{\"a\": [1, -2.5, 1e3, true, false, null, \"x\\\"y\\n\"], "
                        "\"b\": {}, \"c\": []}";
     dtnmos_json* json = NULL;
-    REQUIRE(dtnmos_json_parse(text, strlen(text), &json, NULL) == DTNMOS_OK);
+    REQUIRE(dtnmos_json_parse(text, strlen(text), &json) == DTNMOS_OK);
     dtnmos_buffer written;
     memset(&written, 0, sizeof(written));
     dtnmos_json_write(&written, json);
@@ -521,23 +516,22 @@ void websocket_on_curl_reads_messages(void)
     snprintf(url, sizeof(url), "ws://127.0.0.1:%u/ws", (unsigned)server.port);
     const DtNmosWebSocketTransport* websocket = DtNmos_CurlWebSocket();
     void* connection = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
     const DtNmosResult connected =
-        websocket->Connect(websocket->User, url, 2000, &connection, &error);
+        websocket->Connect(websocket->User, url, 2000, &connection);
     if (connected != DTNMOS_OK)
     {
-        printf("  %s\n", error.Message);
+        printf("  %s\n", DtNmos_GetLastError());
     }
     if (connected == DTNMOS_OK)
     {
         DtNmosString message = {0};
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &error) ==
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
               DTNMOS_OK);
         CHECK_STR(DtNmosString_Get(&message), "hello world");
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &error) ==
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
               DTNMOS_OK);
         CHECK_EQ(DtNmosString_Length(&message), 70000);
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &error) ==
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
               DTNMOS_E_NETWORK);
         DtNmosString_Clear(&message);
         websocket->Close(websocket->User, connection);
@@ -550,7 +544,7 @@ void websocket_on_curl_reads_messages(void)
     // Nobody listens any more: the WebSocket cannot be opened. Windows tries a refused
     // connection again for about two seconds, so it may run out of time instead.
     const DtNmosResult refused =
-        websocket->Connect(websocket->User, url, 500, &connection, &error);
+        websocket->Connect(websocket->User, url, 500, &connection);
     CHECK(refused == DTNMOS_E_NETWORK || refused == DTNMOS_E_TIMEOUT);
     CHECK(connection == NULL);
 }

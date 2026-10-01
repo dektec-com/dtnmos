@@ -88,10 +88,9 @@ static const char* const anc_sdp =
 static DtNmosSdp* parse(const char* text)
 {
     DtNmosSdp* sdp = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
-    if (DtNmosSdp_Parse(text, strlen(text), &sdp, &error) != DTNMOS_OK)
+    if (DtNmosSdp_Parse(text, strlen(text), &sdp) != DTNMOS_OK)
     {
-        printf("  %s\n", error.Message);
+        printf("  %s\n", DtNmos_GetLastError());
     }
     return sdp;
 }
@@ -262,15 +261,13 @@ void sdp_takes_defaults_of_the_session(void)
 static void check_error(const char* text, DtNmosResult code, const char* fragment)
 {
     DtNmosSdp* sdp = (DtNmosSdp*)&sdp;
-    DtNmosError error = {DTNMOS_OK, ""};
-    const DtNmosResult result = DtNmosSdp_Parse(text, strlen(text), &sdp, &error);
+    const DtNmosResult result = DtNmosSdp_Parse(text, strlen(text), &sdp);
     CHECK_EQ(result, code);
-    CHECK_EQ(error.Code, code);
     CHECK(sdp == NULL);
-    if (strstr(error.Message, fragment) == NULL)
+    if (strstr(DtNmos_GetLastError(), fragment) == NULL)
     {
-        printf("  the message \"%s\" lacks \"%s\"\n", error.Message, fragment);
-        CHECK(strstr(error.Message, fragment) != NULL);
+        printf("  the message \"%s\" lacks \"%s\"\n", DtNmos_GetLastError(), fragment);
+        CHECK(strstr(DtNmos_GetLastError(), fragment) != NULL);
     }
 }
 
@@ -301,7 +298,7 @@ void sdp_names_the_line_of_an_error(void)
     check_error(text, DTNMOS_E_PARSE, "c= needs IN IP4 or IN IP6");
     check_error(head, DTNMOS_E_INVALID_ARGUMENT, "no media section");
     DtNmosSdp* sdp = NULL;
-    CHECK(DtNmosSdp_Parse(NULL, 1, &sdp, NULL) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmosSdp_Parse(NULL, 1, &sdp) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- same -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -400,12 +397,11 @@ void sdp_writes_what_it_reads_back(void)
             REQUIRE(DtNmosFlow_Copy(&flows[i], DtNmosSdp_Flow(original, i)) == DTNMOS_OK);
         }
         DtNmosString written = {0};
-        DtNmosError error = {DTNMOS_OK, ""};
         const DtNmosResult result =
-            DtNmosSdp_Write(DtNmosSdp_Session(original), flows, count, &written, &error);
+            DtNmosSdp_Write(DtNmosSdp_Session(original), flows, count, &written);
         if (result != DTNMOS_OK)
         {
-            printf("  %s\n", error.Message);
+            printf("  %s\n", DtNmos_GetLastError());
         }
         CHECK(result == DTNMOS_OK);
         DtNmosSdp* again = parse(DtNmosString_Get(&written));
@@ -460,7 +456,7 @@ void sdp_writes_an_audio_sender(void)
     flow.Format.Audio.Channels = 2;
     flow.Format.Audio.PacketTimeNs = 1000000;
     DtNmosString text = {0};
-    REQUIRE(DtNmosSdp_Write(&session, &flow, 1, &text, NULL) == DTNMOS_OK);
+    REQUIRE(DtNmosSdp_Write(&session, &flow, 1, &text) == DTNMOS_OK);
     CHECK_STR(DtNmosString_Get(&text), "v=0\r\n"
                                        "o=- 42 1 IN IP4 192.168.1.10\r\n"
                                        "s=dt2110audiosink\r\n"
@@ -488,25 +484,22 @@ void sdp_refuses_to_write_an_incomplete_flow(void)
     flows[1].Size = sizeof(flows[1]);
     flows[0].Media = DTNMOS_MEDIA_OTHER;
     DtNmosString text = {0};
-    DtNmosError error = {DTNMOS_OK, ""};
-    CHECK(DtNmosSdp_Write(&session, flows, 1, &text, &error) ==
-          DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(strstr(error.Message, "destination") != NULL);
+    CHECK(DtNmosSdp_Write(&session, flows, 1, &text) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "destination") != NULL);
     DtNmosString_SetText(&flows[0].DestinationIp, "239.0.0.1");
     flows[0].DestinationPort = 5000;
     REQUIRE(DtNmosFlow_Copy(&flows[1], &flows[0]) == DTNMOS_OK);
     DtNmosString_SetText(&flows[1].DestinationIp, "239.0.0.2");
     flows[1].Leg = 1;
     flows[0].Leg = 1;
-    CHECK(DtNmosSdp_Write(&session, flows, 2, &text, &error) ==
-          DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(strstr(error.Message, "second path") != NULL);
+    CHECK(DtNmosSdp_Write(&session, flows, 2, &text) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "second path") != NULL);
     flows[0].Leg = 0;
-    REQUIRE(DtNmosSdp_Write(&session, flows, 2, &text, &error) == DTNMOS_OK);
+    REQUIRE(DtNmosSdp_Write(&session, flows, 2, &text) == DTNMOS_OK);
     CHECK(strstr(DtNmosString_Get(&text), "a=group:DUP primary0 secondary1\r\n") != NULL);
     DtNmosSession empty = {0};
     empty.Size = sizeof(empty);
-    CHECK(DtNmosSdp_Write(&empty, flows, 1, &text, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmosSdp_Write(&empty, flows, 1, &text) == DTNMOS_E_INVALID_ARGUMENT);
     DtNmosString_Clear(&text);
     DtNmosFlow_Clear(&flows[0]);
     DtNmosFlow_Clear(&flows[1]);

@@ -73,10 +73,9 @@ static int handle_request(struct mg_connection* connection, void* user)
     request.ContentType = mg_get_header(connection, "Content-Type");
     request.Body = body.data;
     request.BodyLength = body.length;
-    DtNmosError error;
-    if (DtNmosNode_Handle(node, &request, response, &error) != DTNMOS_OK)
+    if (DtNmosNode_Handle(node, &request, response) != DTNMOS_OK)
     {
-        dtnmos_node_answer_error(response, 500, error.Message);
+        dtnmos_node_answer_error(response, 500, DtNmos_GetLastError());
     }
     const int status = DtNmosHttpResponse_Status(response);
     size_t length = 0;
@@ -119,11 +118,10 @@ static void poll_loop(void* argument)
     while (!stopping(s))
     {
         uint32_t next_ms = 1000;
-        DtNmosError error;
-        error.Message[0] = '\0';
-        if (DtNmosNode_Poll(node, &next_ms, &error) != DTNMOS_OK && node->log != NULL)
+        dtnmos_clear_error();
+        if (DtNmosNode_Poll(node, &next_ms) != DTNMOS_OK && node->log != NULL)
         {
-            node->log(node->log_user, DTNMOS_LOG_WARNING, error.Message);
+            node->log(node->log_user, DTNMOS_LOG_WARNING, DtNmos_GetLastError());
         }
         // Sleep in steps, so that stopping does not wait for a heartbeat.
         for (uint32_t slept = 0; slept < next_ms && slept < 5000 && !stopping(s);
@@ -136,23 +134,22 @@ static void poll_loop(void* argument)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error)
+DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
 {
     if (node == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosNode_Serve() needs a node.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Serve() needs a node.");
     }
     if (node->server != NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_STATE, "The node serves already.");
+        return dtnmos_fail(DTNMOS_E_STATE, "The node serves already.");
     }
     if (node->api_port == 0)
     {
         node->api_port = dtnmos_free_port(node->api_host);
         if (node->api_port == 0)
         {
-            return dtnmos_fail(error, DTNMOS_E_HTTP, "No TCP port is free on %s.",
+            return dtnmos_fail(DTNMOS_E_HTTP, "No TCP port is free on %s.",
                                node->api_host);
         }
     }
@@ -160,7 +157,7 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error)
     if (s == NULL || (s->mutex = dtnmos_mutex_create()) == NULL)
     {
         free(s);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     char ports[300];
     const int ipv6 = strchr(node->api_host, ':') != NULL;
@@ -176,7 +173,7 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error)
         mg_exit_library();
         dtnmos_mutex_free(s->mutex);
         free(s);
-        return dtnmos_fail(error, DTNMOS_E_HTTP, "The node cannot listen on %s.", ports);
+        return dtnmos_fail(DTNMOS_E_HTTP, "The node cannot listen on %s.", ports);
     }
     mg_set_request_handler(s->context, "/", handle_request, node);
     node->server = s;
@@ -184,7 +181,7 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error)
     if (s->poller == NULL)
     {
         dtnmos_server_stop(node);
-        return dtnmos_fail(error, DTNMOS_E_INTERNAL, "The node cannot start its thread.");
+        return dtnmos_fail(DTNMOS_E_INTERNAL, "The node cannot start its thread.");
     }
     return DTNMOS_OK;
 }
@@ -220,11 +217,11 @@ int DtNmos_HasServer(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error)
+DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
 {
     (void)node;
     return dtnmos_fail(
-        error, DTNMOS_E_STATE,
+        DTNMOS_E_STATE,
         "dtnmos was built without its server; answer the requests of the node "
         "with DtNmosNode_Handle() and poll it with DtNmosNode_Poll().");
 }

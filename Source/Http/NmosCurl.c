@@ -85,20 +85,19 @@ static size_t receive_header(char* data, size_t size, size_t count, void* user)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
-                             DtNmosHttpResponse* response, DtNmosError* error)
+                             DtNmosHttpResponse* response)
 {
     (void)user;
     if (request == NULL || request->Url == NULL || request->Method == NULL ||
         response == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmos_CurlHttp() needs a request with a method and a URL.");
     }
     CURL* curl = curl_easy_init();
     if (curl == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INTERNAL,
-                           "libcurl could not create a handle.");
+        return dtnmos_fail(DTNMOS_E_INTERNAL, "libcurl could not create a handle.");
     }
     transfer t = {response, 0};
     struct curl_slist* headers = NULL;
@@ -141,18 +140,18 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
     curl_easy_cleanup(curl);
     if (t.failed)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     if (code == CURLE_OPERATION_TIMEDOUT)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_TIMEOUT, "%s %s got no answer within %u ms.", request->Method,
+            DTNMOS_E_TIMEOUT, "%s %s got no answer within %u ms.", request->Method,
             request->Url,
             (unsigned)(request->TimeoutMs == 0 ? 5000 : request->TimeoutMs));
     }
     if (code != CURLE_OK)
     {
-        return dtnmos_fail(error, DTNMOS_E_HTTP, "%s %s failed: %s.", request->Method,
+        return dtnmos_fail(DTNMOS_E_HTTP, "%s %s failed: %s.", request->Method,
                            request->Url, curl_easy_strerror(code));
     }
     DtNmosHttpResponse_SetStatus(response, (int)status);
@@ -173,13 +172,13 @@ int DtNmos_HasCurl(void)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
-                             DtNmosHttpResponse* response, DtNmosError* error)
+                             DtNmosHttpResponse* response)
 {
     (void)user;
     (void)request;
     (void)response;
     return dtnmos_fail(
-        error, DTNMOS_E_STATE,
+        DTNMOS_E_STATE,
         "dtnmos was built without libcurl, so it has no HTTP transport of its "
         "own; pass one.");
 }

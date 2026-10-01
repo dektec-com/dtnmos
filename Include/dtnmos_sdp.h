@@ -166,8 +166,7 @@ typedef struct DtNmosSdp DtNmosSdp;
 // Parses the SDP of length bytes of text. Fails with DTNMOS_E_PARSE, naming the line,
 // on a malformed description, and with DTNMOS_E_INVALID_ARGUMENT on one without media
 // sections.
-DTNMOS_API DtNmosResult DtNmosSdp_Parse(const char* text, size_t length, DtNmosSdp** sdp,
-                                        DtNmosError* error);
+DTNMOS_API DtNmosResult DtNmosSdp_Parse(const char* text, size_t length, DtNmosSdp** sdp);
 
 // Returns the session of sdp; valid until sdp is freed.
 DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* sdp);
@@ -185,7 +184,7 @@ DTNMOS_API void DtNmosSdp_Free(DtNmosSdp* sdp);
 // a=group:DUP pairs it with. An IPv4 multicast destination gets a TTL of 64.
 DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* session,
                                         const DtNmosFlow* flows, size_t count,
-                                        DtNmosString* text, DtNmosError* error);
+                                        DtNmosString* text);
 
 #ifdef __cplusplus
 }

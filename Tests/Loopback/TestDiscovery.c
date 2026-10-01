@@ -540,8 +540,7 @@ void discovery_finds_registries_by_priority(void)
     REQUIRE(start_responder(&r, instances, 4, 1));
     const DtNmosDiscoveryConfig config = config_for(&r, 300);
     DtNmosRegistryList* list = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
-    const DtNmosResult result = DtNmos_Discover(&config, &list, &error);
+    const DtNmosResult result = DtNmos_Discover(&config, &list);
     stop_responder(&r);
     REQUIRE(result == DTNMOS_OK);
     REQUIRE(DtNmosRegistryList_Count(list) == 4);
@@ -583,7 +582,7 @@ void discovery_asks_again_for_what_is_missing(void)
     REQUIRE(start_responder(&r, &registry_b, 1, 2));
     const DtNmosDiscoveryConfig config = config_for(&r, 300);
     DtNmosRegistryList* list = NULL;
-    const DtNmosResult result = DtNmos_Discover(&config, &list, NULL);
+    const DtNmosResult result = DtNmos_Discover(&config, &list);
     dtnmos_mutex_lock(r.mutex);
     const int queries = r.queries;
     const int asked = r.asked_srv_txt;
@@ -607,7 +606,7 @@ void discovery_finds_nothing_in_silence(void)
     const DtNmosDiscoveryConfig config = config_for(&r, 200);
     DtNmosRegistryList* list = NULL;
     const uint64_t start = dtnmos_monotonic_ms();
-    const DtNmosResult result = DtNmos_Discover(&config, &list, NULL);
+    const DtNmosResult result = DtNmos_Discover(&config, &list);
     const uint64_t took = dtnmos_monotonic_ms() - start;
     stop_responder(&r);
     REQUIRE(result == DTNMOS_OK);
@@ -618,20 +617,19 @@ void discovery_finds_nothing_in_silence(void)
     // What it refuses.
     DtNmosDiscoveryConfig wrong = config;
     wrong.Destination = "224.0.0.251";
-    DtNmosError error = {DTNMOS_OK, ""};
-    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(list == NULL);
     wrong.Destination = "no-address:5353";
-    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
     wrong.Destination = "127.0.0.1:0";
-    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
     wrong = config;
     wrong.InterfaceAddress = "10.0.0";
-    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
     // An address that is no interface of this host cannot send.
     wrong.InterfaceAddress = "192.0.2.1";
-    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_NETWORK);
-    CHECK(DtNmos_Discover(&config, NULL, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_NETWORK);
+    CHECK(DtNmos_Discover(&config, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -714,8 +712,7 @@ void discovery_asks_a_dns_server_too(void)
     config.DnsServer = dns.destination;
     config.DnsDomain = "studio.example.";
     DtNmosRegistryList* list = NULL;
-    DtNmosError error = {DTNMOS_OK, ""};
-    const DtNmosResult result = DtNmos_Discover(&config, &list, &error);
+    const DtNmosResult result = DtNmos_Discover(&config, &list);
     dtnmos_mutex_lock(dns.mutex);
     const int faults = dns.faults;
     const int asked = dns.asked_srv_txt;
@@ -746,11 +743,11 @@ void discovery_asks_a_dns_server_too(void)
 
     // What it refuses.
     config.DnsServer = "no-address:53";
-    CHECK(DtNmos_Discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmos_Discover(&config, &list) == DTNMOS_E_INVALID_ARGUMENT);
     config.DnsServer = "127.0.0.1:53";
     config.DnsDomain = "studio..example";
-    CHECK(DtNmos_Discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(strstr(error.Message, "studio..example") != NULL);
+    CHECK(DtNmos_Discover(&config, &list) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "studio..example") != NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- discovery_takes_only_the_dns_server -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -770,7 +767,7 @@ void discovery_takes_only_the_dns_server(void)
     config.DnsServer = dns.destination;
     config.DnsDomain = "studio.example";
     DtNmosRegistryList* list = NULL;
-    REQUIRE(DtNmos_Discover(&config, &list, NULL) == DTNMOS_OK);
+    REQUIRE(DtNmos_Discover(&config, &list) == DTNMOS_OK);
     dtnmos_mutex_lock(mdns.mutex);
     const int multicast_queries = mdns.queries;
     dtnmos_mutex_unlock(mdns.mutex);
@@ -786,7 +783,7 @@ void discovery_takes_only_the_dns_server(void)
 
     // Records of another domain than the one asked for are not taken.
     config.DnsDomain = "elsewhere.example";
-    REQUIRE(DtNmos_Discover(&config, &list, NULL) == DTNMOS_OK);
+    REQUIRE(DtNmos_Discover(&config, &list) == DTNMOS_OK);
     CHECK_EQ(DtNmosRegistryList_Count(list), 0);
     DtNmosRegistryList_Free(list);
     stop_responder(&dns);

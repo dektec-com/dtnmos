@@ -329,21 +329,20 @@ static void write_flow(dtnmos_buffer* buffer, const DtNmosFlow* flow, size_t ind
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flows,
-                             size_t count, DtNmosString* text, DtNmosError* error)
+                             size_t count, DtNmosString* text)
 {
     if (session == NULL || (flows == NULL && count > 0) || text == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosSdp_Write() needs a session, its flows and a text.");
     }
     if (count == 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "An SDP needs at least one flow.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "An SDP needs at least one flow.");
     }
     if (DtNmosString_Length(&session->OriginIp) == 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "An SDP needs the address of its sender in origin_ip.");
     }
     int with_mid = 0;
@@ -353,7 +352,7 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flo
             flows[i].DestinationPort == 0)
         {
             return dtnmos_fail(
-                error, DTNMOS_E_INVALID_ARGUMENT,
+                DTNMOS_E_INVALID_ARGUMENT,
                 "Flow %zu of the SDP needs a destination address and port.", i);
         }
         if (flows[i].Leg == 1)
@@ -361,7 +360,7 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flo
             if (i == 0 || flows[i - 1].Leg != 0)
             {
                 return dtnmos_fail(
-                    error, DTNMOS_E_INVALID_ARGUMENT,
+                    DTNMOS_E_INVALID_ARGUMENT,
                     "Flow %zu is a second path and needs the first right before it.", i);
             }
             with_mid = 1;
@@ -397,13 +396,13 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flo
     if (buffer.failed)
     {
         dtnmos_buffer_free(&buffer);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     const DtNmosResult result = DtNmosString_Set(text, buffer.data, buffer.length);
     dtnmos_buffer_free(&buffer);
     if (result != DTNMOS_OK)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     return DTNMOS_OK;
 }

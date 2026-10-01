@@ -34,11 +34,14 @@ its headers `dtnmos.h` and `dtnmos_*.h`, a CMake package (`find_package(dtnmos)`
 
 ## Using it
 
-Every function that can fail returns a `DtNmosResult` and fills an optional
-`DtNmosError` with a message that says what failed. Strings the library hands out are
-`DtNmosString`: read them with `DtNmosString_Get()`, and free a struct that holds them
-with its `_clear()`. A struct set to zero is valid and empty, and must not be copied with
-`=`: use its `_copy()`.
+Every function that can fail returns a `DtNmosResult`, and `DtNmos_GetLastError()` then
+gives a message that says what failed, kept for each thread. A callback the library
+calls, the activation of a node or an HTTP function, fails with
+`return DtNmos_SetLastError(DTNMOS_E_..., "what failed");`.
+
+Strings the library hands out are `DtNmosString`: read them with `DtNmosString_Get()`,
+and free a struct that holds them with its `_clear()`. A struct set to zero is valid and
+empty, and must not be copied with `=`: use its `_copy()`.
 
 Reading an SDP gives a handle that owns its flows:
 
@@ -50,10 +53,9 @@ Reading an SDP gives a handle that owns its flows:
 int print_flows(const char* text)
 {
   DtNmosSdp* sdp = NULL;
-  DtNmosError error = {0};
-  if (DtNmosSdp_Parse(text, strlen(text), &sdp, &error) != DTNMOS_OK)
+  if (DtNmosSdp_Parse(text, strlen(text), &sdp) != DTNMOS_OK)
   {
-    fprintf(stderr, "%s\n", error.Message);
+    fprintf(stderr, "%s\n", DtNmos_GetLastError());
     return 1;
   }
   for (size_t i = 0; i < DtNmosSdp_FlowCount(sdp); ++i)
@@ -93,7 +95,7 @@ flow.Format.Audio.Channels = 2;
 flow.Format.Audio.PacketTimeNs = 1000000;
 
 DtNmosString text = {0};
-if (DtNmosSdp_Write(&session, &flow, 1, &text, NULL) == DTNMOS_OK)
+if (DtNmosSdp_Write(&session, &flow, 1, &text) == DTNMOS_OK)
 {
   puts(DtNmosString_Get(&text));
 }
@@ -123,13 +125,12 @@ config.Size = sizeof(config);
 config.RegistryUrl = "http://registry.local";
 config.Http = DtNmos_CurlHttp;  // or a function on the HTTP stack of the program
 DtNmosQuery* query = NULL;
-DtNmosError error = {0};
-if (DtNmosQuery_Create(&config, &query, &error) == DTNMOS_OK)
+if (DtNmosQuery_Create(&config, &query) == DTNMOS_OK)
 {
   DtNmosSenderInfo sender = {0};
   DtNmosSdp* sdp = NULL;
-  if (DtNmosQuery_FindSender(query, "camera 1", &sender, &error) == DTNMOS_OK &&
-      DtNmosQuery_SenderSdp(query, &sender, &sdp, &error) == DTNMOS_OK)
+  if (DtNmosQuery_FindSender(query, "camera 1", &sender) == DTNMOS_OK &&
+      DtNmosQuery_SenderSdp(query, &sender, &sdp) == DTNMOS_OK)
   {
     // The flows of the sender, as DtNmosSdp_Parse() gives them.
     DtNmosSdp_Free(sdp);
@@ -157,13 +158,13 @@ requests to the node go through the HTTP function of the query:
 ```c
 
 DtNmosConnection connection = {0};
-if (DtNmosQuery_Connect(query, "monitor", "camera 1", &connection, &error) == DTNMOS_OK)
+if (DtNmosQuery_Connect(query, "monitor", "camera 1", &connection) == DTNMOS_OK)
 {
   // connection.Receiver and connection.Sender as the registry lists them, and
   // connection.Sdp, the transport file the receiver was given.
   DtNmosConnection_Clear(&connection);
 }
-DtNmosQuery_Disconnect(query, "monitor", NULL, &error);
+DtNmosQuery_Disconnect(query, "monitor", NULL);
 ```
 
 A sender of another kind of media than the receiver, video, audio or data, is refused
@@ -173,7 +174,7 @@ before the node is asked; what the node refuses comes back with the error it gav
 Connection API of the sender:
 
 ```c
-DtNmosQuery_MoveSender(query, "camera 1", "239.10.1.2", 5004, NULL, &error);
+DtNmosQuery_MoveSender(query, "camera 1", "239.10.1.2", 5004, NULL);
 ```
 
 ## Following a registry
@@ -198,12 +199,12 @@ config.Size = sizeof(config);
 config.ResourcePath = "/senders";
 config.OnChange = on_change;  // websocket left null: DtNmos_CurlWebSocket()
 DtNmosSubscription* subscription = NULL;
-if (DtNmosSubscription_Create(query, &config, &subscription, &error) == DTNMOS_OK)
+if (DtNmosSubscription_Create(query, &config, &subscription) == DTNMOS_OK)
 {
   DtNmosResult result = DTNMOS_OK;
   while (result == DTNMOS_OK || result == DTNMOS_E_TIMEOUT)
   {
-    result = DtNmosSubscription_Poll(subscription, 1000, &error);
+    result = DtNmosSubscription_Poll(subscription, 1000);
   }
   // DTNMOS_E_NETWORK: the WebSocket closed; a new subscription starts again.
   DtNmosSubscription_Destroy(subscription);
@@ -238,8 +239,7 @@ config.Size = sizeof(config);
 config.Service = DTNMOS_SERVICE_QUERY;  // or DTNMOS_SERVICE_REGISTRATION
 config.InterfaceAddress = NULL;        // or the IPv4 address of the interface to ask on
 DtNmosRegistryList* list = NULL;
-DtNmosError error = {0};
-if (DtNmos_Discover(&config, &list, &error) == DTNMOS_OK)
+if (DtNmos_Discover(&config, &list) == DTNMOS_OK)
 {
   // Usable ones first, by priority: take the first, and the next when it fails.
   for (size_t i = 0; i < DtNmosRegistryList_Count(list); ++i)
@@ -268,19 +268,19 @@ does both on threads of its own:
 
 DtNmosNodeConfig config = {0};
 config.Size = sizeof(config);
-DtNmosId_FromName(&my_namespace, "my node", &config.Id, NULL);
+DtNmosId_FromName(&my_namespace, "my node", &config.Id);
 config.Label = "my node";
 config.RegistrationUrl = "http://registry.local";
 config.Http = DtNmos_CurlHttp;
 DtNmosNode* node = NULL;
-if (DtNmosNode_Create(&config, &node, NULL) == DTNMOS_OK)
+if (DtNmosNode_Create(&config, &node) == DTNMOS_OK)
 {
   DtNmosDeviceConfig device = {sizeof(device)};
-  DtNmosId_FromName(&config.Id, "card 1", &device.Id, NULL);
+  DtNmosId_FromName(&config.Id, "card 1", &device.Id);
   device.Label = "card 1";
-  DtNmosNode_AddDevice(node, &device, NULL);
+  DtNmosNode_AddDevice(node, &device);
   // DtNmosNode_AddSender() with the flow it sends, DtNmosNode_AddReceiver() ...
-  DtNmosNode_Serve(node, NULL);
+  DtNmosNode_Serve(node);
   // ... until the program ends, which deletes what the node registered:
   DtNmosNode_Destroy(node);
 }
@@ -300,8 +300,7 @@ staged parameters the active ones only when that function succeeds:
 
 ```c
 static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
-                                      const DtNmosReceiverActivation* activation,
-                                      DtNmosError* error)
+                                      const DtNmosReceiverActivation* activation)
 {
   if (activation->HasFlow)
   {

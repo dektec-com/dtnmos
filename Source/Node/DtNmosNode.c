@@ -124,28 +124,27 @@ static char* registration_base(const char* url)
     return base.data;
 }
 
-DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node,
-                               DtNmosError* error)
+DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node)
 {
     if (node == NULL || config == NULL || config->Id.Text[0] == '\0' ||
         config->RegistrationUrl == NULL || config->RegistrationUrl[0] == '\0' ||
         config->Http == NULL)
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "A node needs an ID, the URL of a registry and an HTTP function.");
     }
     *node = NULL;
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "IS-04 %s is not supported; dtnmos speaks v1.3.",
                            config->ApiVersion);
     }
     DtNmosNode* result = calloc(1, sizeof(*result));
     if (result == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     result->mutex = dtnmos_mutex_create();
     result->id = config->Id;
@@ -192,7 +191,7 @@ DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node
         result->registration == NULL)
     {
         dtnmos_node_free(result);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     dtnmos_version_now(&result->last_version, result->version, sizeof(result->version));
     *node = result;
@@ -255,8 +254,7 @@ void dtnmos_node_free(DtNmosNode* node)
 // in status, or fails when no answer came.
 //
 static DtNmosResult registry_request(DtNmosNode* node, const char* method,
-                                     const char* path, const char* body, int* status,
-                                     DtNmosError* error)
+                                     const char* path, const char* body, int* status)
 {
     dtnmos_buffer url;
     memset(&url, 0, sizeof(url));
@@ -266,7 +264,7 @@ static DtNmosResult registry_request(DtNmosNode* node, const char* method,
     {
         dtnmos_buffer_free(&url);
         DtNmosHttpResponse_Free(response);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     DtNmosHttpRequest request;
     memset(&request, 0, sizeof(request));
@@ -280,18 +278,15 @@ static DtNmosResult registry_request(DtNmosNode* node, const char* method,
         request.Body = body;
         request.BodyLength = strlen(body);
     }
-    if (error != NULL)
-    {
-        error->Message[0] = '\0';
-    }
-    DtNmosResult result = node->http(node->http_user, &request, response, error);
+    dtnmos_clear_error();
+    DtNmosResult result = node->http(node->http_user, &request, response);
     if (result == DTNMOS_OK)
     {
         *status = DtNmosHttpResponse_Status(response);
     }
-    else if (error != NULL && error->Message[0] == '\0')
+    else if (DtNmos_GetLastError()[0] == '\0')
     {
-        dtnmos_fail(error, result, "%s %s failed.", method, url.data);
+        dtnmos_fail(result, "%s %s failed.", method, url.data);
     }
     dtnmos_buffer_free(&url);
     DtNmosHttpResponse_Free(response);
@@ -303,7 +298,7 @@ static DtNmosResult registry_request(DtNmosNode* node, const char* method,
 // Registers a resource of type with the JSON data; 200 and 201 are both success.
 //
 static DtNmosResult register_resource(DtNmosNode* node, const char* type,
-                                      const char* data, DtNmosError* error)
+                                      const char* data)
 {
     dtnmos_buffer body;
     memset(&body, 0, sizeof(body));
@@ -311,17 +306,15 @@ static DtNmosResult register_resource(DtNmosNode* node, const char* type,
     if (body.failed)
     {
         dtnmos_buffer_free(&body);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     int status = 0;
-    DtNmosResult result =
-        registry_request(node, "POST", "resource", body.data, &status, error);
+    DtNmosResult result = registry_request(node, "POST", "resource", body.data, &status);
     dtnmos_buffer_free(&body);
     if (result == DTNMOS_OK && status != 200 && status != 201)
     {
-        result =
-            dtnmos_fail(error, DTNMOS_E_HTTP,
-                        "The registry answered %d to registering a %s.", status, type);
+        result = dtnmos_fail(
+            DTNMOS_E_HTTP, "The registry answered %d to registering a %s.", status, type);
     }
     if (result == DTNMOS_OK)
     {
@@ -584,7 +577,7 @@ int dtnmos_is_multicast(const char* address)
 // .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_transport_file -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult dtnmos_node_write_transport_file(const node_sender* sender,
-                                              DtNmosString* text, DtNmosError* error)
+                                              DtNmosString* text)
 {
     DtNmosSession session;
     memset(&session, 0, sizeof(session));
@@ -597,9 +590,9 @@ DtNmosResult dtnmos_node_write_transport_file(const node_sender* sender,
                                                     : "0.0.0.0") != DTNMOS_OK)
     {
         DtNmosSession_Clear(&session);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    const DtNmosResult result = DtNmosSdp_Write(&session, &sender->flow, 1, text, error);
+    const DtNmosResult result = DtNmosSdp_Write(&session, &sender->flow, 1, text);
     DtNmosSession_Clear(&session);
     return result;
 }
@@ -700,24 +693,23 @@ static void touch_device(DtNmosNode* node, const DtNmosId* id)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_AddDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* device,
-                                  DtNmosError* error)
+DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* device)
 {
     if (node == NULL || device == NULL || device->Id.Text[0] == '\0')
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT, "A device needs an ID.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A device needs an ID.");
     }
     dtnmos_node_lock(node);
     DtNmosResult result = DTNMOS_OK;
     if (id_taken(node, &device->Id))
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
                              device->Id.Text);
     }
     else if (!grow((void**)&node->devices, &node->device_capacity, node->device_count,
                    sizeof(*node->devices)))
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     else
     {
@@ -730,7 +722,7 @@ DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* de
         {
             free(added->label);
             free(added->description);
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
         else
         {
@@ -748,7 +740,7 @@ DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* de
 //
 static void derived_id(const DtNmosId* sender, const char* what, DtNmosId* id)
 {
-    if (DtNmosId_FromName(sender, what, id, NULL) != DTNMOS_OK)
+    if (DtNmosId_FromName(sender, what, id) != DTNMOS_OK)
     {
         memset(id, 0, sizeof(*id));
     }
@@ -757,19 +749,17 @@ static void derived_id(const DtNmosId* sender, const char* what, DtNmosId* id)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_AddSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* sender,
-                                  DtNmosSenderActivateFunc activate, void* user,
-                                  DtNmosError* error)
+                                  DtNmosSenderActivateFunc activate, void* user)
 {
     if (node == NULL || sender == NULL || sender->Id.Text[0] == '\0' ||
         sender->Flow == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "A sender needs an ID and a flow.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A sender needs an ID and a flow.");
     }
     if (sender->Flow->Media != DTNMOS_MEDIA_VIDEO &&
         sender->Flow->Media != DTNMOS_MEDIA_AUDIO)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A sender of the node sends video or audio, not %s.",
                            DtNmosMedia_Name(sender->Flow->Media));
     }
@@ -777,18 +767,18 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* se
     DtNmosResult result = DTNMOS_OK;
     if (id_taken(node, &sender->Id))
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
                              sender->Id.Text);
     }
     else if (dtnmos_node_find_device(node, &sender->DeviceId) == NULL)
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                             "The node has no device %s.", sender->DeviceId.Text);
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The node has no device %s.",
+                             sender->DeviceId.Text);
     }
     else if (!grow((void**)&node->senders, &node->sender_capacity, node->sender_count,
                    sizeof(*node->senders)))
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     else
     {
@@ -812,7 +802,7 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* se
             dtnmos_connection_init_sender(added) != DTNMOS_OK)
         {
             free_sender(added);
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
         else
         {
@@ -829,16 +819,15 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* se
 //
 DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
                                     const DtNmosReceiverConfig* receiver,
-                                    DtNmosReceiverActivateFunc activate, void* user,
-                                    DtNmosError* error)
+                                    DtNmosReceiverActivateFunc activate, void* user)
 {
     if (node == NULL || receiver == NULL || receiver->Id.Text[0] == '\0')
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT, "A receiver needs an ID.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A receiver needs an ID.");
     }
     if (receiver->Media != DTNMOS_MEDIA_VIDEO && receiver->Media != DTNMOS_MEDIA_AUDIO)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A receiver of the node receives video or audio, not %s.",
                            DtNmosMedia_Name(receiver->Media));
     }
@@ -846,18 +835,18 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
     DtNmosResult result = DTNMOS_OK;
     if (id_taken(node, &receiver->Id))
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The node has %s already.",
                              receiver->Id.Text);
     }
     else if (dtnmos_node_find_device(node, &receiver->DeviceId) == NULL)
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                             "The node has no device %s.", receiver->DeviceId.Text);
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The node has no device %s.",
+                             receiver->DeviceId.Text);
     }
     else if (!grow((void**)&node->receivers, &node->receiver_capacity,
                    node->receiver_count, sizeof(*node->receivers)))
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     else
     {
@@ -874,7 +863,7 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
             dtnmos_connection_init_receiver(added) != DTNMOS_OK)
         {
             free_receiver(added);
-            result = dtnmos_fail_memory(error);
+            result = dtnmos_fail_memory();
         }
         else
         {
@@ -939,12 +928,11 @@ static void remove_receiver_at(DtNmosNode* node, size_t index)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id, DtNmosError* error)
+DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id)
 {
     if (node == NULL || id == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosNode_Remove() needs an ID.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Remove() needs an ID.");
     }
     dtnmos_node_lock(node);
     DtNmosResult result = DTNMOS_OK;
@@ -988,7 +976,7 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id, DtNmosError
     }
     else
     {
-        result = dtnmos_fail(error, DTNMOS_E_NOT_FOUND, "The node has no %s.", id->Text);
+        result = dtnmos_fail(DTNMOS_E_NOT_FOUND, "The node has no %s.", id->Text);
     }
     dtnmos_node_unlock(node);
     return result;
@@ -997,11 +985,11 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id, DtNmosError
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_UpdateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
-                                     const DtNmosFlow* flow, DtNmosError* error)
+                                     const DtNmosFlow* flow)
 {
     if (node == NULL || id == NULL || flow == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_UpdateSender() needs an ID and a flow.");
     }
     dtnmos_node_lock(node);
@@ -1009,19 +997,17 @@ DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
     node_sender* sender = dtnmos_node_find_sender(node, id);
     if (sender == NULL)
     {
-        result = dtnmos_fail(error, DTNMOS_E_NOT_FOUND, "The node has no sender %s.",
-                             id->Text);
+        result = dtnmos_fail(DTNMOS_E_NOT_FOUND, "The node has no sender %s.", id->Text);
     }
     else if (flow->Media != sender->flow.Media)
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                             "Sender %s sends %s and cannot send %s.", id->Text,
-                             DtNmosMedia_Name(sender->flow.Media),
-                             DtNmosMedia_Name(flow->Media));
+        result = dtnmos_fail(
+            DTNMOS_E_INVALID_ARGUMENT, "Sender %s sends %s and cannot send %s.", id->Text,
+            DtNmosMedia_Name(sender->flow.Media), DtNmosMedia_Name(flow->Media));
     }
     else if (DtNmosFlow_Copy(&sender->flow, flow) != DTNMOS_OK)
     {
-        result = dtnmos_fail_memory(error);
+        result = dtnmos_fail_memory();
     }
     else
     {
@@ -1219,12 +1205,11 @@ int DtNmosNode_IsRegistered(const DtNmosNode* node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms, DtNmosError* error)
+DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms)
 {
     if (node == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosNode_Poll() needs a node.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Poll() needs a node.");
     }
     DtNmosResult result = DTNMOS_OK;
     // Deletions first, children before parents as they were scheduled.
@@ -1241,7 +1226,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms, DtNmosError* e
         char path[96];
         snprintf(path, sizeof(path), "resource/%s/%s", removal.type, removal.id.Text);
         int status = 0;
-        result = registry_request(node, "DELETE", path, NULL, &status, error);
+        result = registry_request(node, "DELETE", path, NULL, &status);
         if (result != DTNMOS_OK)
         {
             break;
@@ -1270,8 +1255,8 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms, DtNmosError* e
         for (size_t i = 0; result == DTNMOS_OK && i < p.count; ++i)
         {
             result = p.bodies[i] == NULL
-                         ? dtnmos_fail_memory(error)
-                         : register_resource(node, p.types[i], p.bodies[i], error);
+                         ? dtnmos_fail_memory()
+                         : register_resource(node, p.types[i], p.bodies[i]);
         }
         if (result == DTNMOS_OK)
         {
@@ -1295,7 +1280,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms, DtNmosError* e
         char path[96];
         snprintf(path, sizeof(path), "health/nodes/%s", node->id.Text);
         int status = 0;
-        result = registry_request(node, "POST", path, NULL, &status, error);
+        result = registry_request(node, "POST", path, NULL, &status);
         dtnmos_node_lock(node);
         if (result == DTNMOS_OK && status == 404)
         {
@@ -1305,7 +1290,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms, DtNmosError* e
         }
         else if (result == DTNMOS_OK && status != 200)
         {
-            result = dtnmos_fail(error, DTNMOS_E_HTTP,
+            result = dtnmos_fail(DTNMOS_E_HTTP,
                                  "The registry answered %d to a heartbeat.", status);
         }
         node->next_heartbeat_ms = dtnmos_monotonic_ms() + node->heartbeat_ms;
@@ -1388,8 +1373,7 @@ static void unregister_all(DtNmosNode* node)
         schedule_removal(node, "nodes", &node->id);
     }
     dtnmos_node_unlock(node);
-    DtNmosError ignored;
-    DtNmosNode_Poll(node, NULL, &ignored);
+    DtNmosNode_Poll(node, NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1589,12 +1573,12 @@ static void answer_names(DtNmosHttpResponse* response, const char* names)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Handle -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosNode_Handle(DtNmosNode* node, const DtNmosHttpRequest* request,
-                               DtNmosHttpResponse* response, DtNmosError* error)
+                               DtNmosHttpResponse* response)
 {
     if (node == NULL || request == NULL || request->Url == NULL ||
         request->Method == NULL || response == NULL)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_Handle() needs a node, a request and a response.");
     }
     // The path without its query, split into its segments.
@@ -1613,8 +1597,7 @@ DtNmosResult DtNmosNode_Handle(DtNmosNode* node, const DtNmosHttpRequest* reques
     if (count >= 3 && strcmp(segments[0], "x-nmos") == 0 &&
         strcmp(segments[1], "connection") == 0 && strcmp(segments[2], "v1.1") == 0)
     {
-        return dtnmos_connection_handle(node, request, segments + 3, count - 3, response,
-                                        error);
+        return dtnmos_connection_handle(node, request, segments + 3, count - 3, response);
     }
     if (!get)
     {

@@ -577,8 +577,7 @@ static int read_destination(const char* text, char* address, size_t size, uint16
 // when there is no server or no domain. Fails for a malformed server or domain.
 //
 static DtNmosResult prepare_unicast(const DtNmosDiscoveryConfig* config,
-                                    const char* service_type, search* unicast,
-                                    DtNmosError* error)
+                                    const char* service_type, search* unicast)
 {
     unicast->kind = DTNMOS_SEARCH_UNICAST;
     unicast->flags = DTNMOS_DNS_RECURSION_DESIRED;
@@ -587,7 +586,7 @@ static DtNmosResult prepare_unicast(const DtNmosDiscoveryConfig* config,
         !read_destination(config->DnsServer, unicast->address, sizeof(unicast->address),
                           &unicast->port))
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "The DNS server %s is no <IPv4 address>:<port>.",
                            config->DnsServer);
     }
@@ -628,8 +627,8 @@ static DtNmosResult prepare_unicast(const DtNmosDiscoveryConfig* config,
                  domain) >= (int)sizeof(unicast->service) ||
         dtnmos_dns_write_query(query, sizeof(query), 0, 0, &question, 1) == 0)
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "The domain %s is no domain.", domain);
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The domain %s is no domain.",
+                           domain);
     }
     unicast->active = 1;
     unicast->found.service = unicast->service;
@@ -643,8 +642,7 @@ static DtNmosResult prepare_unicast(const DtNmosDiscoveryConfig* config,
 // Makes the list of the complete instances that both searches found, sorted.
 //
 static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
-                                    const search* searches, DtNmosRegistryList** list,
-                                    DtNmosError* error)
+                                    const search* searches, DtNmosRegistryList** list)
 {
     const size_t total =
         searches[0].found.instance_count + searches[1].found.instance_count;
@@ -654,7 +652,7 @@ static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
                            calloc(total, sizeof(*result_list->registries))) == NULL))
     {
         free(result_list);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     for (int s = 0; s < 2; ++s)
     {
@@ -673,7 +671,7 @@ static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
             {
                 DtNmosRegistryInfo_Clear(registry);
                 DtNmosRegistryList_Free(result_list);
-                return dtnmos_fail_memory(error);
+                return dtnmos_fail_memory();
             }
             registry->FoundBy = searches[s].kind;
             ++result_list->count;
@@ -692,7 +690,7 @@ static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_Discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
-                             DtNmosRegistryList** list, DtNmosError* error)
+                             DtNmosRegistryList** list)
 {
     if (list != NULL)
     {
@@ -703,12 +701,12 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
          config->Service != DTNMOS_SERVICE_REGISTRATION))
     {
         return dtnmos_fail(
-            error, DTNMOS_E_INVALID_ARGUMENT,
+            DTNMOS_E_INVALID_ARGUMENT,
             "DtNmos_Discover() needs a config of a known service and a list.");
     }
     if (config->InterfaceAddress != NULL && !is_ipv4(config->InterfaceAddress))
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "The interface address %s is no IPv4 address.",
                            config->InterfaceAddress);
     }
@@ -718,7 +716,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
     {
         free(searches);
         free(buffer);
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
     const char* service_type = config->Service == DTNMOS_SERVICE_QUERY
                                    ? "_nmos-query._tcp"
@@ -738,20 +736,20 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
         !read_destination(config->Destination, multicast->address,
                           sizeof(multicast->address), &multicast->port))
     {
-        result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
+        result = dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                              "The destination %s is no <IPv4 address>:<port>.",
                              config->Destination);
     }
     if (result == DTNMOS_OK)
     {
-        result = prepare_unicast(config, service_type, &searches[1], error);
+        result = prepare_unicast(config, service_type, &searches[1]);
     }
     dtnmos_udp* udp = NULL;
     if (result == DTNMOS_OK &&
         (udp = dtnmos_udp_open(NULL, config->InterfaceAddress)) == NULL)
     {
         result = dtnmos_fail(
-            error, DTNMOS_E_NETWORK, "No socket for multicast DNS could be opened%s%s.",
+            DTNMOS_E_NETWORK, "No socket for multicast DNS could be opened%s%s.",
             config->InterfaceAddress != NULL ? " on " : "",
             config->InterfaceAddress != NULL ? config->InterfaceAddress : "");
     }
@@ -780,7 +778,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
             }
             if (one->kind == DTNMOS_SEARCH_MULTICAST)
             {
-                result = dtnmos_fail(error, DTNMOS_E_NETWORK,
+                result = dtnmos_fail(DTNMOS_E_NETWORK,
                                      "The query for %s could not be sent to %s:%u.",
                                      one->service, one->address, one->port);
                 break;
@@ -818,7 +816,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
 
     if (result == DTNMOS_OK)
     {
-        result = list_registries(config, searches, list, error);
+        result = list_registries(config, searches, list);
     }
     if (result == DTNMOS_OK)
     {

@@ -133,7 +133,7 @@ void dtnmos_node_write_receiver(const node_receiver* receiver, dtnmos_buffer* b)
 
 // Writes the SDP of sender, its transport file; the caller holds the lock.
 DtNmosResult dtnmos_node_write_transport_file(const node_sender* sender,
-                                              DtNmosString* text, DtNmosError* error);
+                                              DtNmosString* text);
 
 void dtnmos_node_answer_error(DtNmosHttpResponse* response, int status,
                               const char* message);
@@ -148,7 +148,7 @@ DtNmosResult dtnmos_connection_init_receiver(node_receiver* receiver);
 void dtnmos_connection_clear_receiver(node_receiver* receiver);
 DtNmosResult dtnmos_connection_handle(DtNmosNode* node, const DtNmosHttpRequest* request,
                                       char** segments, size_t count,
-                                      DtNmosHttpResponse* response, DtNmosError* error);
+                                      DtNmosHttpResponse* response);
 
 // Stops the server of NmosServer.c and its polling, when the node serves itself.
 void dtnmos_server_stop(DtNmosNode* node);

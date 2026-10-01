@@ -39,28 +39,36 @@ DTNMOS_API void DtNmos_Version(int* major, int* minor, int* patch);
 typedef enum DtNmosResult
 {
     DTNMOS_OK = 0,
-    DTNMOS_E_INVALID_ARGUMENT, // a parameter is null, empty or out of range
-    DTNMOS_E_PARSE,            // an SDP or JSON document is malformed
-    DTNMOS_E_NOT_FOUND,        // the registry has no such resource
-    DTNMOS_E_AMBIGUOUS,        // a label names more than one resource
-    DTNMOS_E_HTTP,             // a request failed or was answered with an error status
-    DTNMOS_E_TIMEOUT,          // a request got no answer in time
-    DTNMOS_E_STATE,            // the handle is not in a state that allows the call
-    DTNMOS_E_NO_MEMORY,
-    DTNMOS_E_INTERNAL,
-    DTNMOS_E_NETWORK // a socket could not be opened, or could not send
+    // A result at DTNMOS_E or above is a failure; one below it a success, as with
+    // CDTAPI's DTAPI_E.
+    DTNMOS_E = 0x1000,
+    DTNMOS_E_INVALID_ARGUMENT =
+        DTNMOS_E + 1,                  // a parameter is null, empty or out of range
+    DTNMOS_E_PARSE = DTNMOS_E + 2,     // an SDP or JSON document is malformed
+    DTNMOS_E_NOT_FOUND = DTNMOS_E + 3, // the registry has no such resource
+    DTNMOS_E_AMBIGUOUS = DTNMOS_E + 4, // a label names more than one resource
+    DTNMOS_E_HTTP = DTNMOS_E + 5, // a request failed or was answered with an error status
+    DTNMOS_E_TIMEOUT = DTNMOS_E + 6, // a request got no answer in time
+    DTNMOS_E_STATE = DTNMOS_E + 7,   // the handle is not in a state that allows the call
+    DTNMOS_E_NO_MEMORY = DTNMOS_E + 8,
+    DTNMOS_E_INTERNAL = DTNMOS_E + 9,
+    DTNMOS_E_NETWORK = DTNMOS_E + 10 // a socket could not be opened, or could not send
 } DtNmosResult;
 
 // Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.
 DTNMOS_API const char* DtNmosResult_Name(DtNmosResult result);
 
-// A failure: its code, and a message in English that names what failed and why. The
-// message is a fixed array, so that reporting a failure never allocates.
-typedef struct DtNmosError
-{
-    DtNmosResult Code;
-    char Message[512];
-} DtNmosError;
+// Returns the message of the last failure of a call on this thread, in English, naming
+// what failed and why; "" when none failed yet. A call that fails sets it, and one that
+// succeeds leaves it as it was. The text is the thread's own, valid until the next call
+// on it fails.
+DTNMOS_API const char* DtNmos_GetLastError(void);
+
+// Sets the message DtNmos_GetLastError() returns on this thread, and returns result. A
+// callback the library calls, an activation of the node or an HTTP function, fails this
+// way: it returns DtNmos_SetLastError(DTNMOS_E_..., "what failed"), and the library
+// passes the message on, as the answer of the node to a controller for one.
+DTNMOS_API DtNmosResult DtNmos_SetLastError(DtNmosResult result, const char* message);
 
 // A string the library hands out. A DtNmosString set to zero is valid and empty, so a
 // struct that holds strings needs nothing but = {0} before the library fills it. Short
@@ -112,7 +120,7 @@ typedef struct DtNmosId
 // restarts, e.g. from the serial number of a card, its port and the label of an
 // element. Fails with DTNMOS_E_INVALID_ARGUMENT when namespace_id is no UUID.
 DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* namespace_id, const char* name,
-                                          DtNmosId* id, DtNmosError* error);
+                                          DtNmosId* id);
 
 // Where log messages go.
 typedef enum DtNmosLogLevel

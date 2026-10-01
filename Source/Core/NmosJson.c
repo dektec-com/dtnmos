@@ -20,15 +20,13 @@ typedef struct reader
     const char* text;
     size_t length;
     size_t position;
-    DtNmosError* error;
 } reader;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult fail(reader* r, const char* what)
 {
-    return dtnmos_fail(r->error, DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position,
-                       what);
+    return dtnmos_fail(DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position, what);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- skip_space -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -159,7 +157,7 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
             if (buffer.failed)
             {
                 dtnmos_buffer_free(&buffer);
-                return dtnmos_fail_memory(r->error);
+                return dtnmos_fail_memory();
             }
             *text = buffer.data;
             *length = buffer.length;
@@ -357,7 +355,7 @@ static DtNmosResult read_container(reader* r, dtnmos_json* value, int depth, cha
         if (item == NULL)
         {
             free(key);
-            return dtnmos_fail_memory(r->error);
+            return dtnmos_fail_memory();
         }
         DtNmosResult result = read_value(r, item, depth + 1);
         if (result != DTNMOS_OK)
@@ -441,21 +439,19 @@ static void clear_value(dtnmos_json* value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
-                               DtNmosError* error)
+DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value)
 {
     if (value == NULL || (text == NULL && length > 0))
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_json_parse() needs text.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "dtnmos_json_parse() needs text.");
     }
     *value = NULL;
     dtnmos_json* root = calloc(1, sizeof(*root));
     if (root == NULL)
     {
-        return dtnmos_fail_memory(error);
+        return dtnmos_fail_memory();
     }
-    reader r = {text, length, 0, error};
+    reader r = {text, length, 0};
     DtNmosResult result = read_value(&r, root, 0);
     if (result == DTNMOS_OK)
     {

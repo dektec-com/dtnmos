@@ -86,10 +86,10 @@ DTNMOS_API const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* r
 
 // Performs a client request and fills response, which is empty. Returns DTNMOS_OK when
 // an answer came, whatever its status; DTNMOS_E_TIMEOUT when none came in time, and
-// DTNMOS_E_HTTP when the server could not be reached or the exchange failed, with a
-// message in error. Called on the thread of the caller of the library.
+// DTNMOS_E_HTTP when the server could not be reached or the exchange failed, its message
+// set with DtNmos_SetLastError(). Called on the thread of the caller of the library.
 typedef DtNmosResult (*DtNmosHttpFunc)(void* user, const DtNmosHttpRequest* request,
-                                       DtNmosHttpResponse* response, DtNmosError* error);
+                                       DtNmosHttpResponse* response);
 
 // Whether the library was built with the transport on libcurl.
 DTNMOS_API int DtNmos_HasCurl(void);
@@ -97,7 +97,7 @@ DTNMOS_API int DtNmos_HasCurl(void);
 // A DtNmosHttpFunc on libcurl, for HTTP and HTTPS; user is unused. Without libcurl it
 // fails with DTNMOS_E_STATE.
 DTNMOS_API DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
-                                        DtNmosHttpResponse* response, DtNmosError* error);
+                                        DtNmosHttpResponse* response);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The WebSocket of a client +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -112,13 +112,13 @@ typedef struct DtNmosWebSocketTransport
     // Connects to url, "ws://" or "wss://", within timeout_ms, and sets *connection to
     // what the other functions get. Fails with DTNMOS_E_TIMEOUT or DTNMOS_E_NETWORK.
     DtNmosResult (*Connect)(void* user, const char* url, uint32_t timeout_ms,
-                            void** connection, DtNmosError* error);
+                            void** connection);
 
     // Waits at most timeout_ms for a whole text message and sets message to it. Fails
     // with DTNMOS_E_TIMEOUT when none came, keeping a part that did for the next call,
     // and with DTNMOS_E_NETWORK when the connection closed or failed.
     DtNmosResult (*Receive)(void* user, void* connection, uint32_t timeout_ms,
-                            DtNmosString* message, DtNmosError* error);
+                            DtNmosString* message);
 
     // Closes connection and frees it.
     void (*Close)(void* user, void* connection);
