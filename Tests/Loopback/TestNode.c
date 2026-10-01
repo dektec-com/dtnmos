@@ -20,47 +20,47 @@
 #include "tests.h"
 
 // A request the fake registry received.
-typedef struct recorded
+typedef struct NmosRecorded
 {
     char method[8];
     char url[256];
     char type[16]; // of a registration: the type of its resource
-} recorded;
+} NmosRecorded;
 
-typedef struct fake_registration
+typedef struct NmosFakeRegistration
 {
-    recorded requests[64];
+    NmosRecorded requests[64];
     int count;
     int heartbeat_status;
     const char* unreachable; // a request to a URL that holds it gets no answer
-} fake_registration;
+} NmosFakeRegistration;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult record_http(void* user, const DtNmosHttpRequest* request,
                                 DtNmosHttpResponse* response)
 {
-    fake_registration* registry = user;
-    recorded* r = &registry->requests[registry->count < 64 ? registry->count++ : 63];
+    NmosFakeRegistration* registry = user;
+    NmosRecorded* r = &registry->requests[registry->count < 64 ? registry->count++ : 63];
     memset(r, 0, sizeof(*r));
     snprintf(r->method, sizeof(r->method), "%s", request->Method);
     snprintf(r->url, sizeof(r->url), "%s", request->Url);
     if (registry->unreachable != NULL &&
         strstr(request->Url, registry->unreachable) != NULL)
     {
-        return dtnmos_fail(DTNMOS_E_HTTP, "%s did not answer.", request->Url);
+        return NmosError_Fail(DTNMOS_E_HTTP, "%s did not answer.", request->Url);
     }
     int status = 404;
     if (strstr(request->Url, "/x-nmos/registration/v1.3/resource") != NULL &&
         strcmp(request->Method, "POST") == 0)
     {
-        dtnmos_json* json = NULL;
-        if (dtnmos_json_parse(request->Body, request->BodyLength, &json) == DTNMOS_OK)
+        NmosJson* json = NULL;
+        if (NmosJson_Parse(request->Body, request->BodyLength, &json) == DTNMOS_OK)
         {
-            const char* type = dtnmos_json_member_text(json, "type");
+            const char* type = NmosJson_MemberText(json, "type");
             snprintf(r->type, sizeof(r->type), "%s", type == NULL ? "?" : type);
-            CHECK(dtnmos_json_member(json, "data") != NULL);
-            dtnmos_json_free(json);
+            CHECK(NmosJson_Member(json, "data") != NULL);
+            NmosJson_Free(json);
         }
         status = 201;
     }
@@ -85,8 +85,8 @@ static DtNmosResult record_http(void* user, const DtNmosHttpRequest* request,
 //
 // Makes a node with a device, a video sender and an audio receiver.
 //
-static DtNmosNode* make_node(fake_registration* registry, const char* host, uint16_t port,
-                             DtNmosHttpFunc http)
+static DtNmosNode* make_node(NmosFakeRegistration* registry, const char* host,
+                             uint16_t port, DtNmosHttpFunc http)
 {
     DtNmosNodeConfig config;
     memset(&config, 0, sizeof(config));
@@ -137,7 +137,7 @@ static DtNmosNode* make_node(fake_registration* registry, const char* host, uint
 //
 void node_registers_parents_before_children(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
@@ -172,7 +172,7 @@ void node_registers_parents_before_children(void)
 //
 void node_registers_again_when_the_registry_lost_it(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
@@ -182,7 +182,7 @@ void node_registers_again_when_the_registry_lost_it(void)
     // A heartbeat the registry answers with 404 means it lost the node. The wait is
     // longer than a tick of the clock of Windows, about 16 ms, so that the heartbeat is
     // due.
-    dtnmos_sleep_ms(40);
+    NmosOs_SleepMs(40);
     registry.heartbeat_status = 404;
     REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
     CHECK(strstr(registry.requests[registered].url, "/health/nodes/" NODE_ID) != NULL);
@@ -199,7 +199,7 @@ void node_registers_again_when_the_registry_lost_it(void)
 //
 void node_is_opened_closed_and_opened_again(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
@@ -238,7 +238,7 @@ void node_is_opened_closed_and_opened_again(void)
 //
 void node_checks_the_size_of_a_config(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     DtNmosNodeConfig config;
     memset(&config, 0, sizeof(config));
@@ -280,18 +280,18 @@ void node_checks_the_size_of_a_config(void)
 // .-.-.-.-.-.-.-.-.-.- node_deletes_what_is_removed_and_what_it_had -.-.-.-.-.-.-.-.-.-.-
 //
 // The registry a callback moves the node to, and what it was asked.
-typedef struct next_registry
+typedef struct NmosNextRegistry
 {
     int calls;
     uint32_t failures;
     const char* url; // null keeps the node where it is
-} next_registry;
+} NmosNextRegistry;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- give_next_registry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static int give_next_registry(void* user, uint32_t failures, char* next_url, size_t size)
 {
-    next_registry* next = user;
+    NmosNextRegistry* next = user;
     ++next->calls;
     next->failures = failures;
     CHECK_EQ(size, DTNMOS_MAX_URL_SIZE);
@@ -307,11 +307,11 @@ static int give_next_registry(void* user, uint32_t failures, char* next_url, siz
 //
 void node_moves_to_the_next_registry(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     registry.unreachable = "registry-a.test";
-    next_registry next = {0, 0, "http://registry-b.test"};
+    NmosNextRegistry next = {0, 0, "http://registry-b.test"};
     DtNmosNodeConfig config;
     memset(&config, 0, sizeof(config));
     config.Size = sizeof(config);
@@ -348,7 +348,7 @@ void node_moves_to_the_next_registry(void)
     // A heartbeat answered with 404 is no failure: the node registers again with the
     // same registry.
     registry.heartbeat_status = 404;
-    dtnmos_sleep_ms(40);
+    NmosOs_SleepMs(40);
     CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
     registry.heartbeat_status = 200;
     CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
@@ -360,7 +360,7 @@ void node_moves_to_the_next_registry(void)
     next.url = NULL;
     for (int poll = 0; poll < 2; ++poll)
     {
-        dtnmos_sleep_ms(40);
+        NmosOs_SleepMs(40);
         CHECK(DtNmosNode_Poll(node, NULL) != DTNMOS_OK);
     }
     CHECK_EQ(next.calls, 2);
@@ -371,7 +371,7 @@ void node_moves_to_the_next_registry(void)
 
 void node_deletes_what_is_removed_and_what_it_had(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
@@ -418,41 +418,40 @@ static DtNmosHttpResponse* ask(DtNmosNode* node, const char* method, const char*
 //
 void node_answers_its_node_api_and_transport_files(void)
 {
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
     REQUIRE(node != NULL);
     DtNmosHttpResponse* response = ask(node, "GET", "/x-nmos/node/v1.3/self");
     CHECK_EQ(DtNmosHttpResponse_Status(response), 200);
-    dtnmos_json* json = NULL;
+    NmosJson* json = NULL;
     size_t length = 0;
     const char* body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(dtnmos_json_parse(body, length, &json) == DTNMOS_OK);
-    CHECK_STR(dtnmos_json_member_text(json, "id"), NODE_ID);
-    CHECK_STR(dtnmos_json_member_text(json, "href"), "http://192.168.1.5:8080/");
-    dtnmos_json_free(json);
+    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(json, "id"), NODE_ID);
+    CHECK_STR(NmosJson_MemberText(json, "href"), "http://192.168.1.5:8080/");
+    NmosJson_Free(json);
     DtNmosHttpResponse_Free(response);
 
     response = ask(node, "GET", "/x-nmos/node/v1.3/senders/?paging.limit=10");
     body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(dtnmos_json_parse(body, length, &json) == DTNMOS_OK);
+    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
     REQUIRE(json->type == DTNMOS_JSON_ARRAY && json->count == 1);
-    CHECK_STR(dtnmos_json_member_text(&json->items[0], "manifest_href"),
+    CHECK_STR(NmosJson_MemberText(&json->items[0], "manifest_href"),
               "http://192.168.1.5:8080/x-nmos/connection/v1.1/single/senders/" SENDER_ID
               "/transportfile");
-    CHECK_STR(dtnmos_json_member_text(&json->items[0], "transport"),
+    CHECK_STR(NmosJson_MemberText(&json->items[0], "transport"),
               "urn:x-nmos:transport:rtp.mcast");
-    dtnmos_json_free(json);
+    NmosJson_Free(json);
     DtNmosHttpResponse_Free(response);
 
     response = ask(node, "GET", "/x-nmos/node/v1.3/flows");
     body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(dtnmos_json_parse(body, length, &json) == DTNMOS_OK);
+    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
     REQUIRE(json->count == 1);
-    CHECK_STR(dtnmos_json_member_text(&json->items[0], "interlace_mode"),
-              "interlaced_tff");
-    CHECK_STR(dtnmos_json_member_text(&json->items[0], "media_type"), "video/raw");
-    dtnmos_json_free(json);
+    CHECK_STR(NmosJson_MemberText(&json->items[0], "interlace_mode"), "interlaced_tff");
+    CHECK_STR(NmosJson_MemberText(&json->items[0], "media_type"), "video/raw");
+    NmosJson_Free(json);
     DtNmosHttpResponse_Free(response);
 
     // The transport file is the SDP of the flow of the sender.
@@ -492,7 +491,7 @@ void node_serves_itself_over_http(void)
         printf("  skipped: the library has no server or no libcurl\n");
         return;
     }
-    fake_registration registry;
+    NmosFakeRegistration registry;
     memset(&registry, 0, sizeof(registry));
     registry.heartbeat_status = 200;
     // The registry is fake, the node's own server is real.
@@ -524,7 +523,7 @@ void node_serves_itself_over_http(void)
     // The thread of the server polls the node, which registers.
     for (int wait = 0; wait < 100 && !DtNmosNode_IsRegistered(node); ++wait)
     {
-        dtnmos_sleep_ms(20);
+        NmosOs_SleepMs(20);
     }
     CHECK(DtNmosNode_IsRegistered(node));
     DtNmosNode_Free(node);

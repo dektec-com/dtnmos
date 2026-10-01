@@ -20,7 +20,7 @@
 #ifdef _WIN32
     #include <winsock2.h>
     #include <ws2tcpip.h>
-typedef SOCKET test_socket;
+typedef SOCKET NmosTestSocket;
     #define TEST_NO_SOCKET INVALID_SOCKET
     #define test_close_socket closesocket
     // The length that send() and recv() take.
@@ -30,7 +30,7 @@ typedef SOCKET test_socket;
     #include <netinet/in.h>
     #include <sys/socket.h>
     #include <unistd.h>
-typedef int test_socket;
+typedef int NmosTestSocket;
     #define TEST_NO_SOCKET (-1)
     #define test_close_socket close
     #define TEST_LENGTH(n) ((size_t)(n))
@@ -53,7 +53,7 @@ typedef int test_socket;
     "\"data\": [" data "]}}"
 
 // A registry and a WebSocket that the test answers for.
-typedef struct fake_subscription
+typedef struct NmosFakeSubscription
 {
     int status;          // what the registry answers the POST
     const char* answer;  // and with what
@@ -65,14 +65,14 @@ typedef struct fake_subscription
     size_t count;
     size_t next;
     int closed;
-} fake_subscription;
+} NmosFakeSubscription;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
                               DtNmosHttpResponse* response)
 {
-    fake_subscription* fake = user;
+    NmosFakeSubscription* fake = user;
     CHECK_STR(request->Method, "POST");
     CHECK_STR(request->ContentType, "application/json");
     snprintf(fake->url, sizeof(fake->url), "%s", request->Url);
@@ -89,12 +89,12 @@ static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
 static DtNmosResult fake_connect(void* user, const char* url, uint32_t timeout_ms,
                                  void** connection)
 {
-    fake_subscription* fake = user;
+    NmosFakeSubscription* fake = user;
     CHECK_EQ(timeout_ms, 2000);
     snprintf(fake->connected, sizeof(fake->connected), "%s", url);
     if (fake->connect_fails)
     {
-        return dtnmos_fail(DTNMOS_E_NETWORK, "connection refused");
+        return NmosError_Fail(DTNMOS_E_NETWORK, "connection refused");
     }
     *connection = fake;
     return DTNMOS_OK;
@@ -106,21 +106,21 @@ static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_
                                  const char** message, size_t* length)
 {
     (void)connection;
-    fake_subscription* fake = user;
+    NmosFakeSubscription* fake = user;
     if (fake->next < fake->count)
     {
         const char* text = fake->messages[fake->next++];
         if (text == NULL)
         {
-            return dtnmos_fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
-                               (unsigned)timeout_ms);
+            return NmosError_Fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
+                                  (unsigned)timeout_ms);
         }
         // The messages of the fake outlive its connection.
         *message = text;
         *length = strlen(text);
         return DTNMOS_OK;
     }
-    return dtnmos_fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
+    return NmosError_Fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -128,21 +128,21 @@ static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_
 static void fake_close(void* user, void* connection)
 {
     (void)connection;
-    ((fake_subscription*)user)->closed = 1;
+    ((NmosFakeSubscription*)user)->closed = 1;
 }
 
 // What the changes were, as "<kind> <id> <label before> <label after>".
-typedef struct recorded_changes
+typedef struct NmosRecordedChanges
 {
     char lines[8][160];
     size_t count;
-} recorded_changes;
+} NmosRecordedChanges;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_change -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static void record_change(void* user, const DtNmosChange* change)
 {
-    recorded_changes* recorded = user;
+    NmosRecordedChanges* recorded = user;
     DtNmosSenderList* before = NULL;
     DtNmosSenderList* after = NULL;
     if (change->Pre != NULL)
@@ -173,7 +173,7 @@ static void record_change(void* user, const DtNmosChange* change)
 // Creates a query of the registry of fake and a subscription to its senders through
 // the WebSocket of fake; returns the result of creating it.
 //
-static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorded,
+static DtNmosResult subscribe(NmosFakeSubscription* fake, NmosRecordedChanges* recorded,
                               DtNmosQuery** query, DtNmosSubscription** subscription)
 {
     static DtNmosWebSocketTransport websocket;
@@ -226,13 +226,13 @@ void subscription_reports_what_changes(void)
         GRAIN("{\"path\": \"" MIC_ID "\", \"pre\": " MIC "}, {\"path\": \"" MIC_ID
               "\", \"post\": " MIC "}"),
     };
-    fake_subscription fake;
+    NmosFakeSubscription fake;
     memset(&fake, 0, sizeof(fake));
     fake.status = 201;
     fake.answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
     fake.messages = messages;
     fake.count = sizeof(messages) / sizeof(messages[0]);
-    recorded_changes recorded;
+    NmosRecordedChanges recorded;
     memset(&recorded, 0, sizeof(recorded));
     DtNmosQuery* query = NULL;
     DtNmosSubscription* subscription = NULL;
@@ -245,14 +245,14 @@ void subscription_reports_what_changes(void)
     CHECK_STR(fake.url, BASE "subscriptions");
     CHECK_STR(fake.connected, WS_HREF);
     CHECK_STR(DtNmosSubscription_Url(subscription), WS_HREF);
-    dtnmos_json* body = NULL;
-    REQUIRE(dtnmos_json_parse(fake.body, strlen(fake.body), &body) == DTNMOS_OK);
-    CHECK_STR(dtnmos_json_member_text(body, "resource_path"), "/senders");
-    CHECK_EQ(dtnmos_json_member(body, "max_update_rate_ms")->number, 100);
-    CHECK_EQ(dtnmos_json_member(body, "persist")->type, DTNMOS_JSON_FALSE);
-    CHECK_EQ(dtnmos_json_member(body, "secure")->type, DTNMOS_JSON_FALSE);
-    CHECK_EQ(dtnmos_json_member(body, "params")->type, DTNMOS_JSON_OBJECT);
-    dtnmos_json_free(body);
+    NmosJson* body = NULL;
+    REQUIRE(NmosJson_Parse(fake.body, strlen(fake.body), &body) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(body, "resource_path"), "/senders");
+    CHECK_EQ(NmosJson_Member(body, "max_update_rate_ms")->number, 100);
+    CHECK_EQ(NmosJson_Member(body, "persist")->type, DTNMOS_JSON_FALSE);
+    CHECK_EQ(NmosJson_Member(body, "secure")->type, DTNMOS_JSON_FALSE);
+    CHECK_EQ(NmosJson_Member(body, "params")->type, DTNMOS_JSON_OBJECT);
+    NmosJson_Free(body);
 
     CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
     CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_TIMEOUT);
@@ -283,9 +283,9 @@ void subscription_names_what_went_wrong(void)
 {
     static const char* const messages[] = {"not json", "{\"grain\": {}}",
                                            GRAIN("{\"path\": \"" MIC_ID "\"}")};
-    fake_subscription fake;
+    NmosFakeSubscription fake;
     memset(&fake, 0, sizeof(fake));
-    recorded_changes recorded;
+    NmosRecordedChanges recorded;
     memset(&recorded, 0, sizeof(recorded));
     DtNmosQuery* query = NULL;
     DtNmosSubscription* subscription = NULL;
@@ -347,26 +347,26 @@ void json_writes_what_it_reads_back(void)
 {
     const char* text = "{\"a\": [1, -2.5, 1e3, true, false, null, \"x\\\"y\\n\"], "
                        "\"b\": {}, \"c\": []}";
-    dtnmos_json* json = NULL;
-    REQUIRE(dtnmos_json_parse(text, strlen(text), &json) == DTNMOS_OK);
-    dtnmos_buffer written;
+    NmosJson* json = NULL;
+    REQUIRE(NmosJson_Parse(text, strlen(text), &json) == DTNMOS_OK);
+    NmosBuffer written;
     memset(&written, 0, sizeof(written));
-    dtnmos_json_write(&written, json);
+    NmosJson_Write(&written, json);
     REQUIRE(!written.failed);
     CHECK_STR(written.data,
               "{\"a\":[1,-2.5,1000,true,false,null,\"x\\\"y\\n\"],\"b\":{},\"c\":[]}");
-    dtnmos_json_free(json);
-    dtnmos_buffer_free(&written);
+    NmosJson_Free(json);
+    NmosBuffer_Free(&written);
 }
 
 // A server of one WebSocket that the test runs on a thread: it accepts one client,
 // answers its handshake, and sends what the test of the WebSocket on libcurl reads.
-typedef struct test_server
+typedef struct NmosTestServer
 {
-    test_socket listener;
+    NmosTestSocket listener;
     uint16_t port;
     int handshake_ok;
-} test_server;
+} NmosTestServer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- base64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
@@ -393,7 +393,7 @@ static void base64(const uint8_t* data, size_t length, char* text)
 // Sends a frame of a server, unmasked: opcode, whether it is the last of its message,
 // and its payload.
 //
-static void send_frame(test_socket client, int opcode, int last, const char* payload,
+static void send_frame(NmosTestSocket client, int opcode, int last, const char* payload,
                        size_t length)
 {
     uint8_t header[10];
@@ -436,8 +436,8 @@ static void send_frame(test_socket client, int opcode, int last, const char* pay
 //
 static void serve_client(void* argument)
 {
-    test_server* server = argument;
-    const test_socket client = accept(server->listener, NULL, NULL);
+    NmosTestServer* server = argument;
+    const NmosTestSocket client = accept(server->listener, NULL, NULL);
     if (client == TEST_NO_SOCKET)
     {
         return;
@@ -462,12 +462,12 @@ static void serve_client(void* argument)
     {
         key += strlen("Sec-WebSocket-Key: ");
         const size_t key_length = strcspn(key, "\r");
-        dtnmos_sha1 sha1;
-        dtnmos_sha1_init(&sha1);
-        dtnmos_sha1_update(&sha1, key, key_length);
-        dtnmos_sha1_update(&sha1, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", 36);
+        NmosSha1 sha1;
+        NmosSha1_Init(&sha1);
+        NmosSha1_Update(&sha1, key, key_length);
+        NmosSha1_Update(&sha1, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", 36);
         uint8_t digest[20];
-        dtnmos_sha1_final(&sha1, digest);
+        NmosSha1_Final(&sha1, digest);
         char accept_key[32];
         base64(digest, sizeof(digest), accept_key);
         char answer[256];
@@ -514,7 +514,7 @@ void websocket_on_curl_reads_messages(void)
     WSADATA data;
     WSAStartup(MAKEWORD(2, 2), &data);
 #endif
-    test_server server;
+    NmosTestServer server;
     memset(&server, 0, sizeof(server));
     server.listener = socket(AF_INET, SOCK_STREAM, 0);
     REQUIRE(server.listener != TEST_NO_SOCKET);
@@ -528,7 +528,7 @@ void websocket_on_curl_reads_messages(void)
     REQUIRE(getsockname(server.listener, (struct sockaddr*)&address, &address_length) ==
             0);
     server.port = ntohs(address.sin_port);
-    dtnmos_thread* thread = dtnmos_thread_start(serve_client, &server);
+    NmosThread* thread = NmosOs_ThreadStart(serve_client, &server);
     REQUIRE(thread != NULL);
 
     char url[64];
@@ -558,7 +558,7 @@ void websocket_on_curl_reads_messages(void)
         websocket->Close(websocket->User, connection);
     }
     CHECK(connected == DTNMOS_OK);
-    dtnmos_thread_join(thread);
+    NmosOs_ThreadJoin(thread);
     CHECK_EQ(server.handshake_ok, 1);
     test_close_socket(server.listener);
 

@@ -15,7 +15,7 @@
 
 // The transport parameters of the one leg of RTP. An address is "auto", an address, or
 // "" for null; a port is -1 for "auto".
-typedef struct leg
+typedef struct NmosLeg
 {
     char source_ip[DTNMOS_MAX_ADDRESS_SIZE];
     char destination_ip[DTNMOS_MAX_ADDRESS_SIZE]; // of a sender
@@ -24,23 +24,23 @@ typedef struct leg
     int source_port;                              // of a sender
     int destination_port;
     int rtp_enabled;
-} leg;
+} NmosLeg;
 
 // The staged or active parameters of a sender or receiver.
-typedef struct parameters
+typedef struct NmosParameters
 {
     int master_enable;
     char peer_id[37]; // receiver_id of a sender, sender_id of a receiver; "" for null
-    leg transport;
+    NmosLeg transport;
     char* transport_file;     // of a receiver: the SDP it was given, or null
     char activation_time[32]; // of the last activation; "" for null
-} parameters;
+} NmosParameters;
 
-typedef struct connection
+typedef struct NmosConnection
 {
-    parameters staged;
-    parameters active;
-} connection;
+    NmosParameters staged;
+    NmosParameters active;
+} NmosConnection;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
@@ -63,7 +63,7 @@ static char* copy_text(const char* text)
 //
 // Makes target a copy of source; returns 0 when out of memory, leaving target as it was.
 //
-static int copy_parameters(parameters* target, const parameters* source)
+static int copy_parameters(NmosParameters* target, const NmosParameters* source)
 {
     char* file = copy_text(source->transport_file);
     if (source->transport_file != NULL && file == NULL)
@@ -78,7 +78,7 @@ static int copy_parameters(parameters* target, const parameters* source)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- free_connection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void free_connection(connection* c)
+static void free_connection(NmosConnection* c)
 {
     if (c != NULL)
     {
@@ -88,17 +88,17 @@ static void free_connection(connection* c)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_init_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_InitSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_connection_init_sender(node_sender* sender)
+DtNmosResult NmosConnection_InitSender(NmosNodeSender* sender)
 {
-    connection* c = calloc(1, sizeof(*c));
+    NmosConnection* c = calloc(1, sizeof(*c));
     if (c == NULL)
     {
         return DTNMOS_E_NO_MEMORY;
     }
     // A sender sends where its element was told to until a controller moves it.
-    leg* t = &c->active.transport;
+    NmosLeg* t = &c->active.transport;
     snprintf(t->source_ip, sizeof(t->source_ip), "%s",
              sender->source_ip != NULL && sender->source_ip[0] != '\0' ? sender->source_ip
                                                                        : "auto");
@@ -113,25 +113,25 @@ DtNmosResult dtnmos_connection_init_sender(node_sender* sender)
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_clear_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_ClearSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_connection_clear_sender(node_sender* sender)
+void NmosConnection_ClearSender(NmosNodeSender* sender)
 {
     free_connection(sender->connection);
     sender->connection = NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_init_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_InitReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_connection_init_receiver(node_receiver* receiver)
+DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* receiver)
 {
-    connection* c = calloc(1, sizeof(*c));
+    NmosConnection* c = calloc(1, sizeof(*c));
     if (c == NULL)
     {
         return DTNMOS_E_NO_MEMORY;
     }
     // A receiver receives what its element was given until a controller connects it.
-    leg* t = &c->active.transport;
+    NmosLeg* t = &c->active.transport;
     snprintf(t->source_ip, sizeof(t->source_ip), "auto");
     snprintf(t->interface_ip, sizeof(t->interface_ip), "auto");
     t->destination_port = -1;
@@ -143,9 +143,9 @@ DtNmosResult dtnmos_connection_init_receiver(node_receiver* receiver)
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_clear_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_ClearReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_connection_clear_receiver(node_receiver* receiver)
+void NmosConnection_ClearReceiver(NmosNodeReceiver* receiver)
 {
     free_connection(receiver->connection);
     receiver->connection = NULL;
@@ -155,7 +155,7 @@ void dtnmos_connection_clear_receiver(node_receiver* receiver)
 //
 // Writes an address, or null for "".
 //
-static void write_address(dtnmos_buffer* b, const char* address)
+static void write_address(NmosBuffer* b, const char* address)
 {
     if (address[0] == '\0')
     {
@@ -163,13 +163,13 @@ static void write_address(dtnmos_buffer* b, const char* address)
     }
     else
     {
-        dtnmos_json_write_string(b, address);
+        NmosJson_WriteString(b, address);
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_port(dtnmos_buffer* b, int port)
+static void write_port(NmosBuffer* b, int port)
 {
     if (port < 0)
     {
@@ -177,7 +177,7 @@ static void write_port(dtnmos_buffer* b, int port)
     }
     else
     {
-        dtnmos_buffer_printf(b, "%d", port);
+        NmosBuffer_Printf(b, "%d", port);
     }
 }
 
@@ -186,20 +186,19 @@ static void write_port(dtnmos_buffer* b, int port)
 // Writes the parameters p of a sender or receiver; with_activation writes the immediate
 // activation of p, which staged parameters show only in the answer to their PATCH.
 //
-static void write_parameters(dtnmos_buffer* b, const parameters* p, int sender,
+static void write_parameters(NmosBuffer* b, const NmosParameters* p, int sender,
                              int with_activation)
 {
-    dtnmos_buffer_printf(b, "{\"%s\": ", sender ? "receiver_id" : "sender_id");
+    NmosBuffer_Printf(b, "{\"%s\": ", sender ? "receiver_id" : "sender_id");
     write_address(b, p->peer_id);
-    dtnmos_buffer_printf(b, ", \"master_enable\": %s, \"activation\": ",
-                         p->master_enable ? "true" : "false");
+    NmosBuffer_Printf(b, ", \"master_enable\": %s, \"activation\": ",
+                      p->master_enable ? "true" : "false");
     if (with_activation && p->activation_time[0] != '\0')
     {
-        dtnmos_buffer_printf(
-            b,
-            "{\"mode\": \"activate_immediate\", \"requested_time\": null, "
-            "\"activation_time\": \"%s\"}",
-            p->activation_time);
+        NmosBuffer_Printf(b,
+                          "{\"mode\": \"activate_immediate\", \"requested_time\": null, "
+                          "\"activation_time\": \"%s\"}",
+                          p->activation_time);
     }
     else
     {
@@ -211,7 +210,7 @@ static void write_parameters(dtnmos_buffer* b, const parameters* p, int sender,
         DTNMOS_APPEND_LITERAL(b, ", \"transport_file\": {\"data\": ");
         if (p->transport_file != NULL)
         {
-            dtnmos_json_write_string(b, p->transport_file);
+            NmosJson_WriteString(b, p->transport_file);
             DTNMOS_APPEND_LITERAL(b, ", \"type\": \"application/sdp\"}");
         }
         else
@@ -237,8 +236,8 @@ static void write_parameters(dtnmos_buffer* b, const parameters* p, int sender,
     }
     DTNMOS_APPEND_LITERAL(b, ", \"destination_port\": ");
     write_port(b, p->transport.destination_port);
-    dtnmos_buffer_printf(b, ", \"rtp_enabled\": %s}]}",
-                         p->transport.rtp_enabled ? "true" : "false");
+    NmosBuffer_Printf(b, ", \"rtp_enabled\": %s}]}",
+                      p->transport.rtp_enabled ? "true" : "false");
 }
 
 // The constraints of the one leg: each parameter of the leg, unconstrained.
@@ -253,18 +252,18 @@ static const char receiver_constraints[] =
 //
 static void answer_text(DtNmosHttpResponse* response, const char* text)
 {
-    dtnmos_buffer b;
+    NmosBuffer b;
     memset(&b, 0, sizeof(b));
-    dtnmos_buffer_append(&b, text, strlen(text));
-    dtnmos_node_answer_json(response, &b);
-    dtnmos_buffer_free(&b);
+    NmosBuffer_Append(&b, text, strlen(text));
+    NmosNode_AnswerJson(response, &b);
+    NmosBuffer_Free(&b);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_address -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads an address: a string, or null into "". Returns 0 for another type.
 //
-static int read_address(const dtnmos_json* value, char* target, size_t size)
+static int read_address(const NmosJson* value, char* target, size_t size)
 {
     if (value->type == DTNMOS_JSON_NULL)
     {
@@ -283,7 +282,7 @@ static int read_address(const dtnmos_json* value, char* target, size_t size)
 //
 // Reads a port: a whole number of 0 to 65535, or "auto" into -1.
 //
-static int read_port(const dtnmos_json* value, int* port)
+static int read_port(const NmosJson* value, int* port)
 {
     if (value->type == DTNMOS_JSON_STRING && strcmp(value->string, "auto") == 0)
     {
@@ -301,7 +300,7 @@ static int read_port(const dtnmos_json* value, int* port)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_bool -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int read_bool(const dtnmos_json* value, int* target)
+static int read_bool(const NmosJson* value, int* target)
 {
     if (value->type != DTNMOS_JSON_TRUE && value->type != DTNMOS_JSON_FALSE)
     {
@@ -315,18 +314,18 @@ static int read_bool(const dtnmos_json* value, int* target)
 //
 // Merges the transport parameters of the one leg into t; returns a message on failure.
 //
-static const char* merge_leg(const dtnmos_json* value, int sender, leg* t)
+static const char* merge_leg(const NmosJson* value, int sender, NmosLeg* t)
 {
     if (value->type != DTNMOS_JSON_ARRAY || value->count != 1 ||
         value->items[0].type != DTNMOS_JSON_OBJECT)
     {
         return "transport_params holds the parameters of one leg.";
     }
-    const dtnmos_json* params = &value->items[0];
+    const NmosJson* params = &value->items[0];
     for (size_t i = 0; i < params->count; ++i)
     {
         const char* name = params->keys[i];
-        const dtnmos_json* member = &params->items[i];
+        const NmosJson* member = &params->items[i];
         int valid = 0;
         if (strcmp(name, "source_ip") == 0)
         {
@@ -373,7 +372,7 @@ static const char* merge_leg(const dtnmos_json* value, int sender, leg* t)
 // Merges the body of a PATCH into staged, and sets activate when it asks for an immediate
 // activation. Returns a message on failure, with its status in status.
 //
-static const char* merge_patch(const dtnmos_json* body, int sender, parameters* staged,
+static const char* merge_patch(const NmosJson* body, int sender, NmosParameters* staged,
                                int* activate, int* status)
 {
     *status = 400;
@@ -384,7 +383,7 @@ static const char* merge_patch(const dtnmos_json* body, int sender, parameters* 
     for (size_t i = 0; i < body->count; ++i)
     {
         const char* key = body->keys[i];
-        const dtnmos_json* value = &body->items[i];
+        const NmosJson* value = &body->items[i];
         const char* failure = NULL;
         if (strcmp(key, "master_enable") == 0)
         {
@@ -402,7 +401,7 @@ static const char* merge_patch(const dtnmos_json* body, int sender, parameters* 
         }
         else if (!sender && strcmp(key, "transport_file") == 0)
         {
-            const dtnmos_json* data = dtnmos_json_member(value, "data");
+            const NmosJson* data = NmosJson_Member(value, "data");
             if (data == NULL ||
                 (data->type != DTNMOS_JSON_STRING && data->type != DTNMOS_JSON_NULL))
             {
@@ -424,8 +423,8 @@ static const char* merge_patch(const dtnmos_json* body, int sender, parameters* 
         }
         else if (strcmp(key, "activation") == 0)
         {
-            const dtnmos_json* mode = dtnmos_json_member(value, "mode");
-            const char* name = dtnmos_json_text(mode);
+            const NmosJson* mode = NmosJson_Member(value, "mode");
+            const char* name = NmosJson_Text(mode);
             if (mode == NULL || (mode->type != DTNMOS_JSON_NULL && name == NULL))
             {
                 return "activation holds a mode.";
@@ -456,8 +455,8 @@ static const char* merge_patch(const dtnmos_json* body, int sender, parameters* 
 //
 // Finds the sender or receiver id; returns its connection, or null.
 //
-static connection* find_connection(DtNmosNode* node, const char* id, int sender,
-                                   node_sender** s, node_receiver** r)
+static NmosConnection* find_connection(DtNmosNode* node, const char* id, int sender,
+                                       NmosNodeSender** s, NmosNodeReceiver** r)
 {
     *s = NULL;
     *r = NULL;
@@ -470,10 +469,10 @@ static connection* find_connection(DtNmosNode* node, const char* id, int sender,
     strcpy(wanted.Text, id);
     if (sender)
     {
-        *s = dtnmos_node_find_sender(node, &wanted);
+        *s = NmosNode_FindSender(node, &wanted);
         return *s != NULL ? (*s)->connection : NULL;
     }
-    *r = dtnmos_node_find_receiver(node, &wanted);
+    *r = NmosNode_FindReceiver(node, &wanted);
     return *r != NULL ? (*r)->connection : NULL;
 }
 
@@ -483,8 +482,8 @@ static connection* find_connection(DtNmosNode* node, const char* id, int sender,
 // its transport file, with the transport parameters that are set over it. Returns 0 when
 // the transport file describes none.
 //
-static int receiver_flow(DtNmosMedia media, const parameters* staged, dtnmos_store* store,
-                         DtNmosFlow* flow)
+static int receiver_flow(DtNmosMedia media, const NmosParameters* staged,
+                         NmosStore* store, DtNmosFlow* flow)
 {
     DtNmosSdp* sdp = NULL;
     if (DtNmosSdp_Parse(staged->transport_file, strlen(staged->transport_file), &sdp) !=
@@ -498,7 +497,7 @@ static int receiver_flow(DtNmosMedia media, const parameters* staged, dtnmos_sto
         const DtNmosFlow* candidate = DtNmosSdp_Flow(sdp, i);
         if (candidate->Media == media && candidate->Leg == 0)
         {
-            found = dtnmos_flow_copy(flow, store, candidate) == DTNMOS_OK;
+            found = NmosFlow_Copy(flow, store, candidate) == DTNMOS_OK;
         }
     }
     DtNmosSdp_Free(sdp);
@@ -506,7 +505,7 @@ static int receiver_flow(DtNmosMedia media, const parameters* staged, dtnmos_sto
     {
         return 0;
     }
-    const leg* t = &staged->transport;
+    const NmosLeg* t = &staged->transport;
     if (t->multicast_ip[0] != '\0' && strcmp(t->multicast_ip, "auto") != 0)
     {
         snprintf(flow->DestinationIp, sizeof(flow->DestinationIp), "%s", t->multicast_ip);
@@ -524,7 +523,7 @@ static int receiver_flow(DtNmosMedia media, const parameters* staged, dtnmos_sto
 
 // What an activation hands to the callback of a sender or receiver, gathered under the
 // lock of the node and applied without it.
-typedef struct activation
+typedef struct NmosActivation
 {
     DtNmosSenderActivateFunc sender_callback;
     DtNmosReceiverActivateFunc receiver_callback;
@@ -532,14 +531,14 @@ typedef struct activation
     DtNmosId resource;
     DtNmosSenderActivation sender;
     DtNmosReceiverActivation receiver;
-    dtnmos_store store; // the strings and arrays of the flow of receiver
-} activation;
+    NmosStore store; // the strings and arrays of the flow of receiver
+} NmosActivation;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void clear_activation(activation* a)
+static void clear_activation(NmosActivation* a)
 {
-    dtnmos_store_free(&a->store);
+    NmosStore_Free(&a->store);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- gather_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -547,10 +546,10 @@ static void clear_activation(activation* a)
 // Gathers the activation of staged on the sender s or the receiver r. Returns a message
 // when staged cannot be activated.
 //
-static const char* gather_activation(const node_sender* s, const node_receiver* r,
-                                     const parameters* staged, activation* a)
+static const char* gather_activation(const NmosNodeSender* s, const NmosNodeReceiver* r,
+                                     const NmosParameters* staged, NmosActivation* a)
 {
-    const leg* t = &staged->transport;
+    const NmosLeg* t = &staged->transport;
     const int enabled = staged->master_enable && t->rtp_enabled;
     if (s != NULL)
     {
@@ -592,18 +591,18 @@ static const char* gather_activation(const node_sender* s, const node_receiver* 
 // Makes staged, activated, the active parameters of the sender s or receiver r, with the
 // "auto" of a sender resolved, and registers the new state of the sender or receiver.
 //
-static void make_active(DtNmosNode* node, connection* c, node_sender* s, node_receiver* r,
-                        parameters* staged)
+static void make_active(DtNmosNode* node, NmosConnection* c, NmosNodeSender* s,
+                        NmosNodeReceiver* r, NmosParameters* staged)
 {
-    dtnmos_version_now(&node->last_version, staged->activation_time,
-                       sizeof(staged->activation_time));
+    NmosOs_VersionNow(&node->last_version, staged->activation_time,
+                      sizeof(staged->activation_time));
     if (!copy_parameters(&c->active, staged))
     {
         return;
     }
     if (s != NULL)
     {
-        leg* t = &c->active.transport;
+        NmosLeg* t = &c->active.transport;
         if (t->destination_ip[0] != '\0' && strcmp(t->destination_ip, "auto") != 0)
         {
             snprintf(s->flow.DestinationIp, sizeof(s->flow.DestinationIp), "%s",
@@ -623,14 +622,14 @@ static void make_active(DtNmosNode* node, connection* c, node_sender* s, node_re
         s->master_enable = c->active.master_enable && t->rtp_enabled;
         snprintf(s->receiver_id.Text, sizeof(s->receiver_id.Text), "%s", staged->peer_id);
         ++s->session_version;
-        dtnmos_version_now(&node->last_version, s->version, sizeof(s->version));
+        NmosOs_VersionNow(&node->last_version, s->version, sizeof(s->version));
         s->registered = 0;
     }
     else
     {
         r->master_enable = c->active.master_enable && c->active.transport.rtp_enabled;
         snprintf(r->sender_id.Text, sizeof(r->sender_id.Text), "%s", staged->peer_id);
-        dtnmos_version_now(&node->last_version, r->version, sizeof(r->version));
+        NmosOs_VersionNow(&node->last_version, r->version, sizeof(r->version));
         r->registered = 0;
     }
 }
@@ -642,25 +641,25 @@ static void make_active(DtNmosNode* node, connection* c, node_sender* s, node_re
 static void patch_staged(DtNmosNode* node, const char* id, int sender,
                          const DtNmosHttpRequest* request, DtNmosHttpResponse* response)
 {
-    dtnmos_json* body = NULL;
+    NmosJson* body = NULL;
     if (request->Body == NULL ||
-        dtnmos_json_parse(request->Body, request->BodyLength, &body) != DTNMOS_OK)
+        NmosJson_Parse(request->Body, request->BodyLength, &body) != DTNMOS_OK)
     {
-        dtnmos_node_answer_error(response, 400, "The body of the PATCH is no JSON.");
+        NmosNode_AnswerError(response, 400, "The body of the PATCH is no JSON.");
         return;
     }
-    parameters staged;
+    NmosParameters staged;
     memset(&staged, 0, sizeof(staged));
-    activation a;
+    NmosActivation a;
     memset(&a, 0, sizeof(a));
     int activate = 0;
     int status = 404;
     const char* failure = "The node has no such sender or receiver.";
 
-    dtnmos_node_lock(node);
-    node_sender* s = NULL;
-    node_receiver* r = NULL;
-    connection* c = find_connection(node, id, sender, &s, &r);
+    NmosNode_Lock(node);
+    NmosNodeSender* s = NULL;
+    NmosNodeReceiver* r = NULL;
+    NmosConnection* c = find_connection(node, id, sender, &s, &r);
     if (c != NULL)
     {
         status = 500;
@@ -680,12 +679,12 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
         status = 500;
         failure = "Out of memory.";
     }
-    dtnmos_node_unlock(node);
-    dtnmos_json_free(body);
+    NmosNode_Unlock(node);
+    NmosJson_Free(body);
 
     // The callback applies the activation without the lock, for as long as that takes. A
     // callback that fails leaves its message with DtNmos_SetLastError(), on this thread.
-    dtnmos_clear_error();
+    NmosError_Clear();
     DtNmosResult result = DTNMOS_OK;
     if (failure == NULL && a.sender_callback != NULL)
     {
@@ -703,11 +702,11 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
                                                    : "The activation failed.";
     }
 
-    dtnmos_buffer b;
+    NmosBuffer b;
     memset(&b, 0, sizeof(b));
     if (failure == NULL)
     {
-        dtnmos_node_lock(node);
+        NmosNode_Lock(node);
         c = find_connection(node, id, sender, &s, &r);
         if (c == NULL)
         {
@@ -723,37 +722,37 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
             // The answer shows the activation that took place.
             write_parameters(&b, &staged, sender, activate);
         }
-        dtnmos_node_unlock(node);
+        NmosNode_Unlock(node);
     }
     free(staged.transport_file);
     if (failure != NULL)
     {
-        dtnmos_node_answer_error(response, status, failure);
+        NmosNode_AnswerError(response, status, failure);
     }
     else
     {
-        dtnmos_node_answer_json(response, &b);
+        NmosNode_AnswerJson(response, &b);
     }
-    dtnmos_buffer_free(&b);
+    NmosBuffer_Free(&b);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_transport_file -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Answers the transport file of the sender s.
 //
-static void answer_transport_file(const node_sender* s, DtNmosHttpResponse* response)
+static void answer_transport_file(const NmosNodeSender* s, DtNmosHttpResponse* response)
 {
-    dtnmos_buffer text;
+    NmosBuffer text;
     memset(&text, 0, sizeof(text));
-    if (dtnmos_node_write_transport_file(s, &text) != DTNMOS_OK)
+    if (NmosNode_WriteTransportFile(s, &text) != DTNMOS_OK)
     {
-        dtnmos_buffer_free(&text);
-        dtnmos_node_answer_error(response, 500, DtNmos_GetLastError());
+        NmosBuffer_Free(&text);
+        NmosNode_AnswerError(response, 500, DtNmos_GetLastError());
         return;
     }
     DtNmosHttpResponse_SetStatus(response, 200);
     DtNmosHttpResponse_SetBody(response, "application/sdp", text.data, text.length);
-    dtnmos_buffer_free(&text);
+    NmosBuffer_Free(&text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_ids -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -762,19 +761,18 @@ static void answer_transport_file(const node_sender* s, DtNmosHttpResponse* resp
 //
 static void answer_ids(const DtNmosNode* node, int sender, DtNmosHttpResponse* response)
 {
-    dtnmos_buffer b;
+    NmosBuffer b;
     memset(&b, 0, sizeof(b));
     DTNMOS_APPEND_LITERAL(&b, "[");
     const size_t count = sender ? node->sender_count : node->receiver_count;
     for (size_t i = 0; i < count; ++i)
     {
-        dtnmos_buffer_printf(&b, "%s\"%s/\"", i == 0 ? "" : ", ",
-                             sender ? node->senders[i].id.Text
-                                    : node->receivers[i].id.Text);
+        NmosBuffer_Printf(&b, "%s\"%s/\"", i == 0 ? "" : ", ",
+                          sender ? node->senders[i].id.Text : node->receivers[i].id.Text);
     }
     DTNMOS_APPEND_LITERAL(&b, "]");
-    dtnmos_node_answer_json(response, &b);
-    dtnmos_buffer_free(&b);
+    NmosNode_AnswerJson(response, &b);
+    NmosBuffer_Free(&b);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_single -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -794,8 +792,7 @@ static void answer_single(DtNmosNode* node, char** segments, size_t count,
     }
     if ((!sender && !receiver) || count > 3)
     {
-        dtnmos_node_answer_error(response, 404,
-                                 "The Connection API has no such resource.");
+        NmosNode_AnswerError(response, 404, "The Connection API has no such resource.");
         return;
     }
     if (count == 1)
@@ -803,13 +800,12 @@ static void answer_single(DtNmosNode* node, char** segments, size_t count,
         answer_ids(node, sender, response);
         return;
     }
-    node_sender* s = NULL;
-    node_receiver* r = NULL;
-    connection* c = find_connection(node, segments[1], sender, &s, &r);
+    NmosNodeSender* s = NULL;
+    NmosNodeReceiver* r = NULL;
+    NmosConnection* c = find_connection(node, segments[1], sender, &s, &r);
     if (c == NULL)
     {
-        dtnmos_node_answer_error(response, 404,
-                                 "The node has no such sender or receiver.");
+        NmosNode_AnswerError(response, 404, "The node has no such sender or receiver.");
         return;
     }
     const char* leaf = count == 3 ? segments[2] : "";
@@ -831,11 +827,11 @@ static void answer_single(DtNmosNode* node, char** segments, size_t count,
     else if (strcmp(leaf, "staged") == 0 || strcmp(leaf, "active") == 0)
     {
         const int active = strcmp(leaf, "active") == 0;
-        dtnmos_buffer b;
+        NmosBuffer b;
         memset(&b, 0, sizeof(b));
         write_parameters(&b, active ? &c->active : &c->staged, sender, active);
-        dtnmos_node_answer_json(response, &b);
-        dtnmos_buffer_free(&b);
+        NmosNode_AnswerJson(response, &b);
+        NmosBuffer_Free(&b);
     }
     else if (sender && strcmp(leaf, "transportfile") == 0)
     {
@@ -843,16 +839,15 @@ static void answer_single(DtNmosNode* node, char** segments, size_t count,
     }
     else
     {
-        dtnmos_node_answer_error(response, 404,
-                                 "The Connection API has no such resource.");
+        NmosNode_AnswerError(response, 404, "The Connection API has no such resource.");
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_handle -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_Handle -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_connection_handle(DtNmosNode* node, const DtNmosHttpRequest* request,
-                                      char** segments, size_t count,
-                                      DtNmosHttpResponse* response)
+DtNmosResult NmosConnection_Handle(DtNmosNode* node, const DtNmosHttpRequest* request,
+                                   char** segments, size_t count,
+                                   DtNmosHttpResponse* response)
 {
     const int single = count >= 1 && strcmp(segments[0], "single") == 0;
     const int bulk = count >= 1 && strcmp(segments[0], "bulk") == 0;
@@ -867,24 +862,22 @@ DtNmosResult dtnmos_connection_handle(DtNmosNode* node, const DtNmosHttpRequest*
         }
         else
         {
-            dtnmos_node_answer_error(response, 405,
-                                     "Only staged parameters take a PATCH.");
+            NmosNode_AnswerError(response, 405, "Only staged parameters take a PATCH.");
         }
         return DTNMOS_OK;
     }
     if (bulk && count == 2 && strcmp(request->Method, "POST") == 0)
     {
-        dtnmos_node_answer_error(response, 501,
-                                 "The node does not implement bulk activation.");
+        NmosNode_AnswerError(response, 501,
+                             "The node does not implement bulk activation.");
         return DTNMOS_OK;
     }
     if (strcmp(request->Method, "GET") != 0 && strcmp(request->Method, "HEAD") != 0)
     {
-        dtnmos_node_answer_error(response, 405,
-                                 "The Connection API answers GET and PATCH.");
+        NmosNode_AnswerError(response, 405, "The Connection API answers GET and PATCH.");
         return DTNMOS_OK;
     }
-    dtnmos_node_lock(node);
+    NmosNode_Lock(node);
     if (count == 0)
     {
         answer_text(response, "[\"bulk/\", \"single/\"]");
@@ -899,13 +892,12 @@ DtNmosResult dtnmos_connection_handle(DtNmosNode* node, const DtNmosHttpRequest*
     }
     else if (bulk && count == 2)
     {
-        dtnmos_node_answer_error(response, 405, "The bulk interface takes a POST.");
+        NmosNode_AnswerError(response, 405, "The bulk interface takes a POST.");
     }
     else
     {
-        dtnmos_node_answer_error(response, 404,
-                                 "The Connection API has no such resource.");
+        NmosNode_AnswerError(response, 404, "The Connection API has no such resource.");
     }
-    dtnmos_node_unlock(node);
+    NmosNode_Unlock(node);
     return DTNMOS_OK;
 }

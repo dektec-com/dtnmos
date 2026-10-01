@@ -22,13 +22,13 @@ void check_report(const char* file, int line, const char* expression)
     ++check_failures;
 }
 
-typedef struct test
+typedef struct NmosTest
 {
     const char* name;
     void (*run)(void);
-} test;
+} NmosTest;
 
-static const test tests[] = {
+static const NmosTest tests[] = {
 #define DTNMOS_TEST(name) {#name, name},
     DTNMOS_TESTS
 #undef DTNMOS_TEST

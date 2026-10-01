@@ -110,9 +110,9 @@ DtNmosResult DtNmos_SetLastError(DtNmosResult result, const char* message)
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosError_Fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult dtnmos_fail(DtNmosResult code, const char* format, ...)
+DtNmosResult NmosError_Fail(DtNmosResult code, const char* format, ...)
 {
     va_list arguments;
     va_start(arguments, format);
@@ -121,45 +121,46 @@ DtNmosResult dtnmos_fail(DtNmosResult code, const char* format, ...)
     return code;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_check_size -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosError_CheckSize -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_check_size(size_t size, size_t first, size_t current,
-                               const char* what)
+DtNmosResult NmosError_CheckSize(size_t size, size_t first, size_t current,
+                                 const char* what)
 {
     if (size == 0)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "The Size of the %s is not set; set it to sizeof(%s).", what,
-                           what);
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "The Size of the %s is not set; set it to sizeof(%s).",
+                              what, what);
     }
     if (size < first)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "The Size of the %s is %zu, smaller than any version of it.",
-                           what, size);
+        return NmosError_Fail(
+            DTNMOS_E_INVALID_ARGUMENT,
+            "The Size of the %s is %zu, smaller than any version of it.", what, size);
     }
     if (size > current)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "The Size of the %s is %zu, larger than the %zu this library "
-                           "knows: the library is older than the header.",
-                           what, size, current);
+        return NmosError_Fail(
+            DTNMOS_E_INVALID_ARGUMENT,
+            "The Size of the %s is %zu, larger than the %zu this library "
+            "knows: the library is older than the header.",
+            what, size, current);
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_clear_error -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosError_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_clear_error(void)
+void NmosError_Clear(void)
 {
     last_error[0] = '\0';
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_fail_memory -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosError_FailMemory -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult dtnmos_fail_memory(void)
+DtNmosResult NmosError_FailMemory(void)
 {
-    return dtnmos_fail(DTNMOS_E_NO_MEMORY, "Out of memory.");
+    return NmosError_Fail(DTNMOS_E_NO_MEMORY, "Out of memory.");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_uuid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -184,10 +185,10 @@ static int read_uuid(const char* text, uint8_t bytes[16])
             ++i;
             continue;
         }
-        const dtnmos_span pair = {text + i, 2};
+        const NmosSpan pair = {text + i, 2};
         char hex[5] = {'0', 'x', pair.data[0], pair.data[1], '\0'};
         uint8_t value = 0;
-        if (!dtnmos_parse_byte(dtnmos_span_of(hex), &value))
+        if (!NmosText_ParseByte(NmosSpan_Of(hex), &value))
         {
             return 0;
         }
@@ -204,21 +205,21 @@ DtNmosResult DtNmosId_FromName(const DtNmosId* namespace_id, const char* name,
 {
     if (namespace_id == NULL || name == NULL || id == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosId_FromName() needs a namespace, a name and an ID.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosId_FromName() needs a namespace, a name and an ID.");
     }
     uint8_t space[16];
     if (!read_uuid(namespace_id->Text, space))
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "The namespace '%.40s' is no UUID.",
-                           namespace_id->Text);
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "The namespace '%.40s' is no UUID.", namespace_id->Text);
     }
-    dtnmos_sha1 sha1;
-    dtnmos_sha1_init(&sha1);
-    dtnmos_sha1_update(&sha1, space, sizeof(space));
-    dtnmos_sha1_update(&sha1, name, strlen(name));
+    NmosSha1 sha1;
+    NmosSha1_Init(&sha1);
+    NmosSha1_Update(&sha1, space, sizeof(space));
+    NmosSha1_Update(&sha1, name, strlen(name));
     uint8_t digest[20];
-    dtnmos_sha1_final(&sha1, digest);
+    NmosSha1_Final(&sha1, digest);
     // Version 5 in the high nibble of byte 6, and the variant of RFC 9562 in byte 8.
     digest[6] = (uint8_t)((digest[6] & 0x0F) | 0x50);
     digest[8] = (uint8_t)((digest[8] & 0x3F) | 0x80);

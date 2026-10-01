@@ -15,21 +15,20 @@
 // Sets *target to a copy of text owned by store, or to null for null; returns 0 when the
 // memory ran out.
 //
-static int copy_text(const char** target, dtnmos_store* store, const char* text)
+static int copy_text(const char** target, NmosStore* store, const char* text)
 {
     if (text == NULL)
     {
         *target = NULL;
         return 1;
     }
-    *target = dtnmos_store_text(store, text, strlen(text));
+    *target = NmosStore_Text(store, text, strlen(text));
     return *target != NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosFlow_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_flow_copy(DtNmosFlow* target, dtnmos_store* store,
-                              const DtNmosFlow* source)
+DtNmosResult NmosFlow_Copy(DtNmosFlow* target, NmosStore* store, const DtNmosFlow* source)
 {
     DtNmosFlow copy = *source;
     int copied = copy_text(&copy.RefClock.Text, store, source->RefClock.Text);
@@ -42,7 +41,7 @@ DtNmosResult dtnmos_flow_copy(DtNmosFlow* target, dtnmos_store* store,
     case DTNMOS_MEDIA_ANC:
         if (source->Format.Anc.DidSdidCount > 0)
         {
-            copy.Format.Anc.DidSdid = dtnmos_store_copy(
+            copy.Format.Anc.DidSdid = NmosStore_Copy(
                 store, source->Format.Anc.DidSdid,
                 source->Format.Anc.DidSdidCount * sizeof(*source->Format.Anc.DidSdid));
             copied = copied && copy.Format.Anc.DidSdid != NULL;
@@ -61,7 +60,7 @@ DtNmosResult dtnmos_flow_copy(DtNmosFlow* target, dtnmos_store* store,
     }
     if (!copied)
     {
-        return dtnmos_fail_memory();
+        return NmosError_FailMemory();
     }
     *target = copy;
     return DTNMOS_OK;

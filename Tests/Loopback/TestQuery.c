@@ -22,25 +22,24 @@ void json_reads_values_and_escapes(void)
     const char* text =
         "{\"id\": \"abc\", \"n\": -12.5e1, \"list\": [true, false, null, [], {}], "
         "\"text\": \"a\\\"b\\\\c\\/d\\n\\u00e9\\ud83d\\ude00\"}";
-    dtnmos_json* json = NULL;
-    REQUIRE(dtnmos_json_parse(text, strlen(text), &json) == DTNMOS_OK);
+    NmosJson* json = NULL;
+    REQUIRE(NmosJson_Parse(text, strlen(text), &json) == DTNMOS_OK);
     CHECK_EQ(json->type, DTNMOS_JSON_OBJECT);
-    CHECK_STR(dtnmos_json_member_text(json, "id"), "abc");
-    const dtnmos_json* n = dtnmos_json_member(json, "n");
+    CHECK_STR(NmosJson_MemberText(json, "id"), "abc");
+    const NmosJson* n = NmosJson_Member(json, "n");
     REQUIRE(n != NULL);
     CHECK(n->type == DTNMOS_JSON_NUMBER && n->number == -125.0);
-    const dtnmos_json* list = dtnmos_json_member(json, "list");
+    const NmosJson* list = NmosJson_Member(json, "list");
     REQUIRE(list != NULL && list->type == DTNMOS_JSON_ARRAY);
     CHECK_EQ(list->count, 5);
     CHECK_EQ(list->items[0].type, DTNMOS_JSON_TRUE);
     CHECK_EQ(list->items[2].type, DTNMOS_JSON_NULL);
     CHECK_EQ(list->items[4].type, DTNMOS_JSON_OBJECT);
     // Escapes, a character of two bytes in UTF-8, and one of four from a surrogate pair.
-    CHECK_STR(dtnmos_json_member_text(json, "text"),
-              "a\"b\\c/d\n\xc3\xa9\xf0\x9f\x98\x80");
-    CHECK(dtnmos_json_member(json, "missing") == NULL);
-    CHECK(dtnmos_json_member_text(json, "n") == NULL);
-    dtnmos_json_free(json);
+    CHECK_STR(NmosJson_MemberText(json, "text"), "a\"b\\c/d\n\xc3\xa9\xf0\x9f\x98\x80");
+    CHECK(NmosJson_Member(json, "missing") == NULL);
+    CHECK(NmosJson_MemberText(json, "n") == NULL);
+    NmosJson_Free(json);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- json_refuses_what_is_malformed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -51,8 +50,8 @@ void json_refuses_what_is_malformed(void)
                                  "tru", "[1] 2", "\"\\x\"", "\"\\ud83d\"", "{1: 2}"};
     for (size_t i = 0; i < sizeof(texts) / sizeof(texts[0]); ++i)
     {
-        dtnmos_json* json = (dtnmos_json*)&json;
-        const DtNmosResult result = dtnmos_json_parse(texts[i], strlen(texts[i]), &json);
+        NmosJson* json = (NmosJson*)&json;
+        const DtNmosResult result = NmosJson_Parse(texts[i], strlen(texts[i]), &json);
         if (result != DTNMOS_E_PARSE)
         {
             printf("  '%s' parsed\n", texts[i]);
@@ -65,20 +64,20 @@ void json_refuses_what_is_malformed(void)
     char deep[200];
     memset(deep, '[', sizeof(deep) - 1);
     deep[sizeof(deep) - 1] = '\0';
-    dtnmos_json* json = NULL;
-    CHECK(dtnmos_json_parse(deep, strlen(deep), &json) == DTNMOS_E_PARSE);
+    NmosJson* json = NULL;
+    CHECK(NmosJson_Parse(deep, strlen(deep), &json) == DTNMOS_E_PARSE);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- json_writes_escaped_strings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void json_writes_escaped_strings(void)
 {
-    dtnmos_buffer buffer;
+    NmosBuffer buffer;
     memset(&buffer, 0, sizeof(buffer));
-    dtnmos_json_write_string(&buffer, "a\"b\\c\n\x01");
+    NmosJson_WriteString(&buffer, "a\"b\\c\n\x01");
     REQUIRE(!buffer.failed);
     CHECK_STR(buffer.data, "\"a\\\"b\\\\c\\n\\u0001\"");
-    dtnmos_buffer_free(&buffer);
+    NmosBuffer_Free(&buffer);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- http_response_owns_what_it_holds -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -109,28 +108,28 @@ void http_response_owns_what_it_holds(void)
 }
 
 // A registry that the test answers for: each route an URL and what it gives.
-typedef struct route
+typedef struct NmosRoute
 {
     const char* url;
     int status;
     const char* body;
     const char* link; // the Link header, or null
-} route;
+} NmosRoute;
 
-typedef struct fake_registry
+typedef struct NmosFakeRegistry
 {
-    const route* routes;
+    const NmosRoute* routes;
     size_t count;
     int requests;
     int unreachable; // every request fails as if the registry did not answer
-} fake_registry;
+} NmosFakeRegistry;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
                               DtNmosHttpResponse* response)
 {
-    fake_registry* registry = user;
+    NmosFakeRegistry* registry = user;
     ++registry->requests;
     if (registry->unreachable)
     {
@@ -175,7 +174,7 @@ static const char* const audio_sender =
     "\"manifest_href\": null}";
 static const char* const twin_sender = "{\"id\": \"" TWIN_ID "\", \"label\": \"mic\"}";
 
-static const route routes[] = {
+static const NmosRoute routes[] = {
     {BASE "senders?paging.limit=100", 200, "[]", NULL},
     {BASE "flows?paging.limit=100", 200,
      "[{\"id\": \"" VIDEO_FLOW "\", \"format\": \"urn:x-nmos:format:video\", "
@@ -200,7 +199,7 @@ static const route routes[] = {
 // Builds the routes of a registry with two pages of senders, the second reached through
 // the Link header of the first, as the paging of IS-04 does.
 //
-static void registry_routes(route* table, size_t* count, char* page_one,
+static void registry_routes(NmosRoute* table, size_t* count, char* page_one,
                             size_t page_one_size, char* single, size_t single_size,
                             char* by_label, size_t by_label_size, char* twins,
                             size_t twins_size)
@@ -227,7 +226,7 @@ static void registry_routes(route* table, size_t* count, char* page_one,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosQuery* make_query(fake_registry* registry)
+static DtNmosQuery* make_query(NmosFakeRegistry* registry)
 {
     DtNmosQueryConfig config;
     memset(&config, 0, sizeof(config));
@@ -249,7 +248,7 @@ static DtNmosQuery* make_query(fake_registry* registry)
 //
 void query_lists_the_senders_of_every_page(void)
 {
-    route table[16];
+    NmosRoute table[16];
     size_t count = 0;
     char page_one[1024];
     char single[512];
@@ -257,7 +256,7 @@ void query_lists_the_senders_of_every_page(void)
     char twins[512];
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
-    fake_registry registry = {table, count, 0, 0};
+    NmosFakeRegistry registry = {table, count, 0, 0};
     DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
     DtNmosSenderList* list = NULL;
@@ -291,7 +290,7 @@ void query_lists_the_senders_of_every_page(void)
 //
 void query_finds_a_sender_and_its_sdp(void)
 {
-    route table[16];
+    NmosRoute table[16];
     size_t count = 0;
     char page_one[1024];
     char single[512];
@@ -299,7 +298,7 @@ void query_finds_a_sender_and_its_sdp(void)
     char twins[512];
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
-    fake_registry registry = {table, count, 0, 0};
+    NmosFakeRegistry registry = {table, count, 0, 0};
     DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
     const char* const keys[] = {VIDEO_ID, "camera 1"};
@@ -331,7 +330,7 @@ void query_finds_a_sender_and_its_sdp(void)
 //
 void query_writes_a_manifest_into_the_callers_buffer(void)
 {
-    route table[16];
+    NmosRoute table[16];
     size_t count = 0;
     char page_one[1024];
     char single[512];
@@ -339,7 +338,7 @@ void query_writes_a_manifest_into_the_callers_buffer(void)
     char twins[512];
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
-    fake_registry registry = {table, count, 0, 0};
+    NmosFakeRegistry registry = {table, count, 0, 0};
     DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
     DtNmosSenderList* found = NULL;
@@ -373,7 +372,7 @@ void query_writes_a_manifest_into_the_callers_buffer(void)
 //
 void query_names_what_went_wrong(void)
 {
-    route table[16];
+    NmosRoute table[16];
     size_t count = 0;
     char page_one[1024];
     char single[512];
@@ -381,7 +380,7 @@ void query_names_what_went_wrong(void)
     char twins[512];
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
-    fake_registry registry = {table, count, 0, 0};
+    NmosFakeRegistry registry = {table, count, 0, 0};
     DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
     DtNmosSenderList* sender = NULL;

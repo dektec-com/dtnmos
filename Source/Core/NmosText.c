@@ -12,9 +12,9 @@
 
 #include "NmosInternal.h"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_append -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Append -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_buffer_append(dtnmos_buffer* buffer, const char* text, size_t length)
+void NmosBuffer_Append(NmosBuffer* buffer, const char* text, size_t length)
 {
     if (buffer->failed)
     {
@@ -41,9 +41,9 @@ void dtnmos_buffer_append(dtnmos_buffer* buffer, const char* text, size_t length
     buffer->data[buffer->length] = '\0';
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_printf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Printf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
+void NmosBuffer_Printf(NmosBuffer* buffer, const char* format, ...)
 {
     char local[256];
     va_list arguments;
@@ -57,7 +57,7 @@ void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
     }
     if ((size_t)needed < sizeof(local))
     {
-        dtnmos_buffer_append(buffer, local, (size_t)needed);
+        NmosBuffer_Append(buffer, local, (size_t)needed);
         return;
     }
     char* text = malloc((size_t)needed + 1);
@@ -69,29 +69,29 @@ void dtnmos_buffer_printf(dtnmos_buffer* buffer, const char* format, ...)
     va_start(arguments, format);
     vsnprintf(text, (size_t)needed + 1, format, arguments);
     va_end(arguments);
-    dtnmos_buffer_append(buffer, text, (size_t)needed);
+    NmosBuffer_Append(buffer, text, (size_t)needed);
     free(text);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_buffer_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_buffer_free(dtnmos_buffer* buffer)
+void NmosBuffer_Free(NmosBuffer* buffer)
 {
     free(buffer->data);
     memset(buffer, 0, sizeof(*buffer));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_span dtnmos_span_of(const char* text)
+NmosSpan NmosSpan_Of(const char* text)
 {
-    dtnmos_span span = {text, text == NULL ? 0 : strlen(text)};
+    NmosSpan span = {text, text == NULL ? 0 : strlen(text)};
     return span;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_trim -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Trim -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_span dtnmos_span_trim(dtnmos_span span)
+NmosSpan NmosSpan_Trim(NmosSpan span)
 {
     while (span.length > 0 && (span.data[0] == ' ' || span.data[0] == '\t'))
     {
@@ -113,9 +113,9 @@ static char lower(char c)
     return c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_equals -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Equals -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_span_equals(dtnmos_span span, const char* text, int fold)
+int NmosSpan_Equals(NmosSpan span, const char* text, int fold)
 {
     const size_t length = strlen(text);
     if (span.length != length)
@@ -134,35 +134,35 @@ int dtnmos_span_equals(dtnmos_span span, const char* text, int fold)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_starts_with -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_StartsWith -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_span_starts_with(dtnmos_span span, const char* prefix)
+int NmosSpan_StartsWith(NmosSpan span, const char* prefix)
 {
     const size_t length = strlen(prefix);
     return span.length >= length && memcmp(span.data, prefix, length) == 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_span_split -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Split -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_span dtnmos_span_split(dtnmos_span span, char separator, dtnmos_span* head)
+NmosSpan NmosSpan_Split(NmosSpan span, char separator, NmosSpan* head)
 {
     const char* found =
         span.length == 0 ? NULL : memchr(span.data, separator, span.length);
     if (found == NULL)
     {
         *head = span;
-        dtnmos_span rest = {NULL, 0};
+        NmosSpan rest = {NULL, 0};
         return rest;
     }
     head->data = span.data;
     head->length = (size_t)(found - span.data);
-    dtnmos_span rest = {found + 1, span.length - head->length - 1};
+    NmosSpan rest = {found + 1, span.length - head->length - 1};
     return rest;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_u64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_parse_u64(dtnmos_span span, uint64_t maximum, uint64_t* value)
+int NmosText_ParseU64(NmosSpan span, uint64_t maximum, uint64_t* value)
 {
     if (span.length == 0)
     {
@@ -187,12 +187,12 @@ int dtnmos_parse_u64(dtnmos_span span, uint64_t maximum, uint64_t* value)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_u32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_parse_u32(dtnmos_span span, uint32_t maximum, uint32_t* value)
+int NmosText_ParseU32(NmosSpan span, uint32_t maximum, uint32_t* value)
 {
     uint64_t result = 0;
-    if (!dtnmos_parse_u64(span, maximum, &result))
+    if (!NmosText_ParseU64(span, maximum, &result))
     {
         return 0;
     }
@@ -200,19 +200,19 @@ int dtnmos_parse_u32(dtnmos_span span, uint32_t maximum, uint32_t* value)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_rate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseRate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_parse_rate(dtnmos_span span, uint32_t* numerator, uint32_t* denominator)
+int NmosText_ParseRate(NmosSpan span, uint32_t* numerator, uint32_t* denominator)
 {
-    dtnmos_span head;
-    const dtnmos_span rest = dtnmos_span_split(span, '/', &head);
+    NmosSpan head;
+    const NmosSpan rest = NmosSpan_Split(span, '/', &head);
     uint32_t n = 0;
     uint32_t d = 1;
-    if (!dtnmos_parse_u32(head, UINT32_MAX, &n))
+    if (!NmosText_ParseU32(head, UINT32_MAX, &n))
     {
         return 0;
     }
-    if (rest.data != NULL && (!dtnmos_parse_u32(rest, UINT32_MAX, &d) || d == 0))
+    if (rest.data != NULL && (!NmosText_ParseU32(rest, UINT32_MAX, &d) || d == 0))
     {
         return 0;
     }
@@ -221,14 +221,14 @@ int dtnmos_parse_rate(dtnmos_span span, uint32_t* numerator, uint32_t* denominat
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_milliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseMilliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds)
+int NmosText_ParseMilliseconds(NmosSpan span, uint32_t* nanoseconds)
 {
-    dtnmos_span whole;
-    const dtnmos_span fraction = dtnmos_span_split(span, '.', &whole);
+    NmosSpan whole;
+    const NmosSpan fraction = NmosSpan_Split(span, '.', &whole);
     uint32_t milliseconds = 0;
-    if (!dtnmos_parse_u32(whole, 4000, &milliseconds))
+    if (!NmosText_ParseU32(whole, 4000, &milliseconds))
     {
         return 0;
     }
@@ -240,7 +240,7 @@ int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds)
             return 0;
         }
         uint32_t digits = 0;
-        if (!dtnmos_parse_u32(fraction, 999999, &digits))
+        if (!NmosText_ParseU32(fraction, 999999, &digits))
         {
             return 0;
         }
@@ -254,9 +254,9 @@ int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_parse_byte -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseByte -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_parse_byte(dtnmos_span span, uint8_t* value)
+int NmosText_ParseByte(NmosSpan span, uint8_t* value)
 {
     if (span.length > 2 && span.data[0] == '0' &&
         (span.data[1] == 'x' || span.data[1] == 'X'))
@@ -288,7 +288,7 @@ int dtnmos_parse_byte(dtnmos_span span, uint8_t* value)
         return 1;
     }
     uint32_t result = 0;
-    if (!dtnmos_parse_u32(span, 255, &result))
+    if (!NmosText_ParseU32(span, 255, &result))
     {
         return 0;
     }
@@ -296,9 +296,9 @@ int dtnmos_parse_byte(dtnmos_span span, uint8_t* value)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_copy_span -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_CopySpan -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_copy_span(char* target, size_t size, dtnmos_span span)
+int NmosText_CopySpan(char* target, size_t size, NmosSpan span)
 {
     if (size == 0)
     {
@@ -321,7 +321,7 @@ int dtnmos_copy_span(char* target, size_t size, dtnmos_span span)
 //
 // Allocates size bytes that store owns; null when the memory ran out.
 //
-static void* store_piece(dtnmos_store* store, size_t size)
+static void* store_piece(NmosStore* store, size_t size)
 {
     if (store->count == store->capacity)
     {
@@ -342,9 +342,9 @@ static void* store_piece(dtnmos_store* store, size_t size)
     return piece;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-char* dtnmos_store_text(dtnmos_store* store, const char* data, size_t length)
+char* NmosStore_Text(NmosStore* store, const char* data, size_t length)
 {
     char* text = store_piece(store, length + 1);
     if (text != NULL)
@@ -358,9 +358,9 @@ char* dtnmos_store_text(dtnmos_store* store, const char* data, size_t length)
     return text;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void* dtnmos_store_copy(dtnmos_store* store, const void* data, size_t size)
+void* NmosStore_Copy(NmosStore* store, const void* data, size_t size)
 {
     if (size == 0)
     {
@@ -374,9 +374,9 @@ void* dtnmos_store_copy(dtnmos_store* store, const void* data, size_t size)
     return copy;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_store_free(dtnmos_store* store)
+void NmosStore_Free(NmosStore* store)
 {
     for (size_t i = 0; i < store->count; ++i)
     {
@@ -386,17 +386,18 @@ void dtnmos_store_free(dtnmos_store* store)
     memset(store, 0, sizeof(*store));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_copy_text(char* buffer, size_t* size, const char* data, size_t length)
+DtNmosResult NmosText_CopyText(char* buffer, size_t* size, const char* data,
+                               size_t length)
 {
     if (buffer == NULL || *size < length + 1)
     {
         const size_t had = *size;
         *size = length + 1;
-        return dtnmos_fail(DTNMOS_E_BUFFER_TOO_SMALL,
-                           "The text needs %zu bytes, and the buffer has %zu.",
-                           length + 1, buffer == NULL ? (size_t)0 : had);
+        return NmosError_Fail(DTNMOS_E_BUFFER_TOO_SMALL,
+                              "The text needs %zu bytes, and the buffer has %zu.",
+                              length + 1, buffer == NULL ? (size_t)0 : had);
     }
     if (length > 0)
     {

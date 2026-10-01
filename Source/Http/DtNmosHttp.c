@@ -13,18 +13,18 @@
 
 #include "NmosInternal.h"
 
-typedef struct owned_header
+typedef struct NmosOwnedHeader
 {
     char* name;
     char* value;
-} owned_header;
+} NmosOwnedHeader;
 
 struct DtNmosHttpResponse
 {
     int status;
-    dtnmos_buffer body;
+    NmosBuffer body;
     char* content_type;
-    owned_header* headers;
+    NmosOwnedHeader* headers;
     size_t header_count;
     size_t header_capacity;
 };
@@ -61,7 +61,7 @@ void DtNmosHttpResponse_Free(DtNmosHttpResponse* response)
     {
         return;
     }
-    dtnmos_buffer_free(&response->body);
+    NmosBuffer_Free(&response->body);
     free(response->content_type);
     for (size_t i = 0; i < response->header_count; ++i)
     {
@@ -128,7 +128,7 @@ DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* response, const c
         return DTNMOS_E_INVALID_ARGUMENT;
     }
     // An empty body still holds its null character.
-    dtnmos_buffer_append(&response->body, length > 0 ? body : "", length);
+    NmosBuffer_Append(&response->body, length > 0 ? body : "", length);
     return response->body.failed ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
 }
 
@@ -145,7 +145,8 @@ DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* response, const ch
     {
         const size_t capacity =
             response->header_capacity == 0 ? 8 : response->header_capacity * 2;
-        owned_header* headers = realloc(response->headers, capacity * sizeof(*headers));
+        NmosOwnedHeader* headers =
+            realloc(response->headers, capacity * sizeof(*headers));
         if (headers == NULL)
         {
             return DTNMOS_E_NO_MEMORY;
@@ -153,14 +154,14 @@ DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* response, const ch
         response->headers = headers;
         response->header_capacity = capacity;
     }
-    owned_header header = {copy_text(name), copy_text(value)};
+    NmosOwnedHeader header = {copy_text(name), copy_text(value)};
     if (header.name == NULL || header.value == NULL)
     {
         free(header.name);
         free(header.value);
         return DTNMOS_E_NO_MEMORY;
     }
-    if (dtnmos_span_equals(dtnmos_span_of(name), "content-type", 1) &&
+    if (NmosSpan_Equals(NmosSpan_Of(name), "content-type", 1) &&
         response->content_type == NULL)
     {
         response->content_type = copy_text(value);
@@ -227,7 +228,7 @@ const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* response,
     }
     for (size_t i = 0; i < response->header_count; ++i)
     {
-        if (dtnmos_span_equals(dtnmos_span_of(response->headers[i].name), name, 1))
+        if (NmosSpan_Equals(NmosSpan_Of(response->headers[i].name), name, 1))
         {
             return response->headers[i].value;
         }

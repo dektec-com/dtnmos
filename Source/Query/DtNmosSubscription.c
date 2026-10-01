@@ -60,16 +60,16 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
     if (subscription == NULL || config == NULL || config->ResourcePath == NULL ||
         config->ResourcePath[0] != '/' || config->OnChange == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "A subscription needs a resource path such as \"/senders\" "
-                           "and a function for the changes.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A subscription needs a resource path such as \"/senders\" "
+                              "and a function for the changes.");
     }
     if (subscription->open)
     {
-        return dtnmos_fail(DTNMOS_E_STATE,
-                           "The subscription is open already; close it first.");
+        return NmosError_Fail(DTNMOS_E_STATE,
+                              "The subscription is open already; close it first.");
     }
-    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosSubscription_Open");
+    const DtNmosResult open = NmosQuery_CheckOpen(query, "DtNmosSubscription_Open");
     if (open != DTNMOS_OK)
     {
         return open;
@@ -92,33 +92,33 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
     }
     const DtNmosWebSocketTransport* websocket =
         config->WebSocket != NULL ? config->WebSocket : DtNmos_CurlWebSocket();
-    const char* base = dtnmos_query_base(query);
+    const char* base = NmosQuery_Base(query);
 
     // Ask for the subscription: not persistent, so that it goes with its WebSocket, and
     // secure when the registry is asked over https.
-    dtnmos_buffer body;
+    NmosBuffer body;
     memset(&body, 0, sizeof(body));
-    dtnmos_buffer_printf(
+    NmosBuffer_Printf(
         &body, "{\"max_update_rate_ms\": %u, \"resource_path\": ",
         (unsigned)(config->MaxUpdateRateMs == 0 ? 100 : config->MaxUpdateRateMs));
-    dtnmos_json_write_string(&body, config->ResourcePath);
-    dtnmos_buffer_printf(&body, ", \"params\": {}, \"persist\": false, \"secure\": %s}",
-                         strncmp(base, "https:", 6) == 0 ? "true" : "false");
-    dtnmos_buffer url;
+    NmosJson_WriteString(&body, config->ResourcePath);
+    NmosBuffer_Printf(&body, ", \"params\": {}, \"persist\": false, \"secure\": %s}",
+                      strncmp(base, "https:", 6) == 0 ? "true" : "false");
+    NmosBuffer url;
     memset(&url, 0, sizeof(url));
-    dtnmos_buffer_printf(&url, "%ssubscriptions", base);
+    NmosBuffer_Printf(&url, "%ssubscriptions", base);
     DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     DtNmosResult result = DTNMOS_OK;
     if (body.failed || url.failed || response == NULL)
     {
-        result = dtnmos_fail_memory();
+        result = NmosError_FailMemory();
     }
     else
     {
-        result = dtnmos_query_request(query, "POST", url.data, "application/json",
-                                      body.data, body.length, response);
+        result = NmosQuery_Request(query, "POST", url.data, "application/json", body.data,
+                                   body.length, response);
     }
-    dtnmos_json* answer = NULL;
+    NmosJson* answer = NULL;
     if (result == DTNMOS_OK)
     {
         const int status = DtNmosHttpResponse_Status(response);
@@ -126,28 +126,29 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
         const char* text = DtNmosHttpResponse_Body(response, &length);
         if (status != 200 && status != 201)
         {
-            result = dtnmos_fail(DTNMOS_E_HTTP,
-                                 "The registry answered the subscription to %s with %d.",
-                                 config->ResourcePath, status);
+            result = NmosError_Fail(
+                DTNMOS_E_HTTP, "The registry answered the subscription to %s with %d.",
+                config->ResourcePath, status);
         }
-        else if (dtnmos_json_parse(text, length, &answer) != DTNMOS_OK ||
-                 dtnmos_json_member_text(answer, "ws_href") == NULL)
+        else if (NmosJson_Parse(text, length, &answer) != DTNMOS_OK ||
+                 NmosJson_MemberText(answer, "ws_href") == NULL)
         {
-            result = dtnmos_fail(DTNMOS_E_PARSE,
-                                 "The registry answered the subscription to %s without "
-                                 "the ws_href of its WebSocket.",
-                                 config->ResourcePath);
+            result =
+                NmosError_Fail(DTNMOS_E_PARSE,
+                               "The registry answered the subscription to %s without "
+                               "the ws_href of its WebSocket.",
+                               config->ResourcePath);
         }
     }
     DtNmosSubscription* made = NULL;
     if (result == DTNMOS_OK)
     {
-        const char* href = dtnmos_json_member_text(answer, "ws_href");
+        const char* href = NmosJson_MemberText(answer, "ws_href");
         made = subscription;
         const size_t length = strlen(href);
         if ((made->url = malloc(length + 1)) == NULL)
         {
-            result = dtnmos_fail_memory();
+            result = NmosError_FailMemory();
         }
         else
         {
@@ -156,13 +157,13 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
             made->on_change = config->OnChange;
             made->on_change_user = config->OnChangeUser;
             result = websocket->Connect(websocket->User, made->url,
-                                        dtnmos_query_timeout(query), &made->connection);
+                                        NmosQuery_Timeout(query), &made->connection);
         }
     }
-    dtnmos_json_free(answer);
+    NmosJson_Free(answer);
     DtNmosHttpResponse_Free(response);
-    dtnmos_buffer_free(&url);
-    dtnmos_buffer_free(&body);
+    NmosBuffer_Free(&url);
+    NmosBuffer_Free(&body);
     if (result != DTNMOS_OK)
     {
         if (made != NULL)
@@ -181,38 +182,37 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
 // Reports one item of the data of a grain, {"path", "pre", "post"}; an item with neither
 // is skipped.
 //
-static DtNmosResult report_change(DtNmosSubscription* subscription,
-                                  const dtnmos_json* item)
+static DtNmosResult report_change(DtNmosSubscription* subscription, const NmosJson* item)
 {
-    const dtnmos_json* pre = dtnmos_json_member(item, "pre");
-    const dtnmos_json* post = dtnmos_json_member(item, "post");
+    const NmosJson* pre = NmosJson_Member(item, "pre");
+    const NmosJson* post = NmosJson_Member(item, "post");
     const int has_pre = pre != NULL && pre->type == DTNMOS_JSON_OBJECT;
     const int has_post = post != NULL && post->type == DTNMOS_JSON_OBJECT;
     if (!has_pre && !has_post)
     {
         return DTNMOS_OK;
     }
-    dtnmos_buffer before;
-    dtnmos_buffer after;
+    NmosBuffer before;
+    NmosBuffer after;
     memset(&before, 0, sizeof(before));
     memset(&after, 0, sizeof(after));
     if (has_pre)
     {
-        dtnmos_json_write(&before, pre);
+        NmosJson_Write(&before, pre);
     }
     if (has_post)
     {
-        dtnmos_json_write(&after, post);
+        NmosJson_Write(&after, post);
     }
     if (before.failed || after.failed)
     {
-        dtnmos_buffer_free(&before);
-        dtnmos_buffer_free(&after);
-        return dtnmos_fail_memory();
+        NmosBuffer_Free(&before);
+        NmosBuffer_Free(&after);
+        return NmosError_FailMemory();
     }
     DtNmosChange change;
     memset(&change, 0, sizeof(change));
-    const char* path = dtnmos_json_member_text(item, "path");
+    const char* path = NmosJson_MemberText(item, "path");
     change.Id = path != NULL ? path : "";
     change.Pre = has_pre ? before.data : NULL;
     change.PreLength = has_pre ? before.length : 0;
@@ -231,8 +231,8 @@ static DtNmosResult report_change(DtNmosSubscription* subscription,
         change.Kind = has_post ? DTNMOS_CHANGE_ADDED : DTNMOS_CHANGE_REMOVED;
     }
     subscription->on_change(subscription->on_change_user, &change);
-    dtnmos_buffer_free(&before);
-    dtnmos_buffer_free(&after);
+    NmosBuffer_Free(&before);
+    NmosBuffer_Free(&after);
     return DTNMOS_OK;
 }
 
@@ -243,13 +243,13 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
 {
     if (subscription == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosSubscription_Poll() needs a subscription.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosSubscription_Poll() needs a subscription.");
     }
     if (!subscription->open)
     {
-        return dtnmos_fail(DTNMOS_E_STATE,
-                           "DtNmosSubscription_Poll() needs an open subscription.");
+        return NmosError_Fail(DTNMOS_E_STATE,
+                              "DtNmosSubscription_Poll() needs an open subscription.");
     }
     const char* message = NULL;
     size_t length = 0;
@@ -262,24 +262,24 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
     }
     // A grain: {"grain_type": "event", ..., "grain": {"topic": "/senders/",
     // "data": [{"path": ..., "pre": ..., "post": ...}]}}.
-    dtnmos_json* json = NULL;
-    const dtnmos_json* data = NULL;
-    if (dtnmos_json_parse(message, length, &json) == DTNMOS_OK)
+    NmosJson* json = NULL;
+    const NmosJson* data = NULL;
+    if (NmosJson_Parse(message, length, &json) == DTNMOS_OK)
     {
-        data = dtnmos_json_member(dtnmos_json_member(json, "grain"), "data");
+        data = NmosJson_Member(NmosJson_Member(json, "grain"), "data");
     }
     if (data == NULL || data->type != DTNMOS_JSON_ARRAY)
     {
-        dtnmos_json_free(json);
-        return dtnmos_fail(DTNMOS_E_PARSE,
-                           "A message of the WebSocket %s is no grain with data.",
-                           subscription->url);
+        NmosJson_Free(json);
+        return NmosError_Fail(DTNMOS_E_PARSE,
+                              "A message of the WebSocket %s is no grain with data.",
+                              subscription->url);
     }
     for (size_t i = 0; result == DTNMOS_OK && i < data->count; ++i)
     {
         result = report_change(subscription, &data->items[i]);
     }
-    dtnmos_json_free(json);
+    NmosJson_Free(json);
     return result;
 }
 
@@ -296,13 +296,13 @@ DtNmosResult DtNmosSubscription_Close(DtNmosSubscription* subscription)
 {
     if (subscription == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosSubscription_Close() needs a subscription.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosSubscription_Close() needs a subscription.");
     }
     if (!subscription->open)
     {
-        return dtnmos_fail(DTNMOS_E_STATE,
-                           "DtNmosSubscription_Close() needs an open subscription.");
+        return NmosError_Fail(DTNMOS_E_STATE,
+                              "DtNmosSubscription_Close() needs an open subscription.");
     }
     subscription->websocket.Close(subscription->websocket.User, subscription->connection);
     free(subscription->url);

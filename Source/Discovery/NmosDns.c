@@ -90,10 +90,10 @@ static int write_name(uint8_t* buffer, size_t size, size_t* offset, const char* 
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_write_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_WriteQuery -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-size_t dtnmos_dns_write_query(uint8_t* buffer, size_t size, uint16_t id, uint16_t flags,
-                              const dtnmos_dns_question* questions, size_t count)
+size_t NmosDns_WriteQuery(uint8_t* buffer, size_t size, uint16_t id, uint16_t flags,
+                          const NmosDnsQuestion* questions, size_t count)
 {
     if (buffer == NULL || size < header_size || count == 0 || count > 0xFFFF)
     {
@@ -190,11 +190,11 @@ static int read_name(const uint8_t* message, size_t length, size_t* offset, char
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_response -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_ReadResponse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_dns_read_response(const uint8_t* message, size_t length,
-                             void (*record)(void* user, const dtnmos_dns_record* found),
-                             void* user)
+int NmosDns_ReadResponse(const uint8_t* message, size_t length,
+                         void (*record)(void* user, const NmosDnsRecord* found),
+                         void* user)
 {
     // The flags of the header are tested in their bytes rather than through get16(): QR
     // is the top bit of the third byte (RFC 1035, 4.1.1). MSVC 19.51, of Visual Studio
@@ -219,7 +219,7 @@ int dtnmos_dns_read_response(const uint8_t* message, size_t length,
     }
     for (unsigned i = 0; i < records; ++i)
     {
-        dtnmos_dns_record found;
+        NmosDnsRecord found;
         memset(&found, 0, sizeof(found));
         if (!read_name(message, length, &offset, found.name) || offset + 10 > length)
         {
@@ -283,9 +283,9 @@ static int lower(int c)
     return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_same_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_SameName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_dns_same_name(const char* a, const char* b)
+int NmosDns_SameName(const char* a, const char* b)
 {
     while (*a != '\0' && lower((unsigned char)*a) == lower((unsigned char)*b))
     {
@@ -295,10 +295,10 @@ int dtnmos_dns_same_name(const char* a, const char* b)
     return *a == '\0' && *b == '\0';
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_txt_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_TxtValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_dns_txt_value(const uint8_t* txt, size_t length, const char* key, char* value,
-                         size_t size)
+int NmosDns_TxtValue(const uint8_t* txt, size_t length, const char* key, char* value,
+                     size_t size)
 {
     const size_t key_length = strlen(key);
     size_t at = 0;
@@ -338,10 +338,10 @@ int dtnmos_dns_txt_value(const uint8_t* txt, size_t length, const char* key, cha
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_ReadHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_dns_read_header(const uint8_t* message, size_t length, uint16_t* id,
-                           unsigned* rcode)
+int NmosDns_ReadHeader(const uint8_t* message, size_t length, uint16_t* id,
+                       unsigned* rcode)
 {
     if (message == NULL || length < header_size)
     {
@@ -349,7 +349,7 @@ int dtnmos_dns_read_header(const uint8_t* message, size_t length, uint16_t* id,
     }
     *id = get16(message);
     // RCODE is the low four bits of the fourth byte, read there for the reason
-    // dtnmos_dns_read_response() gives.
+    // NmosDns_ReadResponse() gives.
     *rcode = message[3] & rcode_mask;
     return 1;
 }
@@ -400,10 +400,10 @@ static int is_ipv4_text(const char* text)
            parts[0] <= 255 && parts[1] <= 255 && parts[2] <= 255 && parts[3] <= 255;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_dns_read_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_ReadResolvConf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_dns_read_resolv_conf(const char* text, char* server, size_t server_size,
-                                 char* domain, size_t domain_size)
+void NmosDns_ReadResolvConf(const char* text, char* server, size_t server_size,
+                            char* domain, size_t domain_size)
 {
     server[0] = '\0';
     domain[0] = '\0';

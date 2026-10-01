@@ -15,23 +15,23 @@
 // How deep arrays and objects may nest, which bounds the recursion.
 #define DTNMOS_JSON_MAX_DEPTH 64
 
-typedef struct reader
+typedef struct NmosReader
 {
     const char* text;
     size_t length;
     size_t position;
-} reader;
+} NmosReader;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fail(reader* r, const char* what)
+static DtNmosResult fail(NmosReader* r, const char* what)
 {
-    return dtnmos_fail(DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position, what);
+    return NmosError_Fail(DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position, what);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- skip_space -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void skip_space(reader* r)
+static void skip_space(NmosReader* r)
 {
     while (r->position < r->length)
     {
@@ -46,14 +46,14 @@ static void skip_space(reader* r)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_is -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int next_is(reader* r, char c)
+static int next_is(NmosReader* r, char c)
 {
     return r->position < r->length && r->text[r->position] == c;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int read_word(reader* r, const char* word)
+static int read_word(NmosReader* r, const char* word)
 {
     const size_t length = strlen(word);
     if (r->length - r->position < length ||
@@ -88,7 +88,7 @@ static int hex_value(char c)
 //
 // Reads the four hexadecimal digits of \u.
 //
-static int read_hex4(reader* r, unsigned* code)
+static int read_hex4(NmosReader* r, unsigned* code)
 {
     if (r->length - r->position < 4)
     {
@@ -111,7 +111,7 @@ static int read_hex4(reader* r, unsigned* code)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- append_utf8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void append_utf8(dtnmos_buffer* buffer, unsigned code)
+static void append_utf8(NmosBuffer* buffer, unsigned code)
 {
     char bytes[4];
     size_t count = 0;
@@ -137,16 +137,16 @@ static void append_utf8(dtnmos_buffer* buffer, unsigned code)
         bytes[count++] = (char)(0x80 | ((code >> 6) & 0x3F));
         bytes[count++] = (char)(0x80 | (code & 0x3F));
     }
-    dtnmos_buffer_append(buffer, bytes, count);
+    NmosBuffer_Append(buffer, bytes, count);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_string -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads a string after its opening quote into a text of its own.
 //
-static DtNmosResult read_string(reader* r, char** text, size_t* length)
+static DtNmosResult read_string(NmosReader* r, char** text, size_t* length)
 {
-    dtnmos_buffer buffer;
+    NmosBuffer buffer;
     memset(&buffer, 0, sizeof(buffer));
     DTNMOS_APPEND_LITERAL(&buffer, "");
     while (r->position < r->length)
@@ -156,8 +156,8 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
         {
             if (buffer.failed)
             {
-                dtnmos_buffer_free(&buffer);
-                return dtnmos_fail_memory();
+                NmosBuffer_Free(&buffer);
+                return NmosError_FailMemory();
             }
             *text = buffer.data;
             *length = buffer.length;
@@ -165,12 +165,12 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
         }
         if ((unsigned char)c < 0x20)
         {
-            dtnmos_buffer_free(&buffer);
+            NmosBuffer_Free(&buffer);
             return fail(r, "a string holds a control character");
         }
         if (c != '\\')
         {
-            dtnmos_buffer_append(&buffer, &c, 1);
+            NmosBuffer_Append(&buffer, &c, 1);
             continue;
         }
         if (r->position >= r->length)
@@ -210,7 +210,7 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
             unsigned code = 0;
             if (!read_hex4(r, &code))
             {
-                dtnmos_buffer_free(&buffer);
+                NmosBuffer_Free(&buffer);
                 return fail(r, "\\u needs four hexadecimal digits");
             }
             // A high surrogate and the low one after it make one character beyond U+FFFF.
@@ -220,7 +220,7 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
                 if (!read_word(r, "\\u") || !read_hex4(r, &low) || low < 0xDC00 ||
                     low > 0xDFFF)
                 {
-                    dtnmos_buffer_free(&buffer);
+                    NmosBuffer_Free(&buffer);
                     return fail(r, "a high surrogate lacks its low one");
                 }
                 code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
@@ -229,18 +229,18 @@ static DtNmosResult read_string(reader* r, char** text, size_t* length)
             continue;
         }
         default:
-            dtnmos_buffer_free(&buffer);
+            NmosBuffer_Free(&buffer);
             return fail(r, "a string holds an unknown escape");
         }
-        dtnmos_buffer_append(&buffer, simple, 1);
+        NmosBuffer_Append(&buffer, simple, 1);
     }
-    dtnmos_buffer_free(&buffer);
+    NmosBuffer_Free(&buffer);
     return fail(r, "a string does not end");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_number(reader* r, dtnmos_json* value)
+static DtNmosResult read_number(NmosReader* r, NmosJson* value)
 {
     const size_t start = r->position;
     if (next_is(r, '-'))
@@ -275,18 +275,18 @@ static DtNmosResult read_number(reader* r, dtnmos_json* value)
     return DTNMOS_OK;
 }
 
-static DtNmosResult read_value(reader* r, dtnmos_json* value, int depth);
+static DtNmosResult read_value(NmosReader* r, NmosJson* value, int depth);
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- add_item -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Appends an item to a value, and for an object its key, which it takes over.
 //
-static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
+static NmosJson* add_item(NmosJson* value, char* key, size_t* capacity)
 {
     if (value->count == *capacity)
     {
         const size_t grown = *capacity == 0 ? 8 : *capacity * 2;
-        dtnmos_json* items = realloc(value->items, grown * sizeof(*items));
+        NmosJson* items = realloc(value->items, grown * sizeof(*items));
         if (items == NULL)
         {
             return NULL;
@@ -303,7 +303,7 @@ static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
         }
         *capacity = grown;
     }
-    dtnmos_json* item = &value->items[value->count];
+    NmosJson* item = &value->items[value->count];
     memset(item, 0, sizeof(*item));
     if (value->type == DTNMOS_JSON_OBJECT)
     {
@@ -315,7 +315,7 @@ static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_container -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_container(reader* r, dtnmos_json* value, int depth, char close)
+static DtNmosResult read_container(NmosReader* r, NmosJson* value, int depth, char close)
 {
     const int object = close == '}';
     value->type = object ? DTNMOS_JSON_OBJECT : DTNMOS_JSON_ARRAY;
@@ -351,11 +351,11 @@ static DtNmosResult read_container(reader* r, dtnmos_json* value, int depth, cha
             }
             ++r->position;
         }
-        dtnmos_json* item = add_item(value, key, &capacity);
+        NmosJson* item = add_item(value, key, &capacity);
         if (item == NULL)
         {
             free(key);
-            return dtnmos_fail_memory();
+            return NmosError_FailMemory();
         }
         DtNmosResult result = read_value(r, item, depth + 1);
         if (result != DTNMOS_OK)
@@ -379,7 +379,7 @@ static DtNmosResult read_container(reader* r, dtnmos_json* value, int depth, cha
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_value(reader* r, dtnmos_json* value, int depth)
+static DtNmosResult read_value(NmosReader* r, NmosJson* value, int depth)
 {
     if (depth > DTNMOS_JSON_MAX_DEPTH)
     {
@@ -422,7 +422,7 @@ static DtNmosResult read_value(reader* r, dtnmos_json* value, int depth)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void clear_value(dtnmos_json* value)
+static void clear_value(NmosJson* value)
 {
     free(value->string);
     for (size_t i = 0; i < value->count; ++i)
@@ -437,21 +437,21 @@ static void clear_value(dtnmos_json* value)
     free(value->keys);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value)
+DtNmosResult NmosJson_Parse(const char* text, size_t length, NmosJson** value)
 {
     if (value == NULL || (text == NULL && length > 0))
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "dtnmos_json_parse() needs text.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "NmosJson_Parse() needs text.");
     }
     *value = NULL;
-    dtnmos_json* root = calloc(1, sizeof(*root));
+    NmosJson* root = calloc(1, sizeof(*root));
     if (root == NULL)
     {
-        return dtnmos_fail_memory();
+        return NmosError_FailMemory();
     }
-    reader r = {text, length, 0};
+    NmosReader r = {text, length, 0};
     DtNmosResult result = read_value(&r, root, 0);
     if (result == DTNMOS_OK)
     {
@@ -463,16 +463,16 @@ DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** va
     }
     if (result != DTNMOS_OK)
     {
-        dtnmos_json_free(root);
+        NmosJson_Free(root);
         return result;
     }
     *value = root;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_json_free(dtnmos_json* value)
+void NmosJson_Free(NmosJson* value)
 {
     if (value == NULL)
     {
@@ -482,9 +482,9 @@ void dtnmos_json_free(dtnmos_json* value)
     free(value);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_member -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Member -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const dtnmos_json* dtnmos_json_member(const dtnmos_json* value, const char* key)
+const NmosJson* NmosJson_Member(const NmosJson* value, const char* key)
 {
     if (value == NULL || value->type != DTNMOS_JSON_OBJECT || key == NULL)
     {
@@ -500,23 +500,23 @@ const dtnmos_json* dtnmos_json_member(const dtnmos_json* value, const char* key)
     return NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* dtnmos_json_text(const dtnmos_json* value)
+const char* NmosJson_Text(const NmosJson* value)
 {
     return value != NULL && value->type == DTNMOS_JSON_STRING ? value->string : NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_member_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_MemberText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* dtnmos_json_member_text(const dtnmos_json* value, const char* key)
+const char* NmosJson_MemberText(const NmosJson* value, const char* key)
 {
-    return dtnmos_json_text(dtnmos_json_member(value, key));
+    return NmosJson_Text(NmosJson_Member(value, key));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_write_string -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_WriteString -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
+void NmosJson_WriteString(NmosBuffer* buffer, const char* text)
 {
     DTNMOS_APPEND_LITERAL(buffer, "\"");
     for (const char* c = text == NULL ? "" : text; *c != '\0'; ++c)
@@ -541,11 +541,11 @@ void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
         default:
             if ((unsigned char)*c < 0x20)
             {
-                dtnmos_buffer_printf(buffer, "\\u%04x", (unsigned)(unsigned char)*c);
+                NmosBuffer_Printf(buffer, "\\u%04x", (unsigned)(unsigned char)*c);
             }
             else
             {
-                dtnmos_buffer_append(buffer, c, 1);
+                NmosBuffer_Append(buffer, c, 1);
             }
             break;
         }
@@ -553,9 +553,9 @@ void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text)
     DTNMOS_APPEND_LITERAL(buffer, "\"");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value)
+void NmosJson_Write(NmosBuffer* buffer, const NmosJson* value)
 {
     switch (value->type)
     {
@@ -571,10 +571,10 @@ void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value)
     case DTNMOS_JSON_NUMBER:
         // Seventeen digits give a double back exactly; a whole number has none after the
         // point.
-        dtnmos_buffer_printf(buffer, "%.17g", value->number);
+        NmosBuffer_Printf(buffer, "%.17g", value->number);
         break;
     case DTNMOS_JSON_STRING:
-        dtnmos_json_write_string(buffer, value->string);
+        NmosJson_WriteString(buffer, value->string);
         break;
     case DTNMOS_JSON_ARRAY:
         DTNMOS_APPEND_LITERAL(buffer, "[");
@@ -584,7 +584,7 @@ void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value)
             {
                 DTNMOS_APPEND_LITERAL(buffer, ",");
             }
-            dtnmos_json_write(buffer, &value->items[i]);
+            NmosJson_Write(buffer, &value->items[i]);
         }
         DTNMOS_APPEND_LITERAL(buffer, "]");
         break;
@@ -596,9 +596,9 @@ void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value)
             {
                 DTNMOS_APPEND_LITERAL(buffer, ",");
             }
-            dtnmos_json_write_string(buffer, value->keys[i]);
+            NmosJson_WriteString(buffer, value->keys[i]);
             DTNMOS_APPEND_LITERAL(buffer, ":");
-            dtnmos_json_write(buffer, &value->items[i]);
+            NmosJson_Write(buffer, &value->items[i]);
         }
         DTNMOS_APPEND_LITERAL(buffer, "}");
         break;

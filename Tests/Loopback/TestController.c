@@ -55,7 +55,7 @@
     "\", \"manifest_href\": null}"
 
 // A registry and a node that the test answers for, which records what it was asked.
-typedef struct fake_network
+typedef struct NmosFakeNetwork
 {
     char requests[16][256]; // "<method> <url>"
     size_t count;
@@ -64,15 +64,15 @@ typedef struct fake_network
     int patch_status;      // what the node answers a PATCH
     const char* patch_answer;
     int node_unreachable;
-} fake_network;
+} NmosFakeNetwork;
 
-typedef struct fake_route
+typedef struct NmosFakeRoute
 {
     const char* url;
     const char* body;
-} fake_route;
+} NmosFakeRoute;
 
-static const fake_route fake_routes[] = {
+static const NmosFakeRoute fake_routes[] = {
     {BASE "receivers?paging.limit=100", "[" MONITOR ", " SPEAKER "]"},
     {BASE "receivers?label=monitor&paging.limit=100", "[" MONITOR "]"},
     {BASE "receivers?label=speaker&paging.limit=100", "[" SPEAKER "]"},
@@ -106,7 +106,7 @@ static const fake_route fake_routes[] = {
 static DtNmosResult fake_answer(void* user, const DtNmosHttpRequest* request,
                                 DtNmosHttpResponse* response)
 {
-    fake_network* network = user;
+    NmosFakeNetwork* network = user;
     CHECK_EQ(request->TimeoutMs, 2000);
     if (network->count < 16)
     {
@@ -150,7 +150,7 @@ static DtNmosResult fake_answer(void* user, const DtNmosHttpRequest* request,
 //
 // Sets up network, whose node accepts a PATCH, and returns a query of its registry.
 //
-static DtNmosQuery* make_network(fake_network* network)
+static DtNmosQuery* make_network(NmosFakeNetwork* network)
 {
     memset(network, 0, sizeof(*network));
     network->patch_status = 200;
@@ -172,7 +172,7 @@ static DtNmosQuery* make_network(fake_network* network)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- count_patches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static size_t count_patches(const fake_network* network)
+static size_t count_patches(const NmosFakeNetwork* network)
 {
     size_t patches = 0;
     for (size_t i = 0; i < network->count; ++i)
@@ -186,7 +186,7 @@ static size_t count_patches(const fake_network* network)
 //
 void query_lists_and_finds_receivers(void)
 {
-    fake_network network;
+    NmosFakeNetwork network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
     DtNmosReceiverList* list = NULL;
@@ -232,7 +232,7 @@ void query_lists_and_finds_receivers(void)
 //
 void controller_connects_a_receiver(void)
 {
-    fake_network network;
+    NmosFakeNetwork network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
     DtNmosConnection* connection = NULL;
@@ -264,16 +264,16 @@ void controller_connects_a_receiver(void)
         CHECK_STR(network.requests[i], expected[i]);
     }
     CHECK_STR(network.content_type, "application/json");
-    dtnmos_json* body = NULL;
-    REQUIRE(dtnmos_json_parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    CHECK_STR(dtnmos_json_member_text(body, "sender_id"), CAMERA_ID);
-    CHECK_EQ(dtnmos_json_member(body, "master_enable")->type, DTNMOS_JSON_TRUE);
-    CHECK_STR(dtnmos_json_member_text(dtnmos_json_member(body, "activation"), "mode"),
+    NmosJson* body = NULL;
+    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(body, "sender_id"), CAMERA_ID);
+    CHECK_EQ(NmosJson_Member(body, "master_enable")->type, DTNMOS_JSON_TRUE);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
               "activate_immediate");
-    const dtnmos_json* file = dtnmos_json_member(body, "transport_file");
-    CHECK_STR(dtnmos_json_member_text(file, "type"), "application/sdp");
-    CHECK_STR(dtnmos_json_member_text(file, "data"), CAMERA_SDP);
-    dtnmos_json_free(body);
+    const NmosJson* file = NmosJson_Member(body, "transport_file");
+    CHECK_STR(NmosJson_MemberText(file, "type"), "application/sdp");
+    CHECK_STR(NmosJson_MemberText(file, "data"), CAMERA_SDP);
+    NmosJson_Free(body);
     free(network.body);
     DtNmosConnection_Free(connection);
     DtNmosQuery_Free(query);
@@ -283,7 +283,7 @@ void controller_connects_a_receiver(void)
 //
 void controller_disconnects_a_receiver(void)
 {
-    fake_network network;
+    NmosFakeNetwork network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
     DtNmosReceiverList* disconnected = NULL;
@@ -294,14 +294,14 @@ void controller_disconnects_a_receiver(void)
     CHECK_STR(network.requests[0], "GET " BASE "receivers/" MONITOR_ID);
     CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
     CHECK_STR(network.requests[2], "PATCH " STAGED);
-    dtnmos_json* body = NULL;
-    REQUIRE(dtnmos_json_parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    CHECK_EQ(dtnmos_json_member(body, "sender_id")->type, DTNMOS_JSON_NULL);
-    CHECK_EQ(dtnmos_json_member(body, "master_enable")->type, DTNMOS_JSON_FALSE);
-    CHECK_STR(dtnmos_json_member_text(dtnmos_json_member(body, "activation"), "mode"),
+    NmosJson* body = NULL;
+    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
+    CHECK_EQ(NmosJson_Member(body, "sender_id")->type, DTNMOS_JSON_NULL);
+    CHECK_EQ(NmosJson_Member(body, "master_enable")->type, DTNMOS_JSON_FALSE);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
               "activate_immediate");
-    CHECK(dtnmos_json_member(body, "transport_file") == NULL);
-    dtnmos_json_free(body);
+    CHECK(NmosJson_Member(body, "transport_file") == NULL);
+    NmosJson_Free(body);
     free(network.body);
     DtNmosReceiverList_Free(disconnected);
     DtNmosQuery_Free(query);
@@ -311,7 +311,7 @@ void controller_disconnects_a_receiver(void)
 //
 void controller_names_what_went_wrong(void)
 {
-    fake_network network;
+    NmosFakeNetwork network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
     DtNmosConnection* connection = NULL;
@@ -361,7 +361,7 @@ void controller_names_what_went_wrong(void)
 //
 void controller_moves_a_sender(void)
 {
-    fake_network network;
+    NmosFakeNetwork network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
     DtNmosSenderList* moved = NULL;
@@ -380,16 +380,16 @@ void controller_moves_a_sender(void)
     CHECK_STR(network.requests[0], "GET " BASE "senders?label=encoder&paging.limit=100");
     CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
     CHECK_STR(network.requests[2], "PATCH " MOVED);
-    dtnmos_json* body = NULL;
-    REQUIRE(dtnmos_json_parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    const dtnmos_json* legs = dtnmos_json_member(body, "transport_params");
+    NmosJson* body = NULL;
+    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
+    const NmosJson* legs = NmosJson_Member(body, "transport_params");
     REQUIRE(legs != NULL && legs->type == DTNMOS_JSON_ARRAY && legs->count == 1);
-    CHECK_STR(dtnmos_json_member_text(&legs->items[0], "destination_ip"), "239.1.2.3");
-    CHECK_EQ(dtnmos_json_member(&legs->items[0], "destination_port")->number, 5010);
-    CHECK_STR(dtnmos_json_member_text(dtnmos_json_member(body, "activation"), "mode"),
+    CHECK_STR(NmosJson_MemberText(&legs->items[0], "destination_ip"), "239.1.2.3");
+    CHECK_EQ(NmosJson_Member(&legs->items[0], "destination_port")->number, 5010);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
               "activate_immediate");
-    CHECK(dtnmos_json_member(body, "master_enable") == NULL);
-    dtnmos_json_free(body);
+    CHECK(NmosJson_Member(body, "master_enable") == NULL);
+    NmosJson_Free(body);
     DtNmosSenderList_Free(moved);
 
     // A sender that does not send over RTP, one without a device, and no port.

@@ -19,7 +19,7 @@ static uint32_t rotate(uint32_t value, int bits)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- process -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void process(dtnmos_sha1* sha1, const uint8_t block[64])
+static void process(NmosSha1* sha1, const uint8_t block[64])
 {
     uint32_t w[80];
     for (int i = 0; i < 16; ++i)
@@ -74,9 +74,9 @@ static void process(dtnmos_sha1* sha1, const uint8_t block[64])
     sha1->state[4] += e;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_init -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Init -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_sha1_init(dtnmos_sha1* sha1)
+void NmosSha1_Init(NmosSha1* sha1)
 {
     memset(sha1, 0, sizeof(*sha1));
     sha1->state[0] = 0x67452301u;
@@ -86,9 +86,9 @@ void dtnmos_sha1_init(dtnmos_sha1* sha1)
     sha1->state[4] = 0xC3D2E1F0u;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_update -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Update -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_sha1_update(dtnmos_sha1* sha1, const void* data, size_t length)
+void NmosSha1_Update(NmosSha1* sha1, const void* data, size_t length)
 {
     const uint8_t* bytes = data;
     sha1->length += length;
@@ -111,24 +111,24 @@ void dtnmos_sha1_update(dtnmos_sha1* sha1, const void* data, size_t length)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sha1_final -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Final -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_sha1_final(dtnmos_sha1* sha1, uint8_t digest[20])
+void NmosSha1_Final(NmosSha1* sha1, uint8_t digest[20])
 {
     const uint64_t bits = sha1->length * 8;
     const uint8_t one = 0x80;
     const uint8_t zero = 0;
-    dtnmos_sha1_update(sha1, &one, 1);
+    NmosSha1_Update(sha1, &one, 1);
     while (sha1->used != 56)
     {
-        dtnmos_sha1_update(sha1, &zero, 1);
+        NmosSha1_Update(sha1, &zero, 1);
     }
     uint8_t length[8];
     for (int i = 0; i < 8; ++i)
     {
         length[i] = (uint8_t)(bits >> (56 - 8 * i));
     }
-    dtnmos_sha1_update(sha1, length, 8);
+    NmosSha1_Update(sha1, length, 8);
     for (int i = 0; i < 5; ++i)
     {
         digest[4 * i] = (uint8_t)(sha1->state[i] >> 24);

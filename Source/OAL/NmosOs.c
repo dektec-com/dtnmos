@@ -46,16 +46,16 @@
 
 #if defined(_WIN32)
 
-struct dtnmos_mutex
+struct NmosMutex
 {
     SRWLOCK lock;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_mutex* dtnmos_mutex_create(void)
+NmosMutex* NmosOs_MutexCreate(void)
 {
-    dtnmos_mutex* mutex = malloc(sizeof(*mutex));
+    NmosMutex* mutex = malloc(sizeof(*mutex));
     if (mutex != NULL)
     {
         InitializeSRWLock(&mutex->lock);
@@ -63,28 +63,28 @@ dtnmos_mutex* dtnmos_mutex_create(void)
     return mutex;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_free(dtnmos_mutex* mutex)
+void NmosOs_MutexFree(NmosMutex* mutex)
 {
     free(mutex);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_lock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexLock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_lock(dtnmos_mutex* mutex)
+void NmosOs_MutexLock(NmosMutex* mutex)
 {
     AcquireSRWLockExclusive(&mutex->lock);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_unlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexUnlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_unlock(dtnmos_mutex* mutex)
+void NmosOs_MutexUnlock(NmosMutex* mutex)
 {
     ReleaseSRWLockExclusive(&mutex->lock);
 }
 
-struct dtnmos_thread
+struct NmosThread
 {
     HANDLE handle;
     void (*function)(void*);
@@ -95,16 +95,16 @@ struct dtnmos_thread
 //
 static DWORD WINAPI run_thread(LPVOID parameter)
 {
-    dtnmos_thread* thread = parameter;
+    NmosThread* thread = parameter;
     thread->function(thread->argument);
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_thread_start -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadStart -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_thread* dtnmos_thread_start(void (*function)(void*), void* argument)
+NmosThread* NmosOs_ThreadStart(void (*function)(void*), void* argument)
 {
-    dtnmos_thread* thread = malloc(sizeof(*thread));
+    NmosThread* thread = malloc(sizeof(*thread));
     if (thread == NULL)
     {
         return NULL;
@@ -120,9 +120,9 @@ dtnmos_thread* dtnmos_thread_start(void (*function)(void*), void* argument)
     return thread;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_thread_join -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadJoin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_thread_join(dtnmos_thread* thread)
+void NmosOs_ThreadJoin(NmosThread* thread)
 {
     if (thread == NULL)
     {
@@ -133,16 +133,16 @@ void dtnmos_thread_join(dtnmos_thread* thread)
     free(thread);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sleep_ms -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SleepMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_sleep_ms(uint32_t milliseconds)
+void NmosOs_SleepMs(uint32_t milliseconds)
 {
     Sleep(milliseconds);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_monotonic_ms -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MonotonicMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-uint64_t dtnmos_monotonic_ms(void)
+uint64_t NmosOs_MonotonicMs(void)
 {
     return (uint64_t)GetTickCount64();
 }
@@ -167,23 +167,23 @@ static int start_sockets(void)
 }
 
     #define DTNMOS_CLOSE_SOCKET closesocket
-typedef SOCKET dtnmos_socket;
+typedef SOCKET NmosSocket;
     // The length of a buffer, as the sockets of the platform take it.
     #define DTNMOS_SOCKET_LENGTH(length) ((int)(length))
     #define DTNMOS_NO_SOCKET INVALID_SOCKET
 
 #else
 
-struct dtnmos_mutex
+struct NmosMutex
 {
     pthread_mutex_t lock;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_mutex* dtnmos_mutex_create(void)
+NmosMutex* NmosOs_MutexCreate(void)
 {
-    dtnmos_mutex* mutex = malloc(sizeof(*mutex));
+    NmosMutex* mutex = malloc(sizeof(*mutex));
     if (mutex != NULL && pthread_mutex_init(&mutex->lock, NULL) != 0)
     {
         free(mutex);
@@ -192,9 +192,9 @@ dtnmos_mutex* dtnmos_mutex_create(void)
     return mutex;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_free(dtnmos_mutex* mutex)
+void NmosOs_MutexFree(NmosMutex* mutex)
 {
     if (mutex != NULL)
     {
@@ -203,21 +203,21 @@ void dtnmos_mutex_free(dtnmos_mutex* mutex)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_lock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexLock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_lock(dtnmos_mutex* mutex)
+void NmosOs_MutexLock(NmosMutex* mutex)
 {
     pthread_mutex_lock(&mutex->lock);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_mutex_unlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexUnlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_mutex_unlock(dtnmos_mutex* mutex)
+void NmosOs_MutexUnlock(NmosMutex* mutex)
 {
     pthread_mutex_unlock(&mutex->lock);
 }
 
-struct dtnmos_thread
+struct NmosThread
 {
     pthread_t handle;
     void (*function)(void*);
@@ -228,16 +228,16 @@ struct dtnmos_thread
 //
 static void* run_thread(void* parameter)
 {
-    dtnmos_thread* thread = parameter;
+    NmosThread* thread = parameter;
     thread->function(thread->argument);
     return NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_thread_start -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadStart -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_thread* dtnmos_thread_start(void (*function)(void*), void* argument)
+NmosThread* NmosOs_ThreadStart(void (*function)(void*), void* argument)
 {
-    dtnmos_thread* thread = malloc(sizeof(*thread));
+    NmosThread* thread = malloc(sizeof(*thread));
     if (thread == NULL)
     {
         return NULL;
@@ -252,9 +252,9 @@ dtnmos_thread* dtnmos_thread_start(void (*function)(void*), void* argument)
     return thread;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_thread_join -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadJoin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_thread_join(dtnmos_thread* thread)
+void NmosOs_ThreadJoin(NmosThread* thread)
 {
     if (thread == NULL)
     {
@@ -264,9 +264,9 @@ void dtnmos_thread_join(dtnmos_thread* thread)
     free(thread);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sleep_ms -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SleepMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_sleep_ms(uint32_t milliseconds)
+void NmosOs_SleepMs(uint32_t milliseconds)
 {
     struct timespec duration;
     duration.tv_sec = (time_t)(milliseconds / 1000);
@@ -276,9 +276,9 @@ void dtnmos_sleep_ms(uint32_t milliseconds)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_monotonic_ms -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MonotonicMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-uint64_t dtnmos_monotonic_ms(void)
+uint64_t NmosOs_MonotonicMs(void)
 {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
@@ -293,15 +293,15 @@ static int start_sockets(void)
 }
 
     #define DTNMOS_CLOSE_SOCKET close
-typedef int dtnmos_socket;
+typedef int NmosSocket;
     #define DTNMOS_SOCKET_LENGTH(length) (length)
     #define DTNMOS_NO_SOCKET (-1)
 
 #endif
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_version_now -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_VersionNow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_version_now(uint64_t* last, char* text, size_t size)
+void NmosOs_VersionNow(uint64_t* last, char* text, size_t size)
 {
     struct timespec now;
     timespec_get(&now, TIME_UTC);
@@ -317,9 +317,9 @@ void dtnmos_version_now(uint64_t* last, char* text, size_t size)
              (unsigned long long)(nanoseconds % 1000000000u));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_address_toward -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_AddressToward -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_address_toward(const char* host, char* address, size_t size)
+int NmosOs_AddressToward(const char* host, char* address, size_t size)
 {
     if (host == NULL || !start_sockets())
     {
@@ -337,7 +337,7 @@ int dtnmos_address_toward(const char* host, char* address, size_t size)
     int result = 0;
     // Connecting a datagram socket sends nothing; it only chooses the route and so the
     // address of this host on it.
-    const dtnmos_socket probe = socket(found->ai_family, SOCK_DGRAM, 0);
+    const NmosSocket probe = socket(found->ai_family, SOCK_DGRAM, 0);
     if (probe != DTNMOS_NO_SOCKET)
     {
         struct sockaddr_storage local;
@@ -357,9 +357,9 @@ int dtnmos_address_toward(const char* host, char* address, size_t size)
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_free_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_FreePort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-uint16_t dtnmos_free_port(const char* host)
+uint16_t NmosOs_FreePort(const char* host)
 {
     if (host == NULL || !start_sockets())
     {
@@ -376,7 +376,7 @@ uint16_t dtnmos_free_port(const char* host)
         return 0;
     }
     uint16_t port = 0;
-    const dtnmos_socket probe = socket(found->ai_family, SOCK_STREAM, 0);
+    const NmosSocket probe = socket(found->ai_family, SOCK_STREAM, 0);
     if (probe != DTNMOS_NO_SOCKET)
     {
         struct sockaddr_storage local;
@@ -394,14 +394,14 @@ uint16_t dtnmos_free_port(const char* host)
     return port;
 }
 
-struct dtnmos_udp
+struct NmosUdp
 {
-    dtnmos_socket socket;
+    NmosSocket socket;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpOpen -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_address)
+NmosUdp* NmosOs_UdpOpen(const char* bind_address, const char* interface_address)
 {
     if (!start_sockets())
     {
@@ -420,7 +420,7 @@ dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_addr
     {
         return NULL;
     }
-    const dtnmos_socket handle = socket(AF_INET, SOCK_DGRAM, 0);
+    const NmosSocket handle = socket(AF_INET, SOCK_DGRAM, 0);
     if (handle == DTNMOS_NO_SOCKET)
     {
         return NULL;
@@ -446,7 +446,7 @@ dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_addr
     WSAIoctl(handle, SIO_UDP_CONNRESET, &report, sizeof(report), NULL, 0, &returned, NULL,
              NULL);
 #endif
-    dtnmos_udp* udp = ok ? malloc(sizeof(*udp)) : NULL;
+    NmosUdp* udp = ok ? malloc(sizeof(*udp)) : NULL;
     if (udp == NULL)
     {
         DTNMOS_CLOSE_SOCKET(handle);
@@ -456,9 +456,9 @@ dtnmos_udp* dtnmos_udp_open(const char* bind_address, const char* interface_addr
     return udp;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_port -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpPort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-uint16_t dtnmos_udp_port(const dtnmos_udp* udp)
+uint16_t NmosOs_UdpPort(const NmosUdp* udp)
 {
     struct sockaddr_in local;
     socklen_t length = sizeof(local);
@@ -469,10 +469,10 @@ uint16_t dtnmos_udp_port(const dtnmos_udp* udp)
     return ntohs(local.sin_port);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_send -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpSend -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const void* data,
-                    size_t length)
+int NmosOs_UdpSend(NmosUdp* udp, const char* address, uint16_t port, const void* data,
+                   size_t length)
 {
     struct sockaddr_in to;
     memset(&to, 0, sizeof(to));
@@ -486,10 +486,10 @@ int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const v
                           (struct sockaddr*)&to, sizeof(to)) == length;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
-                       char* from_address, size_t from_size, uint16_t* from_port)
+int NmosOs_UdpReceive(NmosUdp* udp, void* buffer, size_t size, uint32_t timeout_ms,
+                      char* from_address, size_t from_size, uint16_t* from_port)
 {
     fd_set readable;
     FD_ZERO(&readable);
@@ -527,9 +527,9 @@ int dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t time
     return received;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpClose -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_udp_close(dtnmos_udp* udp)
+void NmosOs_UdpClose(NmosUdp* udp)
 {
     if (udp != NULL)
     {
@@ -538,9 +538,9 @@ void dtnmos_udp_close(dtnmos_udp* udp)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_system_dns -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SystemDns -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_system_dns(char* server, size_t server_size, char* domain, size_t domain_size)
+void NmosOs_SystemDns(char* server, size_t server_size, char* domain, size_t domain_size)
 {
     server[0] = '\0';
     domain[0] = '\0';
@@ -615,6 +615,6 @@ void dtnmos_system_dns(char* server, size_t server_size, char* domain, size_t do
     const size_t length = fread(text, 1, sizeof(text) - 1, file);
     fclose(file);
     text[length] = '\0';
-    dtnmos_dns_read_resolv_conf(text, server, server_size, domain, domain_size);
+    NmosDns_ReadResolvConf(text, server, server_size, domain, domain_size);
 #endif
 }

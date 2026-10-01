@@ -13,7 +13,7 @@
 #include "NmosInternal.h"
 #include "dtnmos.h"
 
-typedef enum dtnmos_json_type
+typedef enum NmosJsonType
 {
     DTNMOS_JSON_NULL,
     DTNMOS_JSON_FALSE,
@@ -22,37 +22,37 @@ typedef enum dtnmos_json_type
     DTNMOS_JSON_STRING,
     DTNMOS_JSON_ARRAY,
     DTNMOS_JSON_OBJECT
-} dtnmos_json_type;
+} NmosJsonType;
 
 // A value. An array holds count items; an object holds count items with a key each.
-typedef struct dtnmos_json
+typedef struct NmosJson
 {
-    dtnmos_json_type type;
+    NmosJsonType type;
     double number;
     char* string; // a string, decoded, ending in a null character
     size_t string_length;
-    struct dtnmos_json* items;
+    struct NmosJson* items;
     char** keys; // of an object, decoded
     size_t count;
-} dtnmos_json;
+} NmosJson;
 
-// Parses length bytes of text into a value, which dtnmos_json_free() frees. Fails with
+// Parses length bytes of text into a value, which NmosJson_Free() frees. Fails with
 // DTNMOS_E_PARSE naming the offset of what is wrong.
-DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value);
-void dtnmos_json_free(dtnmos_json* value);
+DtNmosResult NmosJson_Parse(const char* text, size_t length, NmosJson** value);
+void NmosJson_Free(NmosJson* value);
 
 // Returns the member key of an object, or null when value is no object or lacks it.
-const dtnmos_json* dtnmos_json_member(const dtnmos_json* value, const char* key);
+const NmosJson* NmosJson_Member(const NmosJson* value, const char* key);
 
 // Returns the text of a string value, or null when value is null or no string.
-const char* dtnmos_json_text(const dtnmos_json* value);
+const char* NmosJson_Text(const NmosJson* value);
 
 // Returns the text of the string member key of an object, or null.
-const char* dtnmos_json_member_text(const dtnmos_json* value, const char* key);
+const char* NmosJson_MemberText(const NmosJson* value, const char* key);
 
 // Appends text as a JSON string, quoted and escaped.
-void dtnmos_json_write_string(dtnmos_buffer* buffer, const char* text);
+void NmosJson_WriteString(NmosBuffer* buffer, const char* text);
 
-// Appends value as JSON text, without spaces, which dtnmos_json_parse() reads back as the
+// Appends value as JSON text, without spaces, which NmosJson_Parse() reads back as the
 // same value.
-void dtnmos_json_write(dtnmos_buffer* buffer, const dtnmos_json* value);
+void NmosJson_Write(NmosBuffer* buffer, const NmosJson* value);

@@ -25,10 +25,10 @@ static int is_ipv6(const char* address)
 //
 static int is_ipv4_multicast(const char* address)
 {
-    dtnmos_span first;
-    dtnmos_span_split(dtnmos_span_of(address), '.', &first);
+    NmosSpan first;
+    NmosSpan_Split(NmosSpan_Of(address), '.', &first);
     uint32_t octet = 0;
-    return dtnmos_parse_u32(first, 255, &octet) && octet >= 224 && octet <= 239;
+    return NmosText_ParseU32(first, 255, &octet) && octet >= 224 && octet <= 239;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- address_type -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -40,21 +40,20 @@ static const char* address_type(const char* address)
 
 // Appends "; " between the parameters of an a=fmtp, and the payload type before the
 // first.
-typedef struct fmtp_writer
+typedef struct NmosFmtpWriter
 {
-    dtnmos_buffer* buffer;
+    NmosBuffer* buffer;
     uint8_t payload_type;
     int count;
-} fmtp_writer;
+} NmosFmtpWriter;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- separate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void separate(fmtp_writer* writer)
+static void separate(NmosFmtpWriter* writer)
 {
     if (writer->count++ == 0)
     {
-        dtnmos_buffer_printf(writer->buffer, "a=fmtp:%u ",
-                             (unsigned)writer->payload_type);
+        NmosBuffer_Printf(writer->buffer, "a=fmtp:%u ", (unsigned)writer->payload_type);
     }
     else
     {
@@ -66,31 +65,31 @@ static void separate(fmtp_writer* writer)
 //
 // Writes name=value; nothing when value is null or empty.
 //
-static void write_text(fmtp_writer* writer, const char* name, const char* value)
+static void write_text(NmosFmtpWriter* writer, const char* name, const char* value)
 {
     if (value == NULL || value[0] == '\0')
     {
         return;
     }
     separate(writer);
-    dtnmos_buffer_printf(writer->buffer, "%s=%s", name, value);
+    NmosBuffer_Printf(writer->buffer, "%s=%s", name, value);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_number(fmtp_writer* writer, const char* name, uint32_t value)
+static void write_number(NmosFmtpWriter* writer, const char* name, uint32_t value)
 {
     if (value == 0)
     {
         return;
     }
     separate(writer);
-    dtnmos_buffer_printf(writer->buffer, "%s=%u", name, (unsigned)value);
+    NmosBuffer_Printf(writer->buffer, "%s=%u", name, (unsigned)value);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_rate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_rate(fmtp_writer* writer, uint32_t numerator, uint32_t denominator)
+static void write_rate(NmosFmtpWriter* writer, uint32_t numerator, uint32_t denominator)
 {
     if (numerator == 0)
     {
@@ -99,30 +98,30 @@ static void write_rate(fmtp_writer* writer, uint32_t numerator, uint32_t denomin
     separate(writer);
     if (denominator <= 1)
     {
-        dtnmos_buffer_printf(writer->buffer, "exactframerate=%u", (unsigned)numerator);
+        NmosBuffer_Printf(writer->buffer, "exactframerate=%u", (unsigned)numerator);
     }
     else
     {
-        dtnmos_buffer_printf(writer->buffer, "exactframerate=%u/%u", (unsigned)numerator,
-                             (unsigned)denominator);
+        NmosBuffer_Printf(writer->buffer, "exactframerate=%u/%u", (unsigned)numerator,
+                          (unsigned)denominator);
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_flag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_flag(fmtp_writer* writer, const char* name, int set)
+static void write_flag(NmosFmtpWriter* writer, const char* name, int set)
 {
     if (!set)
     {
         return;
     }
     separate(writer);
-    dtnmos_buffer_append(writer->buffer, name, strlen(name));
+    NmosBuffer_Append(writer->buffer, name, strlen(name));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- end_fmtp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void end_fmtp(fmtp_writer* writer)
+static void end_fmtp(NmosFmtpWriter* writer)
 {
     if (writer->count > 0)
     {
@@ -132,12 +131,12 @@ static void end_fmtp(fmtp_writer* writer)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_video(dtnmos_buffer* buffer, const DtNmosFlow* flow)
+static void write_video(NmosBuffer* buffer, const DtNmosFlow* flow)
 {
     const DtNmosVideoFormat* video = &flow->Format.Video;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u raw/%u\r\n", (unsigned)flow->PayloadType,
-                         (unsigned)flow->ClockRate);
-    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    NmosBuffer_Printf(buffer, "a=rtpmap:%u raw/%u\r\n", (unsigned)flow->PayloadType,
+                      (unsigned)flow->ClockRate);
+    NmosFmtpWriter writer = {buffer, flow->PayloadType, 0};
     write_text(&writer, "sampling", video->Sampling);
     write_number(&writer, "width", video->Width);
     write_number(&writer, "height", video->Height);
@@ -156,14 +155,14 @@ static void write_video(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_compressed(dtnmos_buffer* buffer, const DtNmosFlow* flow)
+static void write_compressed(NmosBuffer* buffer, const DtNmosFlow* flow)
 {
     const DtNmosCompressedVideoFormat* video = &flow->Format.CompressedVideo;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
-                         video->Encoding, (unsigned)flow->ClockRate);
-    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    NmosBuffer_Printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
+                      video->Encoding, (unsigned)flow->ClockRate);
+    NmosFmtpWriter writer = {buffer, flow->PayloadType, 0};
     separate(&writer);
-    dtnmos_buffer_printf(buffer, "packetmode=%u", (unsigned)video->PacketMode);
+    NmosBuffer_Printf(buffer, "packetmode=%u", (unsigned)video->PacketMode);
     write_text(&writer, "profile", video->Profile);
     write_text(&writer, "level", video->Level);
     write_text(&writer, "sublevel", video->Sublevel);
@@ -180,7 +179,7 @@ static void write_compressed(dtnmos_buffer* buffer, const DtNmosFlow* flow)
     if (video->TransmissionMode != 1)
     {
         separate(&writer);
-        dtnmos_buffer_printf(buffer, "transmode=%u", (unsigned)video->TransmissionMode);
+        NmosBuffer_Printf(buffer, "transmode=%u", (unsigned)video->TransmissionMode);
     }
     write_flag(&writer, "interlace", video->Interlaced);
     write_flag(&writer, "segmented", video->Segmented);
@@ -191,13 +190,13 @@ static void write_compressed(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 //
 // Writes a time in nanoseconds as milliseconds, "1" or "0.125".
 //
-static void write_milliseconds(dtnmos_buffer* buffer, uint32_t nanoseconds)
+static void write_milliseconds(NmosBuffer* buffer, uint32_t nanoseconds)
 {
     const unsigned whole = (unsigned)(nanoseconds / 1000000u);
     unsigned fraction = (unsigned)(nanoseconds % 1000000u);
     if (fraction == 0)
     {
-        dtnmos_buffer_printf(buffer, "%u", whole);
+        NmosBuffer_Printf(buffer, "%u", whole);
         return;
     }
     int digits = 6;
@@ -206,18 +205,18 @@ static void write_milliseconds(dtnmos_buffer* buffer, uint32_t nanoseconds)
         fraction /= 10;
         --digits;
     }
-    dtnmos_buffer_printf(buffer, "%u.%0*u", whole, digits, fraction);
+    NmosBuffer_Printf(buffer, "%u.%0*u", whole, digits, fraction);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_audio(dtnmos_buffer* buffer, const DtNmosFlow* flow)
+static void write_audio(NmosBuffer* buffer, const DtNmosFlow* flow)
 {
     const DtNmosAudioFormat* audio = &flow->Format.Audio;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u/%u\r\n", (unsigned)flow->PayloadType,
-                         audio->Encoding, (unsigned)audio->SampleRate,
-                         (unsigned)audio->Channels);
-    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    NmosBuffer_Printf(buffer, "a=rtpmap:%u %s/%u/%u\r\n", (unsigned)flow->PayloadType,
+                      audio->Encoding, (unsigned)audio->SampleRate,
+                      (unsigned)audio->Channels);
+    NmosFmtpWriter writer = {buffer, flow->PayloadType, 0};
     write_text(&writer, "channel-order", audio->ChannelOrder);
     end_fmtp(&writer);
     if (audio->PacketTimeNs != 0)
@@ -230,18 +229,17 @@ static void write_audio(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_anc(dtnmos_buffer* buffer, const DtNmosFlow* flow)
+static void write_anc(NmosBuffer* buffer, const DtNmosFlow* flow)
 {
     const DtNmosAncFormat* anc = &flow->Format.Anc;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u smpte291/%u\r\n",
-                         (unsigned)flow->PayloadType, (unsigned)flow->ClockRate);
-    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    NmosBuffer_Printf(buffer, "a=rtpmap:%u smpte291/%u\r\n", (unsigned)flow->PayloadType,
+                      (unsigned)flow->ClockRate);
+    NmosFmtpWriter writer = {buffer, flow->PayloadType, 0};
     for (size_t i = 0; i < anc->DidSdidCount; ++i)
     {
         separate(&writer);
-        dtnmos_buffer_printf(buffer, "DID_SDID={0x%02X,0x%02X}",
-                             (unsigned)anc->DidSdid[i].Did,
-                             (unsigned)anc->DidSdid[i].Sdid);
+        NmosBuffer_Printf(buffer, "DID_SDID={0x%02X,0x%02X}",
+                          (unsigned)anc->DidSdid[i].Did, (unsigned)anc->DidSdid[i].Sdid);
     }
     write_number(&writer, "VPID_Code", anc->VpidCode);
     write_rate(&writer, anc->RateNumerator, anc->RateDenominator);
@@ -252,18 +250,18 @@ static void write_anc(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_other -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_other(dtnmos_buffer* buffer, const DtNmosFlow* flow)
+static void write_other(NmosBuffer* buffer, const DtNmosFlow* flow)
 {
     const DtNmosOtherFormat* other = &flow->Format.Other;
     if (other->Encoding[0] != '\0')
     {
-        dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
-                             other->Encoding, (unsigned)flow->ClockRate);
+        NmosBuffer_Printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
+                          other->Encoding, (unsigned)flow->ClockRate);
     }
     if (other->Fmtp != NULL && other->Fmtp[0] != '\0')
     {
-        dtnmos_buffer_printf(buffer, "a=fmtp:%u %s\r\n", (unsigned)flow->PayloadType,
-                             other->Fmtp);
+        NmosBuffer_Printf(buffer, "a=fmtp:%u %s\r\n", (unsigned)flow->PayloadType,
+                          other->Fmtp);
     }
 }
 
@@ -271,7 +269,7 @@ static void write_other(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 //
 // Writes a=ts-refclk; a PTP domain as ST 2110-10 §8.2 writes it, after the grandmaster.
 //
-static void write_ref_clock(dtnmos_buffer* buffer, const DtNmosRefClock* clock)
+static void write_ref_clock(NmosBuffer* buffer, const DtNmosRefClock* clock)
 {
     switch (clock->Kind)
     {
@@ -280,27 +278,27 @@ static void write_ref_clock(dtnmos_buffer* buffer, const DtNmosRefClock* clock)
     case DTNMOS_REFCLOCK_PTP:
         if (clock->Traceable)
         {
-            dtnmos_buffer_printf(buffer, "a=ts-refclk:ptp=%s:traceable\r\n",
-                                 clock->PtpVersion);
+            NmosBuffer_Printf(buffer, "a=ts-refclk:ptp=%s:traceable\r\n",
+                              clock->PtpVersion);
         }
         else if (clock->Domain >= 0)
         {
-            dtnmos_buffer_printf(buffer, "a=ts-refclk:ptp=%s:%s:%d\r\n",
-                                 clock->PtpVersion, clock->Grandmaster, clock->Domain);
+            NmosBuffer_Printf(buffer, "a=ts-refclk:ptp=%s:%s:%d\r\n", clock->PtpVersion,
+                              clock->Grandmaster, clock->Domain);
         }
         else
         {
-            dtnmos_buffer_printf(buffer, "a=ts-refclk:ptp=%s:%s\r\n", clock->PtpVersion,
-                                 clock->Grandmaster);
+            NmosBuffer_Printf(buffer, "a=ts-refclk:ptp=%s:%s\r\n", clock->PtpVersion,
+                              clock->Grandmaster);
         }
         break;
     case DTNMOS_REFCLOCK_LOCALMAC:
-        dtnmos_buffer_printf(buffer, "a=ts-refclk:localmac=%s\r\n", clock->LocalMac);
+        NmosBuffer_Printf(buffer, "a=ts-refclk:localmac=%s\r\n", clock->LocalMac);
         break;
     case DTNMOS_REFCLOCK_OTHER:
         if (clock->Text != NULL && clock->Text[0] != '\0')
         {
-            dtnmos_buffer_printf(buffer, "a=ts-refclk:%s\r\n", clock->Text);
+            NmosBuffer_Printf(buffer, "a=ts-refclk:%s\r\n", clock->Text);
         }
         break;
     }
@@ -308,26 +306,25 @@ static void write_ref_clock(dtnmos_buffer* buffer, const DtNmosRefClock* clock)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_flow(dtnmos_buffer* buffer, const DtNmosFlow* flow, size_t index,
+static void write_flow(NmosBuffer* buffer, const DtNmosFlow* flow, size_t index,
                        int with_mid)
 {
     const char* destination = flow->DestinationIp;
-    dtnmos_buffer_printf(buffer, "m=%s %u RTP/AVP %u\r\n",
-                         flow->Media == DTNMOS_MEDIA_AUDIO ? "audio" : "video",
-                         (unsigned)flow->DestinationPort, (unsigned)flow->PayloadType);
-    dtnmos_buffer_printf(buffer, "c=IN %s %s%s\r\n", address_type(destination),
-                         destination, is_ipv4_multicast(destination) ? "/64" : "");
+    NmosBuffer_Printf(buffer, "m=%s %u RTP/AVP %u\r\n",
+                      flow->Media == DTNMOS_MEDIA_AUDIO ? "audio" : "video",
+                      (unsigned)flow->DestinationPort, (unsigned)flow->PayloadType);
+    NmosBuffer_Printf(buffer, "c=IN %s %s%s\r\n", address_type(destination), destination,
+                      is_ipv4_multicast(destination) ? "/64" : "");
     if (flow->Media == DTNMOS_MEDIA_COMPRESSED_VIDEO &&
         flow->Format.CompressedVideo.BandwidthKbps != 0)
     {
-        dtnmos_buffer_printf(
-            buffer, "b=AS:%llu\r\n",
-            (unsigned long long)flow->Format.CompressedVideo.BandwidthKbps);
+        NmosBuffer_Printf(buffer, "b=AS:%llu\r\n",
+                          (unsigned long long)flow->Format.CompressedVideo.BandwidthKbps);
     }
     if (flow->SourceIp[0] != '\0')
     {
-        dtnmos_buffer_printf(buffer, "a=source-filter: incl IN %s %s %s\r\n",
-                             address_type(destination), destination, flow->SourceIp);
+        NmosBuffer_Printf(buffer, "a=source-filter: incl IN %s %s %s\r\n",
+                          address_type(destination), destination, flow->SourceIp);
     }
     switch (flow->Media)
     {
@@ -350,41 +347,43 @@ static void write_flow(dtnmos_buffer* buffer, const DtNmosFlow* flow, size_t ind
     write_ref_clock(buffer, &flow->RefClock);
     if (flow->MediaClockDirect)
     {
-        dtnmos_buffer_printf(buffer, "a=mediaclk:direct=%u\r\n",
-                             (unsigned)flow->MediaClockOffset);
+        NmosBuffer_Printf(buffer, "a=mediaclk:direct=%u\r\n",
+                          (unsigned)flow->MediaClockOffset);
     }
     if (with_mid)
     {
-        dtnmos_buffer_printf(buffer, "a=mid:%s%zu\r\n",
-                             flow->Leg == 1 ? "secondary" : "primary", index);
+        NmosBuffer_Printf(buffer, "a=mid:%s%zu\r\n",
+                          flow->Leg == 1 ? "secondary" : "primary", index);
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSdp_Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* flows,
-                              size_t count, dtnmos_buffer* text)
+DtNmosResult NmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flows,
+                           size_t count, NmosBuffer* text)
 {
     if (session == NULL || (flows == NULL && count > 0) || text == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosSdp_Write() needs a session, its flows and a buffer.");
+        return NmosError_Fail(
+            DTNMOS_E_INVALID_ARGUMENT,
+            "DtNmosSdp_Write() needs a session, its flows and a buffer.");
     }
     if (count == 0)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "An SDP needs at least one flow.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "An SDP needs at least one flow.");
     }
     if (session->OriginIp[0] == '\0')
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "An SDP needs the address of its sender in OriginIp.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "An SDP needs the address of its sender in OriginIp.");
     }
     int with_mid = 0;
     for (size_t i = 0; i < count; ++i)
     {
         if (flows[i].DestinationIp[0] == '\0' || flows[i].DestinationPort == 0)
         {
-            return dtnmos_fail(
+            return NmosError_Fail(
                 DTNMOS_E_INVALID_ARGUMENT,
                 "Flow %zu of the SDP needs a destination address and port.", i);
         }
@@ -392,7 +391,7 @@ DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* fl
         {
             if (i == 0 || flows[i - 1].Leg != 0)
             {
-                return dtnmos_fail(
+                return NmosError_Fail(
                     DTNMOS_E_INVALID_ARGUMENT,
                     "Flow %zu is a second path and needs the first right before it.", i);
             }
@@ -400,17 +399,17 @@ DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* fl
         }
     }
 
-    dtnmos_buffer buffer;
+    NmosBuffer buffer;
     memset(&buffer, 0, sizeof(buffer));
     const char* origin = session->OriginIp;
     DTNMOS_APPEND_LITERAL(&buffer, "v=0\r\n");
-    dtnmos_buffer_printf(
+    NmosBuffer_Printf(
         &buffer, "o=- %llu %llu IN %s %s\r\n", (unsigned long long)session->SessionId,
         (unsigned long long)session->SessionVersion, address_type(origin), origin);
     // RFC 8866 asks for a single space when a session has no name.
-    dtnmos_buffer_printf(&buffer, "s=%s\r\n",
-                         session->Name != NULL && session->Name[0] != '\0' ? session->Name
-                                                                           : " ");
+    NmosBuffer_Printf(&buffer, "s=%s\r\n",
+                      session->Name != NULL && session->Name[0] != '\0' ? session->Name
+                                                                        : " ");
     DTNMOS_APPEND_LITERAL(&buffer, "t=0 0\r\n");
     for (size_t i = 0; with_mid && i < count; ++i)
     {
@@ -418,8 +417,8 @@ DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* fl
         {
             // Flow i is named primary<i> or secondary<i>; the first path is the flow
             // before.
-            dtnmos_buffer_printf(&buffer, "a=group:DUP primary%zu secondary%zu\r\n",
-                                 i - 1, i);
+            NmosBuffer_Printf(&buffer, "a=group:DUP primary%zu secondary%zu\r\n", i - 1,
+                              i);
         }
     }
     for (size_t i = 0; i < count; ++i)
@@ -428,10 +427,10 @@ DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* fl
     }
     if (buffer.failed)
     {
-        dtnmos_buffer_free(&buffer);
-        return dtnmos_fail_memory();
+        NmosBuffer_Free(&buffer);
+        return NmosError_FailMemory();
     }
-    dtnmos_buffer_free(text);
+    NmosBuffer_Free(text);
     *text = buffer;
     return DTNMOS_OK;
 }
@@ -443,9 +442,10 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flo
 {
     if (size == NULL || session == NULL || (flows == NULL && count > 0))
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosSdp_Write() needs a session, its flows and the size of "
-                           "the buffer.");
+        return NmosError_Fail(
+            DTNMOS_E_INVALID_ARGUMENT,
+            "DtNmosSdp_Write() needs a session, its flows and the size of "
+            "the buffer.");
     }
     const DtNmosResult sized =
         DTNMOS_CHECK_SIZE(session, DtNmosSession, sizeof(DtNmosSession));
@@ -462,13 +462,13 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flo
             return flow_sized;
         }
     }
-    dtnmos_buffer text;
+    NmosBuffer text;
     memset(&text, 0, sizeof(text));
-    DtNmosResult result = dtnmos_sdp_write(session, flows, count, &text);
+    DtNmosResult result = NmosSdp_Write(session, flows, count, &text);
     if (result == DTNMOS_OK)
     {
-        result = dtnmos_copy_text(buffer, size, text.data, text.length);
+        result = NmosText_CopyText(buffer, size, text.data, text.length);
     }
-    dtnmos_buffer_free(&text);
+    NmosBuffer_Free(&text);
     return result;
 }

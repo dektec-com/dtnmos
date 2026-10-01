@@ -23,17 +23,17 @@ int DtNmos_HasCurl(void)
 }
 
 // What the callbacks of libcurl fill.
-typedef struct transfer
+typedef struct NmosTransfer
 {
     DtNmosHttpResponse* response;
     int failed;
-} transfer;
+} NmosTransfer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receive_body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static size_t receive_body(char* data, size_t size, size_t count, void* user)
 {
-    transfer* t = user;
+    NmosTransfer* t = user;
     const size_t length = size * count;
     if (DtNmosHttpResponse_AppendBody(t->response, data, length) != DTNMOS_OK)
     {
@@ -47,21 +47,21 @@ static size_t receive_body(char* data, size_t size, size_t count, void* user)
 //
 static size_t receive_header(char* data, size_t size, size_t count, void* user)
 {
-    transfer* t = user;
+    NmosTransfer* t = user;
     const size_t length = size * count;
-    dtnmos_span line = {data, length};
+    NmosSpan line = {data, length};
     while (line.length > 0 &&
            (line.data[line.length - 1] == '\n' || line.data[line.length - 1] == '\r'))
     {
         --line.length;
     }
     // A new status line starts the headers of the next response, after a redirect.
-    if (dtnmos_span_starts_with(line, "HTTP/"))
+    if (NmosSpan_StartsWith(line, "HTTP/"))
     {
         return length;
     }
-    dtnmos_span name;
-    const dtnmos_span value = dtnmos_span_split(line, ':', &name);
+    NmosSpan name;
+    const NmosSpan value = NmosSpan_Split(line, ':', &name);
     if (value.data == NULL || name.length == 0 || name.length > 255 ||
         value.length > 8191)
     {
@@ -69,7 +69,7 @@ static size_t receive_header(char* data, size_t size, size_t count, void* user)
     }
     char name_text[256];
     char value_text[8192];
-    const dtnmos_span trimmed = dtnmos_span_trim(value);
+    const NmosSpan trimmed = NmosSpan_Trim(value);
     memcpy(name_text, name.data, name.length);
     name_text[name.length] = '\0';
     memcpy(value_text, trimmed.data, trimmed.length);
@@ -91,8 +91,9 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
     if (request == NULL || request->Url == NULL || request->Method == NULL ||
         response == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmos_CurlHttp() needs a request with a method and a URL.");
+        return NmosError_Fail(
+            DTNMOS_E_INVALID_ARGUMENT,
+            "DtNmos_CurlHttp() needs a request with a method and a URL.");
     }
     const DtNmosResult sized =
         DTNMOS_CHECK_SIZE(request, DtNmosHttpRequest, sizeof(DtNmosHttpRequest));
@@ -103,9 +104,9 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
     CURL* curl = curl_easy_init();
     if (curl == NULL)
     {
-        return dtnmos_fail(DTNMOS_E_INTERNAL, "libcurl could not create a handle.");
+        return NmosError_Fail(DTNMOS_E_INTERNAL, "libcurl could not create a handle.");
     }
-    transfer t = {response, 0};
+    NmosTransfer t = {response, 0};
     struct curl_slist* headers = NULL;
     char content_type[256];
     if (request->ContentType != NULL)
@@ -146,19 +147,19 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
     curl_easy_cleanup(curl);
     if (t.failed)
     {
-        return dtnmos_fail_memory();
+        return NmosError_FailMemory();
     }
     if (code == CURLE_OPERATION_TIMEDOUT)
     {
-        return dtnmos_fail(
+        return NmosError_Fail(
             DTNMOS_E_TIMEOUT, "%s %s got no answer within %u ms.", request->Method,
             request->Url,
             (unsigned)(request->TimeoutMs == 0 ? 5000 : request->TimeoutMs));
     }
     if (code != CURLE_OK)
     {
-        return dtnmos_fail(DTNMOS_E_HTTP, "%s %s failed: %s.", request->Method,
-                           request->Url, curl_easy_strerror(code));
+        return NmosError_Fail(DTNMOS_E_HTTP, "%s %s failed: %s.", request->Method,
+                              request->Url, curl_easy_strerror(code));
     }
     DtNmosHttpResponse_SetStatus(response, (int)status);
     // An answer without body still has one, so that its text ends in a null character.
@@ -183,7 +184,7 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
     (void)user;
     (void)request;
     (void)response;
-    return dtnmos_fail(
+    return NmosError_Fail(
         DTNMOS_E_STATE,
         "dtnmos was built without libcurl, so it has no HTTP transport of its "
         "own; pass one.");
