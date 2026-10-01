@@ -143,13 +143,13 @@ static void PollLoop(void* Argument)
             Node->Log(Node->LogUser, DTNMOS_LOG_WARNING, DtNmos_GetLastError());
         }
         // Sleep in steps, so that stopping does not wait for a heartbeat, nor an
-        // activation that was scheduled meanwhile.
-        for (uint32_t Slept = 0;
-             Slept < NextMs && Slept < 5000 && !Stopping(s) && !Woken(Node);)
+        // activation that was scheduled meanwhile; until a time of the monotonic clock,
+        // so that the steps do not add up their overshoot.
+        const uint64_t Until = NmosOs_MonotonicMs() + (NextMs < 5000 ? NextMs : 5000);
+        for (uint64_t Now = NmosOs_MonotonicMs();
+             Now < Until && !Stopping(s) && !Woken(Node); Now = NmosOs_MonotonicMs())
         {
-            const uint32_t Step = NextMs - Slept < 10 ? NextMs - Slept : 10;
-            NmosOs_SleepMs(Step);
-            Slept += Step;
+            NmosOs_SleepMs(Until - Now < 10 ? (uint32_t)(Until - Now) : 10);
         }
     }
 }
