@@ -12,7 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "dtnmos/dtnmos.h"
+#include "dtnmos.h"
 
 #if defined(__GNUC__) || defined(__clang__)
     #define DTNMOS_PRINTF(format_index, first_argument)                                  \

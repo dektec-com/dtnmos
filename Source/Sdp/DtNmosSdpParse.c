@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "NmosInternal.h"
-#include "dtnmos/sdp.h"
+#include "dtnmos_sdp.h"
 
 struct dtnmos_sdp
 {

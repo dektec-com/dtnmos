@@ -28,9 +28,9 @@ ctest --test-dir build
 cmake --install build --prefix /usr/local
 ```
 
-It installs a static library by default, or a shared one with `-DBUILD_SHARED_LIBS=ON`, its
-headers under `dtnmos/`, a CMake package (`find_package(dtnmos)`, target `dtnmos::dtnmos`)
-and a pkg-config file (`pkg-config --cflags --libs dtnmos`).
+It installs a static library by default, or a shared one with `-DBUILD_SHARED_LIBS=ON`,
+its headers `dtnmos.h` and `dtnmos_*.h`, a CMake package (`find_package(dtnmos)`, target
+`dtnmos::dtnmos`) and a pkg-config file (`pkg-config --cflags --libs dtnmos`).
 
 ## Using it
 
@@ -43,7 +43,7 @@ with its `_clear()`. A struct set to zero is valid and empty, and must not be co
 Reading an SDP gives a handle that owns its flows:
 
 ```c
-#include <dtnmos/sdp.h>
+#include <dtnmos_sdp.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -116,7 +116,7 @@ A query lists the senders of a registry, finds one by its ID or label, and fetch
 HTTP goes through the function in its config, which fills a response:
 
 ```c
-#include <dtnmos/query.h>
+#include <dtnmos_query.h>
 
 dtnmos_query_config config = {0};
 config.size = sizeof(config);
@@ -149,13 +149,12 @@ of a registry the same way, each with the sender it is subscribed to.
 ## Connecting a receiver
 
 A controller connects a receiver of the registry to a sender, each by its ID or label, and
-disconnects it (`dtnmos/controller.h`). It finds the Connection API of the receiver through
+disconnects it (`dtnmos_query.h`). It finds the Connection API of the receiver through
 the control `urn:x-nmos:control:sr-ctrl/v1.1` of its device, and activates at once its
 staged parameters with the sender and the SDP of the sender as transport file. The
 requests to the node go through the HTTP function of the query:
 
 ```c
-#include <dtnmos/controller.h>
 
 dtnmos_connection connection = {0};
 if (dtnmos_connect(query, "monitor", "camera 1", &connection, &error) == DTNMOS_OK)
@@ -180,14 +179,13 @@ dtnmos_move_sender(query, "camera 1", "239.10.1.2", 5004, NULL, &error);
 ## Following a registry
 
 A subscription of the Query API tells what changes in the registry as it happens
-(`dtnmos/subscription.h`): first every resource of its path as it is, then each one that
+(`dtnmos_query.h`): first every resource of its path as it is, then each one that
 is added, modified or removed, with its JSON before and after. The messages come over a
 WebSocket, which, as HTTP, goes through functions the caller passes in; with
 `-DDTNMOS_WITH_CURL=ON` and a libcurl with WebSockets, `dtnmos_curl_websocket()` is one.
 dtnmos starts no thread: the caller polls.
 
 ```c
-#include <dtnmos/subscription.h>
 
 static void on_change(void* user, const dtnmos_change* change)
 {
@@ -234,7 +232,6 @@ server come first. `searches`, `dns_server` and `dns_domain` of the config choos
 searches and give a server and domain of their own. IPv4 only, and DNS over UDP only.
 
 ```c
-#include <dtnmos/discovery.h>
 
 dtnmos_discovery_config config = {0};
 config.size = sizeof(config);
@@ -267,7 +264,7 @@ HTTP server of its own calls both; with the server of the library, `dtnmos_node_
 does both on threads of its own:
 
 ```c
-#include <dtnmos/node.h>
+#include <dtnmos_node.h>
 
 dtnmos_node_config config = {0};
 config.size = sizeof(config);

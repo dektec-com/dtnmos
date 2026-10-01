@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "check.h"
-#include "dtnmos/sdp.h"
+#include "dtnmos_sdp.h"
 #include "tests.h"
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- string_keeps_short_and_long_texts -.-.-.-.-.-.-.-.-.-.-.-.-.

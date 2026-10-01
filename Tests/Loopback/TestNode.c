@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/node.h"
+#include "dtnmos_node.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/discovery.h"
+#include "dtnmos_query.h"
 
 #include <stdio.h>
 #include <stdlib.h>

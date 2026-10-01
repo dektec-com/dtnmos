@@ -12,7 +12,7 @@
 
 #include "NmosInternal.h"
 #include "NmosOs.h"
-#include "dtnmos/node.h"
+#include "dtnmos_node.h"
 
 typedef struct node_device
 {

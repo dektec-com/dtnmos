@@ -12,7 +12,7 @@
 #include <stdint.h>
 
 #include "NmosJson.h"
-#include "dtnmos/query.h"
+#include "dtnmos_query.h"
 
 // Returns the base URL of the Query API of query, ending in a slash.
 const char* dtnmos_query_base(const dtnmos_query* query);

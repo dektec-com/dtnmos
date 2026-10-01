@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/http.h"
+#include "dtnmos_http.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/query.h"
+#include "dtnmos_query.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +15,6 @@
 #include "NmosInternal.h"
 #include "NmosJson.h"
 #include "NmosQuery.h"
-#include "dtnmos/subscription.h"
 
 // The most pages a list follows, which bounds a registry whose paging never ends.
 #define DTNMOS_MAX_PAGES 1000

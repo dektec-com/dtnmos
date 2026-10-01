@@ -11,7 +11,7 @@
 
 #include "NmosJson.h"
 #include "check.h"
-#include "dtnmos/node.h"
+#include "dtnmos_node.h"
 #include "tests.h"
 
 #define NODE_ID "bbbbbbbb-0000-4000-8000-000000000001"

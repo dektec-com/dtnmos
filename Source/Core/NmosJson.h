@@ -11,7 +11,7 @@
 #include <stddef.h>
 
 #include "NmosInternal.h"
-#include "dtnmos/dtnmos.h"
+#include "dtnmos.h"
 
 typedef enum dtnmos_json_type
 {

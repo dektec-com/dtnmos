@@ -1,6 +1,6 @@
-// #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# node.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#* dtnmos_node.h *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos - dtnmos
+// dtnmos - An NMOS node: registration (IS-04 v1.3) and connection management (IS-05 v1.1)
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -8,9 +8,9 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/dtnmos.h"
-#include "dtnmos/http.h"
-#include "dtnmos/sdp.h"
+#include "dtnmos.h"
+#include "dtnmos_http.h"
+#include "dtnmos_sdp.h"
 
 #ifdef __cplusplus
 extern "C"

@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* dtnmos.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - dtnmos
+// dtnmos - Results, errors, strings, ids and logging, which every header uses
 //
 // SPDX-License-Identifier: BSD-3-Clause
 

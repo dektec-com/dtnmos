@@ -7,7 +7,7 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include "NmosInternal.h"
-#include "dtnmos/http.h"
+#include "dtnmos_http.h"
 
 #ifdef DTNMOS_WITH_CURL
 

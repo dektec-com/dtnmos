@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/sdp.h"
+#include "dtnmos_sdp.h"
 
 #include <stdlib.h>
 #include <string.h>
