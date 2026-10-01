@@ -1076,6 +1076,9 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
     return Due;
 }
 
+// The margin before a scheduled activation within which the poll waits for it itself.
+#define NMOS_DUE_SPIN_NS 3000000u
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
@@ -1089,10 +1092,23 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
         NmosNodeSender* s = NULL;
         NmosNodeReceiver* r = NULL;
         NmosConnection* c = FindDue(Node, Now, &s, &r, &Next);
+        if (c == NULL && Next != 0 && Next - Now <= NMOS_DUE_SPIN_NS)
+        {
+            // Due within the margin: waited for here, on the clock of TAI, so that it
+            // takes place at its time rather than at the next millisecond of a sleep.
+            NmosNode_Unlock(Node);
+            while (NmosOs_TaiNowNs() < Next)
+            {
+                NmosOs_SleepMs(0);
+            }
+            continue;
+        }
         if (c == NULL)
         {
             NmosNode_Unlock(Node);
-            const uint64_t Ms = Next != 0 ? (Next - Now + 999999u) / 1000000u : 0;
+            // The poll comes back the margin before the next is due.
+            const uint64_t Ms =
+                Next != 0 ? (Next - Now - NMOS_DUE_SPIN_NS) / 1000000u : 0;
             if (Next != 0 && Ms < *WaitMs)
             {
                 *WaitMs = (uint32_t)Ms;
