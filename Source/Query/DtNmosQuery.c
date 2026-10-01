@@ -22,8 +22,11 @@
 // The size of a page the query asks for.
 #define DTNMOS_PAGE_LIMIT 100
 
+// A query is allocated empty and closed; DtNmosQuery_Open() fills it in, and
+// DtNmosQuery_Close() empties it again.
 struct DtNmosQuery
 {
+    int open;
     char* base; // registry URL followed by /x-nmos/query/v1.3/
     DtNmosHttpFunc http;
     void* http_user;
@@ -88,9 +91,9 @@ static char* copy_text(const char* text, size_t length)
     return copy;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** query)
+DtNmosResult DtNmosQuery_Open(DtNmosQuery* query, const DtNmosQueryConfig* config)
 {
     if (query == NULL || config == NULL || config->RegistryUrl == NULL ||
         config->RegistryUrl[0] == '\0' || config->Http == NULL)
@@ -98,18 +101,17 @@ DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** q
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A query needs the URL of a registry and an HTTP function.");
     }
-    *query = NULL;
+    if (query->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE, "The query is open already; close it first.");
+    }
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "The Query API %s is not supported; dtnmos speaks v1.3.",
                            config->ApiVersion);
     }
-    DtNmosQuery* result = calloc(1, sizeof(*result));
-    if (result == NULL)
-    {
-        return dtnmos_fail_memory();
-    }
+    DtNmosQuery* result = query;
     size_t length = strlen(config->RegistryUrl);
     while (length > 0 && config->RegistryUrl[length - 1] == '/')
     {
@@ -122,7 +124,6 @@ DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** q
     if (base.failed)
     {
         dtnmos_buffer_free(&base);
-        free(result);
         return dtnmos_fail_memory();
     }
     result->base = base.data;
@@ -131,20 +132,70 @@ DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config, DtNmosQuery** q
     result->timeout_ms = config->TimeoutMs == 0 ? 5000 : config->TimeoutMs;
     result->log = config->Log;
     result->log_user = config->LogUser;
-    *query = result;
+    result->open = 1;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Alloc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void DtNmosQuery_Destroy(DtNmosQuery* query)
+DtNmosQuery* DtNmosQuery_Alloc(void)
+{
+    return calloc(1, sizeof(DtNmosQuery));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult DtNmosQuery_Close(DtNmosQuery* query)
+{
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_Close");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    free(query->base);
+    memset(query, 0, sizeof(*query));
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void DtNmosQuery_Free(DtNmosQuery* query)
 {
     if (query == NULL)
     {
         return;
     }
-    free(query->base);
+    if (query->open)
+    {
+        DtNmosQuery_Close(query);
+    }
     free(query);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void DtNmosQuery_Freep(DtNmosQuery** query)
+{
+    if (query != NULL)
+    {
+        DtNmosQuery_Free(*query);
+        *query = NULL;
+    }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_query_check_open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult dtnmos_query_check_open(const DtNmosQuery* query, const char* function)
+{
+    if (query == NULL)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "%s() needs a query.", function);
+    }
+    if (!query->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE, "%s() needs an open query.", function);
+    }
+    return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- log_message -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -232,7 +283,7 @@ static DtNmosResult get_json(DtNmosQuery* query, const char* url, dtnmos_json** 
                              char** next)
 {
     *json = NULL;
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     if (response == NULL)
     {
         return dtnmos_fail_memory();
@@ -518,6 +569,11 @@ static DtNmosSenderList* new_sender_list(size_t capacity)
 //
 DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list)
 {
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_Senders");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || list == NULL)
     {
         return dtnmos_fail(
@@ -769,6 +825,11 @@ DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* query, const char* id_or_label,
     {
         *found = NULL;
     }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_FindSender");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || id_or_label == NULL || id_or_label[0] == '\0' || found == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
@@ -873,6 +934,11 @@ static DtNmosResult read_receiver(const dtnmos_json* resource, dtnmos_store* sto
 //
 DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query, DtNmosReceiverList** list)
 {
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_Receivers");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || list == NULL)
     {
         return dtnmos_fail(
@@ -934,6 +1000,11 @@ DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* query, const char* id_or_labe
     {
         *found = NULL;
     }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_FindReceiver");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || id_or_label == NULL || id_or_label[0] == '\0' || found == NULL)
     {
         return dtnmos_fail(
@@ -971,7 +1042,7 @@ DtNmosResult dtnmos_query_manifest(DtNmosQuery* query, const DtNmosSenderInfo* s
                            "Sender %s ('%s') has no manifest_href, so it gives no SDP.",
                            sender->Id.Text, sender->Label == NULL ? "" : sender->Label);
     }
-    DtNmosHttpResponse* fetched = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* fetched = DtNmosHttpResponse_Alloc();
     if (fetched == NULL)
     {
         return dtnmos_fail_memory();
@@ -992,6 +1063,12 @@ DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
                                         const DtNmosSenderInfo* sender, char* buffer,
                                         size_t* size)
 {
+    const DtNmosResult open =
+        dtnmos_query_check_open(query, "DtNmosQuery_SenderManifest");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || sender == NULL || size == NULL)
     {
         return dtnmos_fail(
@@ -1015,6 +1092,11 @@ DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
 DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* query, const DtNmosSenderInfo* sender,
                                    DtNmosSdp** sdp)
 {
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_SenderSdp");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (sdp == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,

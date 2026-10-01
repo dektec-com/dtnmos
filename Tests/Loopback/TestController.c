@@ -162,8 +162,11 @@ static DtNmosQuery* make_network(fake_network* network)
     config.Http = fake_answer;
     config.HttpUser = network;
     config.TimeoutMs = 2000;
-    DtNmosQuery* query = NULL;
-    DtNmosQuery_Create(&config, &query);
+    DtNmosQuery* query = DtNmosQuery_Alloc();
+    if (query == NULL || DtNmosQuery_Open(query, &config) != DTNMOS_OK)
+    {
+        DtNmosQuery_Freep(&query);
+    }
     return query;
 }
 
@@ -222,7 +225,7 @@ void query_lists_and_finds_receivers(void)
     CHECK(strstr(DtNmos_GetLastError(), "no receiver labelled 'nobody'") != NULL);
     CHECK(missing == NULL);
     DtNmosReceiverList_Free(list);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_connects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -273,7 +276,7 @@ void controller_connects_a_receiver(void)
     dtnmos_json_free(body);
     free(network.body);
     DtNmosConnection_Free(connection);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_disconnects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -301,7 +304,7 @@ void controller_disconnects_a_receiver(void)
     dtnmos_json_free(body);
     free(network.body);
     DtNmosReceiverList_Free(disconnected);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -351,7 +354,7 @@ void controller_names_what_went_wrong(void)
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
     CHECK(connection == NULL);
     free(network.body);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- controller_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -408,5 +411,5 @@ void controller_moves_a_sender(void)
           NULL);
     CHECK(strstr(DtNmos_GetLastError(), "with 400: no such address") != NULL);
     free(network.body);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }

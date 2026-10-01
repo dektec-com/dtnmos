@@ -189,10 +189,12 @@ static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorde
     config.Http = fake_http;
     config.HttpUser = fake;
     config.TimeoutMs = 2000;
-    *query = NULL;
-    *subscription = NULL;
-    if (DtNmosQuery_Create(&config, query) != DTNMOS_OK)
+    *query = DtNmosQuery_Alloc();
+    *subscription = DtNmosSubscription_Alloc();
+    if (*query == NULL || *subscription == NULL ||
+        DtNmosQuery_Open(*query, &config) != DTNMOS_OK)
     {
+        DtNmosSubscription_Freep(subscription);
         return DTNMOS_E_INTERNAL;
     }
     DtNmosSubscriptionConfig wanted;
@@ -202,7 +204,12 @@ static DtNmosResult subscribe(fake_subscription* fake, recorded_changes* recorde
     wanted.WebSocket = &websocket;
     wanted.OnChange = record_change;
     wanted.OnChangeUser = recorded;
-    return DtNmosSubscription_Create(*query, &wanted, subscription);
+    const DtNmosResult result = DtNmosSubscription_Open(*subscription, *query, &wanted);
+    if (result != DTNMOS_OK)
+    {
+        DtNmosSubscription_Freep(subscription);
+    }
+    return result;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- subscription_reports_what_changes -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -265,9 +272,9 @@ void subscription_reports_what_changes(void)
     {
         CHECK_STR(recorded.lines[i], expected[i]);
     }
-    DtNmosSubscription_Destroy(subscription);
+    DtNmosSubscription_Free(subscription);
     CHECK_EQ(fake.closed, 1);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- subscription_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -290,18 +297,18 @@ void subscription_names_what_went_wrong(void)
     CHECK(strstr(DtNmos_GetLastError(),
                  "answered the subscription to /senders with 400") != NULL);
     CHECK(subscription == NULL);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
     fake.status = 200;
     fake.answer = "{\"id\": \"1\"}";
     CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_PARSE);
     CHECK(strstr(DtNmos_GetLastError(), "without the ws_href") != NULL);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
     // A WebSocket that cannot be opened.
     fake.answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
     fake.connect_fails = 1;
     CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_NETWORK);
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 
     // Messages that are no grain fail the poll and not the subscription, and an item
     // with neither pre nor post is no change.
@@ -314,16 +321,24 @@ void subscription_names_what_went_wrong(void)
     CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_PARSE);
     CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
     CHECK_EQ(recorded.count, 0);
-    DtNmosSubscription_Destroy(subscription);
-    DtNmosQuery_Destroy(query);
+    DtNmosSubscription_Free(subscription);
+    DtNmosQuery_Free(query);
 
     // A subscription needs a path and a function.
     DtNmosSubscriptionConfig config;
     memset(&config, 0, sizeof(config));
     config.Size = sizeof(config);
     config.ResourcePath = "senders";
-    CHECK(DtNmosSubscription_Create(NULL, &config, &subscription) ==
+    subscription = DtNmosSubscription_Alloc();
+    REQUIRE(subscription != NULL);
+    CHECK(DtNmosSubscription_Open(subscription, NULL, &config) ==
           DTNMOS_E_INVALID_ARGUMENT);
+    // One that is not open neither polls nor closes.
+    CHECK(DtNmosSubscription_Poll(subscription, 0) == DTNMOS_E_STATE);
+    CHECK(DtNmosSubscription_Close(subscription) == DTNMOS_E_STATE);
+    CHECK_STR(DtNmosSubscription_Url(subscription), "");
+    DtNmosSubscription_Freep(&subscription);
+    CHECK(subscription == NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- json_writes_what_it_reads_back -.-.-.-.-.-.-.-.-.-.-.-.-.-.-

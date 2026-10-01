@@ -131,8 +131,8 @@ DtNmosQueryConfig config = {0};
 config.Size = sizeof(config);
 config.RegistryUrl = "http://registry.local";
 config.Http = DtNmos_CurlHttp;  // or a function on the HTTP stack of the program
-DtNmosQuery* query = NULL;
-if (DtNmosQuery_Create(&config, &query) == DTNMOS_OK)
+DtNmosQuery* query = DtNmosQuery_Alloc();
+if (DtNmosQuery_Open(query, &config) == DTNMOS_OK)
 {
   DtNmosSenderList* found = NULL;
   DtNmosSdp* sdp = NULL;
@@ -143,8 +143,8 @@ if (DtNmosQuery_Create(&config, &query) == DTNMOS_OK)
     DtNmosSdp_Free(sdp);
   }
   DtNmosSenderList_Free(found);
-  DtNmosQuery_Destroy(query);
 }
+DtNmosQuery_Freep(&query);  // closes it when it is open
 ```
 
 An HTTP function of its own receives a `DtNmosHttpRequest` and fills the response with
@@ -207,17 +207,18 @@ DtNmosSubscriptionConfig config = {0};
 config.Size = sizeof(config);
 config.ResourcePath = "/senders";
 config.OnChange = on_change;  // websocket left null: DtNmos_CurlWebSocket()
-DtNmosSubscription* subscription = NULL;
-if (DtNmosSubscription_Create(query, &config, &subscription) == DTNMOS_OK)
+DtNmosSubscription* subscription = DtNmosSubscription_Alloc();
+if (DtNmosSubscription_Open(subscription, query, &config) == DTNMOS_OK)
 {
   DtNmosResult result = DTNMOS_OK;
   while (result == DTNMOS_OK || result == DTNMOS_E_TIMEOUT)
   {
     result = DtNmosSubscription_Poll(subscription, 1000);
   }
-  // DTNMOS_E_NETWORK: the WebSocket closed; a new subscription starts again.
-  DtNmosSubscription_Destroy(subscription);
+  // DTNMOS_E_NETWORK: the WebSocket closed; opened again, it starts again.
+  DtNmosSubscription_Close(subscription);
 }
+DtNmosSubscription_Freep(&subscription);
 ```
 
 A message the subscription cannot read fails its poll with `DTNMOS_E_PARSE`, after which
@@ -281,8 +282,8 @@ DtNmosId_FromName(&my_namespace, "my node", &config.Id);
 config.Label = "my node";
 config.RegistrationUrl = "http://registry.local";
 config.Http = DtNmos_CurlHttp;
-DtNmosNode* node = NULL;
-if (DtNmosNode_Create(&config, &node) == DTNMOS_OK)
+DtNmosNode* node = DtNmosNode_Alloc();
+if (DtNmosNode_Open(node, &config) == DTNMOS_OK)
 {
   DtNmosDeviceConfig device = {sizeof(device)};
   DtNmosId_FromName(&config.Id, "card 1", &device.Id);
@@ -291,9 +292,16 @@ if (DtNmosNode_Create(&config, &node) == DTNMOS_OK)
   // DtNmosNode_AddSender() with the flow it sends, DtNmosNode_AddReceiver() ...
   DtNmosNode_Serve(node);
   // ... until the program ends, which deletes what the node registered:
-  DtNmosNode_Destroy(node);
+  DtNmosNode_Close(node);
 }
+DtNmosNode_Freep(&node);
 ```
+
+Every object of the library is allocated, opened, closed and freed, as CDTAPI's are. A
+node, a query or a subscription that is closed can be opened again with another config,
+keeping the handle a program has handed on; a function that needs it open fails with
+`DTNMOS_E_STATE` on one that is not. `_Free()` closes an open object first, and
+`_Freep()` also sets the pointer to null.
 
 A node can move to another registry when its own fails: `RegistryFailed` of the config
 is called on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when

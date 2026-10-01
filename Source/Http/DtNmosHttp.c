@@ -46,9 +46,9 @@ static char* copy_text(const char* text)
     return copy;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Alloc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosHttpResponse* DtNmosHttpResponse_Create(void)
+DtNmosHttpResponse* DtNmosHttpResponse_Alloc(void)
 {
     return calloc(1, sizeof(DtNmosHttpResponse));
 }
@@ -70,6 +70,17 @@ void DtNmosHttpResponse_Free(DtNmosHttpResponse* response)
     }
     free(response->headers);
     free(response);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void DtNmosHttpResponse_Freep(DtNmosHttpResponse** response)
+{
+    if (response != NULL)
+    {
+        DtNmosHttpResponse_Free(*response);
+        *response = NULL;
+    }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_SetStatus -.-.-.-.-.-.-.-.-.-.-.-.-.-.-

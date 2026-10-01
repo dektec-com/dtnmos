@@ -119,13 +119,27 @@ typedef DtNmosResult (*DtNmosReceiverActivateFunc)(
 typedef DtNmosResult (*DtNmosSenderActivateFunc)(
     void* user, const DtNmosId* sender, const DtNmosSenderActivation* activation);
 
-// Creates a node of config, whose strings it copies. Fails with DTNMOS_E_INVALID_ARGUMENT
-// without an ID, a registration URL or an HTTP function.
-DTNMOS_API DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config,
-                                          DtNmosNode** node);
+// Allocates a node, closed. Returns null when the memory ran out.
+DTNMOS_API DtNmosNode* DtNmosNode_Alloc(void);
 
-// Stops serving, deletes what the node registered from the registry, and frees it.
-DTNMOS_API void DtNmosNode_Destroy(DtNmosNode* node);
+// Opens node with config, whose strings it copies; it registers nothing until it is
+// polled. Fails with DTNMOS_E_INVALID_ARGUMENT without an ID, a registration URL or an
+// HTTP function, and with DTNMOS_E_STATE when the node is open. A node closed can be
+// opened again, with another config, keeping its handle.
+DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* node, const DtNmosNodeConfig* config);
+
+// Stops serving, deletes what the node registered from the registry, and forgets it all,
+// leaving the node closed. Fails with DTNMOS_E_STATE when the node is not open.
+DTNMOS_API DtNmosResult DtNmosNode_Close(DtNmosNode* node);
+
+// Closes the node when it is open, and frees it. Null is allowed.
+DTNMOS_API void DtNmosNode_Free(DtNmosNode* node);
+
+// Frees *node as DtNmosNode_Free() does and sets *node to null. Null is allowed.
+DTNMOS_API void DtNmosNode_Freep(DtNmosNode** node);
+
+// The functions below need an open node, and fail with DTNMOS_E_STATE on another; those
+// that return no result return 0.
 
 // Adds a device, sender or receiver; the next poll registers it. Fails with
 // DTNMOS_E_INVALID_ARGUMENT for an ID the node has, an unknown device, or a sender of
@@ -168,7 +182,7 @@ DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* node,
                                           DtNmosHttpResponse* response);
 
 // Serves the Node API and the Connection API on api_host and api_port on a civetweb
-// server, and polls the node on a thread of its own, until DtNmosNode_Destroy(). Fails
+// server, and polls the node on a thread of its own, until DtNmosNode_Close(). Fails
 // with DTNMOS_E_STATE when the library is built without DTNMOS_WITH_SERVER, and with
 // DTNMOS_E_HTTP when the server cannot listen.
 DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* node);

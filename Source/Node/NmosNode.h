@@ -71,8 +71,11 @@ typedef struct node_removal
     DtNmosId id;
 } node_removal;
 
+// A node is allocated empty and closed; DtNmosNode_Open() fills it in, and
+// DtNmosNode_Close() empties it again.
 struct DtNmosNode
 {
+    int open;
     dtnmos_mutex* mutex;
     DtNmosId id;
     char* label;
@@ -113,7 +116,10 @@ struct DtNmosNode
 
 void dtnmos_node_lock(DtNmosNode* node);
 void dtnmos_node_unlock(DtNmosNode* node);
-void dtnmos_node_free(DtNmosNode* node);
+// Frees what node holds and leaves it empty and closed.
+void dtnmos_node_release(DtNmosNode* node);
+// Fails with DTNMOS_E_STATE, naming function, when node is not open.
+DtNmosResult dtnmos_node_check_open(const DtNmosNode* node, const char* function);
 
 node_device* dtnmos_node_find_device(DtNmosNode* node, const DtNmosId* id);
 node_sender* dtnmos_node_find_sender(DtNmosNode* node, const DtNmosId* id);

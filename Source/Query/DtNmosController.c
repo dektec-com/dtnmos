@@ -202,7 +202,7 @@ static DtNmosResult patch(DtNmosQuery* query, const staged_resource* resource,
         dtnmos_buffer_free(&url);
         return result;
     }
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     if (response == NULL)
     {
         dtnmos_buffer_free(&url);
@@ -243,6 +243,11 @@ DtNmosResult DtNmosQuery_Connect(DtNmosQuery* query, const char* receiver,
     if (connection != NULL)
     {
         *connection = NULL;
+    }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_Connect");
+    if (open != DTNMOS_OK)
+    {
+        return open;
     }
     if (query == NULL || receiver == NULL || receiver[0] == '\0' || sender == NULL ||
         sender[0] == '\0')
@@ -333,6 +338,11 @@ DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* query, const char* receiver,
     {
         *disconnected = NULL;
     }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_Disconnect");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     if (query == NULL || receiver == NULL || receiver[0] == '\0')
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
@@ -370,6 +380,11 @@ DtNmosResult DtNmosQuery_MoveSender(DtNmosQuery* query, const char* sender,
     if (moved != NULL)
     {
         *moved = NULL;
+    }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosQuery_MoveSender");
+    if (open != DTNMOS_OK)
+    {
+        return open;
     }
     if (query == NULL || sender == NULL || sender[0] == '\0' || destination_ip == NULL ||
         destination_ip[0] == '\0' || destination_port == 0)

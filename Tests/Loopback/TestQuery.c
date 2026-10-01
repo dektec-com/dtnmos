@@ -85,7 +85,7 @@ void json_writes_escaped_strings(void)
 //
 void http_response_owns_what_it_holds(void)
 {
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     REQUIRE(response != NULL);
     CHECK_STR(DtNmosHttpResponse_Body(response, NULL), "");
     DtNmosHttpResponse_SetStatus(response, 200);
@@ -236,10 +236,11 @@ static DtNmosQuery* make_query(fake_registry* registry)
     config.Http = fake_http;
     config.HttpUser = registry;
     config.TimeoutMs = 2000;
-    DtNmosQuery* query = NULL;
-    if (DtNmosQuery_Create(&config, &query) != DTNMOS_OK)
+    DtNmosQuery* query = DtNmosQuery_Alloc();
+    if (query == NULL || DtNmosQuery_Open(query, &config) != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
+        DtNmosQuery_Freep(&query);
     }
     return query;
 }
@@ -283,7 +284,7 @@ void query_lists_the_senders_of_every_page(void)
     // Two pages of senders and one of flows.
     CHECK_EQ(registry.requests, 3);
     DtNmosSenderList_Free(list);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- query_finds_a_sender_and_its_sdp -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -323,7 +324,7 @@ void query_finds_a_sender_and_its_sdp(void)
         DtNmosSdp_Free(sdp);
         DtNmosSenderList_Free(found);
     }
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.- query_writes_a_manifest_into_the_callers_buffer -.-.-.-.-.-.-.-.-.-.
@@ -365,7 +366,7 @@ void query_writes_a_manifest_into_the_callers_buffer(void)
     CHECK_EQ(strlen(text), needed - 1);
     CHECK(strstr(text, "s=camera 1") != NULL);
     DtNmosSenderList_Free(found);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- query_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -419,7 +420,7 @@ void query_names_what_went_wrong(void)
     CHECK(DtNmosQuery_Senders(query, &list) == DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
     CHECK(list == NULL);
-    DtNmosQuery_Destroy(query);
+    DtNmosQuery_Free(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- query_refuses_an_incomplete_config -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -429,15 +430,23 @@ void query_refuses_an_incomplete_config(void)
     DtNmosQueryConfig config;
     memset(&config, 0, sizeof(config));
     config.Size = sizeof(config);
-    DtNmosQuery* query = NULL;
-    CHECK(DtNmosQuery_Create(&config, &query) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosQuery* query = DtNmosQuery_Alloc();
+    REQUIRE(query != NULL);
+    CHECK(DtNmosQuery_Open(query, &config) == DTNMOS_E_INVALID_ARGUMENT);
     config.RegistryUrl = "http://registry.test";
     config.Http = fake_http;
     config.ApiVersion = "v1.2";
-    CHECK(DtNmosQuery_Create(&config, &query) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmosQuery_Open(query, &config) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "v1.2") != NULL);
+    // A query that did not open is closed: it asks nothing.
+    DtNmosSenderList* list = NULL;
+    CHECK(DtNmosQuery_Senders(query, &list) == DTNMOS_E_STATE);
+    CHECK(strstr(DtNmos_GetLastError(), "needs an open query") != NULL);
+    CHECK(DtNmosQuery_Close(query) == DTNMOS_E_STATE);
+    DtNmosQuery_Freep(&query);
     CHECK(query == NULL);
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosQuery_Freep(&query);
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     DtNmosHttpRequest request = {sizeof(request), "GET", "http://x", NULL, NULL, 0, 0};
     if (!DtNmos_HasCurl())
     {

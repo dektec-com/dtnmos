@@ -43,10 +43,16 @@ typedef struct DtNmosHttpRequest
 // A response: its status, headers and body, which it owns.
 typedef struct DtNmosHttpResponse DtNmosHttpResponse;
 
-// Creates an empty response, with status 0, for a caller that answers requests of its
+// Allocates an empty response, with status 0, for a caller that answers requests of its
 // own with the library; returns null when out of memory.
-DTNMOS_API DtNmosHttpResponse* DtNmosHttpResponse_Create(void);
+DTNMOS_API DtNmosHttpResponse* DtNmosHttpResponse_Alloc(void);
+
+// Frees response. Null is allowed.
 DTNMOS_API void DtNmosHttpResponse_Free(DtNmosHttpResponse* response);
+
+// Frees *response as DtNmosHttpResponse_Free() does and sets *response to null. Null is
+// allowed.
+DTNMOS_API void DtNmosHttpResponse_Freep(DtNmosHttpResponse** response);
 
 DTNMOS_API void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* response, int status);
 

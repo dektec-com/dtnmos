@@ -14,6 +14,9 @@
 #include "NmosJson.h"
 #include "dtnmos_query.h"
 
+// Fails with DTNMOS_E_STATE, naming function, when query is not open.
+DtNmosResult dtnmos_query_check_open(const DtNmosQuery* query, const char* function);
+
 // Returns the base URL of the Query API of query, ending in a slash.
 const char* dtnmos_query_base(const DtNmosQuery* query);
 

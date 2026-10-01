@@ -98,8 +98,6 @@ static int host_of_url(const char* url, char* host, size_t size)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registration_base -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Returns the base of the Registration API of the registry at url, which the caller
@@ -124,7 +122,31 @@ static char* registration_base(const char* url)
     return base.data;
 }
 
-DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node)
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Alloc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+DtNmosNode* DtNmosNode_Alloc(void)
+{
+    return calloc(1, sizeof(DtNmosNode));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_check_open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+DtNmosResult dtnmos_node_check_open(const DtNmosNode* node, const char* function)
+{
+    if (node == NULL)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "%s() needs a node.", function);
+    }
+    if (!node->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE, "%s() needs an open node.", function);
+    }
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult DtNmosNode_Open(DtNmosNode* node, const DtNmosNodeConfig* config)
 {
     if (node == NULL || config == NULL || config->Id.Text[0] == '\0' ||
         config->RegistrationUrl == NULL || config->RegistrationUrl[0] == '\0' ||
@@ -134,18 +156,17 @@ DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node
             DTNMOS_E_INVALID_ARGUMENT,
             "A node needs an ID, the URL of a registry and an HTTP function.");
     }
-    *node = NULL;
+    if (node->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE, "The node is open already; close it first.");
+    }
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "IS-04 %s is not supported; dtnmos speaks v1.3.",
                            config->ApiVersion);
     }
-    DtNmosNode* result = calloc(1, sizeof(*result));
-    if (result == NULL)
-    {
-        return dtnmos_fail_memory();
-    }
+    DtNmosNode* result = node;
     result->mutex = dtnmos_mutex_create();
     result->id = config->Id;
     result->label = copy_text(config->Label);
@@ -190,11 +211,11 @@ DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config, DtNmosNode** node
         result->hostname == NULL || result->api_host == NULL ||
         result->registration == NULL)
     {
-        dtnmos_node_free(result);
+        dtnmos_node_release(result);
         return dtnmos_fail_memory();
     }
     dtnmos_version_now(&result->last_version, result->version, sizeof(result->version));
-    *node = result;
+    result->open = 1;
     return DTNMOS_OK;
 }
 
@@ -218,9 +239,9 @@ static void free_receiver(node_receiver* receiver)
     dtnmos_connection_clear_receiver(receiver);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_release -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_node_free(DtNmosNode* node)
+void dtnmos_node_release(DtNmosNode* node)
 {
     for (size_t i = 0; i < node->device_count; ++i)
     {
@@ -245,7 +266,7 @@ void dtnmos_node_free(DtNmosNode* node)
     free(node->api_host);
     free(node->registration);
     dtnmos_mutex_free(node->mutex);
-    free(node);
+    memset(node, 0, sizeof(*node));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- registry_request -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -259,7 +280,7 @@ static DtNmosResult registry_request(DtNmosNode* node, const char* method,
     dtnmos_buffer url;
     memset(&url, 0, sizeof(url));
     dtnmos_buffer_printf(&url, "%s%s", node->registration, path);
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     if (url.failed || response == NULL)
     {
         dtnmos_buffer_free(&url);
@@ -693,7 +714,12 @@ static void touch_device(DtNmosNode* node, const DtNmosId* id)
 //
 DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* device)
 {
-    if (node == NULL || device == NULL || device->Id.Text[0] == '\0')
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_AddDevice");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (device == NULL || device->Id.Text[0] == '\0')
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A device needs an ID.");
     }
@@ -749,8 +775,12 @@ static void derived_id(const DtNmosId* sender, const char* what, DtNmosId* id)
 DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* sender,
                                   DtNmosSenderActivateFunc activate, void* user)
 {
-    if (node == NULL || sender == NULL || sender->Id.Text[0] == '\0' ||
-        sender->Flow == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_AddSender");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (sender == NULL || sender->Id.Text[0] == '\0' || sender->Flow == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A sender needs an ID and a flow.");
     }
@@ -820,7 +850,12 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
                                     const DtNmosReceiverConfig* receiver,
                                     DtNmosReceiverActivateFunc activate, void* user)
 {
-    if (node == NULL || receiver == NULL || receiver->Id.Text[0] == '\0')
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_AddReceiver");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (receiver == NULL || receiver->Id.Text[0] == '\0')
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A receiver needs an ID.");
     }
@@ -929,7 +964,12 @@ static void remove_receiver_at(DtNmosNode* node, size_t index)
 //
 DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id)
 {
-    if (node == NULL || id == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_Remove");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (id == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Remove() needs an ID.");
     }
@@ -986,7 +1026,12 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id)
 DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
                                      const DtNmosFlow* flow)
 {
-    if (node == NULL || id == NULL || flow == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_UpdateSender");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (id == NULL || flow == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_UpdateSender() needs an ID and a flow.");
@@ -1192,7 +1237,7 @@ static void mark_registered(DtNmosNode* node, const pending* p)
 //
 int DtNmosNode_IsRegistered(const DtNmosNode* node)
 {
-    if (node == NULL)
+    if (node == NULL || !node->open)
     {
         return 0;
     }
@@ -1219,9 +1264,10 @@ int DtNmosNode_IsRegistered(const DtNmosNode* node)
 //
 DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms)
 {
-    if (node == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_Poll");
+    if (open != DTNMOS_OK)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Poll() needs a node.");
+        return open;
     }
     DtNmosResult result = DTNMOS_OK;
     // Deletions first, children before parents as they were scheduled.
@@ -1388,34 +1434,67 @@ static void unregister_all(DtNmosNode* node)
     DtNmosNode_Poll(node, NULL);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosNode_Destroy(DtNmosNode* node)
+DtNmosResult DtNmosNode_Close(DtNmosNode* node)
+{
+    const DtNmosResult result = dtnmos_node_check_open(node, "DtNmosNode_Close");
+    if (result != DTNMOS_OK)
+    {
+        return result;
+    }
+    dtnmos_server_stop(node);
+    unregister_all(node);
+    dtnmos_node_release(node);
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void DtNmosNode_Free(DtNmosNode* node)
 {
     if (node == NULL)
     {
         return;
     }
-    dtnmos_server_stop(node);
-    unregister_all(node);
-    dtnmos_node_free(node);
+    if (node->open)
+    {
+        DtNmosNode_Close(node);
+    }
+    free(node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void DtNmosNode_Freep(DtNmosNode** node)
+{
+    if (node != NULL)
+    {
+        DtNmosNode_Free(*node);
+        *node = NULL;
+    }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_ApiPort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 uint16_t DtNmosNode_ApiPort(const DtNmosNode* node)
 {
-    return node == NULL ? 0 : node->api_port;
+    return node == NULL || !node->open ? 0 : node->api_port;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_ApiUrl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, char* buffer, size_t* size)
 {
-    if (node == NULL || size == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_ApiUrl");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (size == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosNode_ApiUrl() needs a node and a size.");
+                           "DtNmosNode_ApiUrl() needs a size.");
     }
     dtnmos_buffer b;
     memset(&b, 0, sizeof(b));
@@ -1589,8 +1668,13 @@ static void answer_names(DtNmosHttpResponse* response, const char* names)
 DtNmosResult DtNmosNode_Handle(DtNmosNode* node, const DtNmosHttpRequest* request,
                                DtNmosHttpResponse* response)
 {
-    if (node == NULL || request == NULL || request->Url == NULL ||
-        request->Method == NULL || response == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_Handle");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
+    if (request == NULL || request->Url == NULL || request->Method == NULL ||
+        response == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_Handle() needs a node, a request and a response.");

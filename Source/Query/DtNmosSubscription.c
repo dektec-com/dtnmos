@@ -15,8 +15,11 @@
 #include "NmosJson.h"
 #include "NmosQuery.h"
 
+// A subscription is allocated empty and closed; DtNmosSubscription_Open() fills it in,
+// and DtNmosSubscription_Close() empties it again.
 struct DtNmosSubscription
 {
+    int open;
     DtNmosWebSocketTransport websocket;
     void* connection;
     char* url; // of the WebSocket
@@ -42,22 +45,35 @@ const char* DtNmosChangeKind_Name(DtNmosChangeKind kind)
     return "unknown";
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Alloc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
-                                       const DtNmosSubscriptionConfig* config,
-                                       DtNmosSubscription** subscription)
+DtNmosSubscription* DtNmosSubscription_Alloc(void)
 {
-    if (query == NULL || config == NULL || config->ResourcePath == NULL ||
-        config->ResourcePath[0] != '/' || config->OnChange == NULL ||
-        subscription == NULL)
+    return calloc(1, sizeof(DtNmosSubscription));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQuery* query,
+                                     const DtNmosSubscriptionConfig* config)
+{
+    if (subscription == NULL || config == NULL || config->ResourcePath == NULL ||
+        config->ResourcePath[0] != '/' || config->OnChange == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "A subscription needs a query, a resource path such as "
-                           "\"/senders\", a function for the changes and a place for "
-                           "itself.");
+                           "A subscription needs a resource path such as \"/senders\" "
+                           "and a function for the changes.");
     }
-    *subscription = NULL;
+    if (subscription->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE,
+                           "The subscription is open already; close it first.");
+    }
+    const DtNmosResult open = dtnmos_query_check_open(query, "DtNmosSubscription_Open");
+    if (open != DTNMOS_OK)
+    {
+        return open;
+    }
     const DtNmosWebSocketTransport* websocket =
         config->WebSocket != NULL ? config->WebSocket : DtNmos_CurlWebSocket();
     const char* base = dtnmos_query_base(query);
@@ -75,7 +91,7 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
     dtnmos_buffer url;
     memset(&url, 0, sizeof(url));
     dtnmos_buffer_printf(&url, "%ssubscriptions", base);
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     DtNmosResult result = DTNMOS_OK;
     if (body.failed || url.failed || response == NULL)
     {
@@ -111,9 +127,9 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
     if (result == DTNMOS_OK)
     {
         const char* href = dtnmos_json_member_text(answer, "ws_href");
-        made = calloc(1, sizeof(*made));
+        made = subscription;
         const size_t length = strlen(href);
-        if (made == NULL || (made->url = malloc(length + 1)) == NULL)
+        if ((made->url = malloc(length + 1)) == NULL)
         {
             result = dtnmos_fail_memory();
         }
@@ -136,11 +152,11 @@ DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
         if (made != NULL)
         {
             free(made->url);
-            free(made);
+            memset(made, 0, sizeof(*made));
         }
         return result;
     }
-    *subscription = made;
+    made->open = 1;
     return DTNMOS_OK;
 }
 
@@ -214,6 +230,11 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosSubscription_Poll() needs a subscription.");
     }
+    if (!subscription->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE,
+                           "DtNmosSubscription_Poll() needs an open subscription.");
+    }
     const char* message = NULL;
     size_t length = 0;
     DtNmosResult result = subscription->websocket.Receive(subscription->websocket.User,
@@ -250,18 +271,51 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
 //
 const char* DtNmosSubscription_Url(const DtNmosSubscription* subscription)
 {
-    return subscription == NULL ? "" : subscription->url;
+    return subscription == NULL || !subscription->open ? "" : subscription->url;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosSubscription_Destroy(DtNmosSubscription* subscription)
+DtNmosResult DtNmosSubscription_Close(DtNmosSubscription* subscription)
+{
+    if (subscription == NULL)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "DtNmosSubscription_Close() needs a subscription.");
+    }
+    if (!subscription->open)
+    {
+        return dtnmos_fail(DTNMOS_E_STATE,
+                           "DtNmosSubscription_Close() needs an open subscription.");
+    }
+    subscription->websocket.Close(subscription->websocket.User, subscription->connection);
+    free(subscription->url);
+    memset(subscription, 0, sizeof(*subscription));
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void DtNmosSubscription_Free(DtNmosSubscription* subscription)
 {
     if (subscription == NULL)
     {
         return;
     }
-    subscription->websocket.Close(subscription->websocket.User, subscription->connection);
-    free(subscription->url);
+    if (subscription->open)
+    {
+        DtNmosSubscription_Close(subscription);
+    }
     free(subscription);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void DtNmosSubscription_Freep(DtNmosSubscription** subscription)
+{
+    if (subscription != NULL)
+    {
+        DtNmosSubscription_Free(*subscription);
+        *subscription = NULL;
+    }
 }

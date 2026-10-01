@@ -1,4 +1,4 @@
-// #*#* NmosFlow.h *#*# (C) 2026 DekTec
+// #*#*#*#*#*#*#*#*#*#*#*#*#*#*# NmosFlow.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
 // dtnmos - What the node and the parser share of flows and their SDP
 //

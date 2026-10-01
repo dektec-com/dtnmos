@@ -60,12 +60,28 @@ DTNMOS_API const DtNmosSenderInfo* DtNmosSenderList_At(const DtNmosSenderList* l
                                                        size_t index);
 DTNMOS_API void DtNmosSenderList_Free(DtNmosSenderList* list);
 
-// Creates a query of the registry of config, whose strings it copies. Fails with
+// Allocates a query, closed. Returns null when the memory ran out.
+DTNMOS_API DtNmosQuery* DtNmosQuery_Alloc(void);
+
+// Opens query on the registry of config, whose strings it copies. Fails with
 // DTNMOS_E_INVALID_ARGUMENT without a registry URL or HTTP function, or with another
-// API version than v1.3.
-DTNMOS_API DtNmosResult DtNmosQuery_Create(const DtNmosQueryConfig* config,
-                                           DtNmosQuery** query);
-DTNMOS_API void DtNmosQuery_Destroy(DtNmosQuery* query);
+// API version than v1.3, and with DTNMOS_E_STATE when the query is open. A query closed
+// can be opened again, on another registry, keeping its handle.
+DTNMOS_API DtNmosResult DtNmosQuery_Open(DtNmosQuery* query,
+                                         const DtNmosQueryConfig* config);
+
+// Forgets the registry, leaving the query closed. Fails with DTNMOS_E_STATE when the
+// query is not open. A subscription made with it must be closed first.
+DTNMOS_API DtNmosResult DtNmosQuery_Close(DtNmosQuery* query);
+
+// Closes the query when it is open, and frees it. Null is allowed.
+DTNMOS_API void DtNmosQuery_Free(DtNmosQuery* query);
+
+// Frees *query as DtNmosQuery_Free() does and sets *query to null. Null is allowed.
+DTNMOS_API void DtNmosQuery_Freep(DtNmosQuery** query);
+
+// The functions of a query below, and those of the controller, need an open query, and
+// fail with DTNMOS_E_STATE on another.
 
 // Lists the senders of the registry, following its paging, each with the media of its
 // flow.
@@ -218,14 +234,18 @@ typedef struct DtNmosSubscriptionConfig
 
 typedef struct DtNmosSubscription DtNmosSubscription;
 
-// Asks the registry of query for a subscription to the resources at
-// config->resource_path, through the HTTP function of the query, and connects to its
-// WebSocket, with the timeout of the query. The query must outlive the subscription.
-// Fails as the requests of the query do, with DTNMOS_E_PARSE when the answer names no
-// WebSocket, and as the connect of the WebSocket does.
-DTNMOS_API DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
-                                                  const DtNmosSubscriptionConfig* config,
-                                                  DtNmosSubscription** subscription);
+// Allocates a subscription, closed. Returns null when the memory ran out.
+DTNMOS_API DtNmosSubscription* DtNmosSubscription_Alloc(void);
+
+// Opens subscription: asks the registry of query, which is open, for a subscription to
+// the resources at config->ResourcePath, through the HTTP function of the query, and
+// connects to its WebSocket, with the timeout of the query. The query must stay open
+// while the subscription is. Fails with DTNMOS_E_STATE when the subscription is open or
+// the query is not, as the requests of the query do, with DTNMOS_E_PARSE when the answer
+// names no WebSocket, and as the connect of the WebSocket does.
+DTNMOS_API DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription,
+                                                DtNmosQuery* query,
+                                                const DtNmosSubscriptionConfig* config);
 
 // Waits at most timeout_ms for a message, and calls on_change for each change in it, on
 // the thread of the caller. The first message holds every resource as it is, each a
@@ -239,9 +259,17 @@ DTNMOS_API DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription
 // The URL of the WebSocket of the subscription.
 DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* subscription);
 
-// Closes the WebSocket and frees the subscription; the registry drops a subscription
-// that is not persistent when its last WebSocket closes.
-DTNMOS_API void DtNmosSubscription_Destroy(DtNmosSubscription* subscription);
+// Closes the WebSocket, leaving the subscription closed; the registry drops a
+// subscription that is not persistent when its last WebSocket closes. Fails with
+// DTNMOS_E_STATE when the subscription is not open.
+DTNMOS_API DtNmosResult DtNmosSubscription_Close(DtNmosSubscription* subscription);
+
+// Closes the subscription when it is open, and frees it. Null is allowed.
+DTNMOS_API void DtNmosSubscription_Free(DtNmosSubscription* subscription);
+
+// Frees *subscription as DtNmosSubscription_Free() does and sets *subscription to null.
+// Null is allowed.
+DTNMOS_API void DtNmosSubscription_Freep(DtNmosSubscription** subscription);
 
 // Reads the JSON of a sender, as a change gives it, into a list of one, which the caller
 // frees. Its media stays DTNMOS_MEDIA_OTHER: it is a property of its flow. Fails with

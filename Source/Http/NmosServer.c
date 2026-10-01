@@ -56,7 +56,7 @@ static int handle_request(struct mg_connection* connection, void* user)
             dtnmos_buffer_append(&body, chunk, (size_t)read);
         }
     }
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     if (url.failed || body.failed || response == NULL)
     {
         mg_send_http_error(connection, 500, "%s", "Out of memory.");
@@ -136,9 +136,10 @@ static void poll_loop(void* argument)
 //
 DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
 {
-    if (node == NULL)
+    const DtNmosResult open = dtnmos_node_check_open(node, "DtNmosNode_Serve");
+    if (open != DTNMOS_OK)
     {
-        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "DtNmosNode_Serve() needs a node.");
+        return open;
     }
     if (node->server != NULL)
     {

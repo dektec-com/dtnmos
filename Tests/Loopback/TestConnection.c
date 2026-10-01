@@ -127,10 +127,11 @@ static DtNmosNode* make_node(activations* seen)
     config.RegistrationUrl = "http://registry.test";
     config.Http = registry_http;
     config.HttpUser = seen;
-    DtNmosNode* node = NULL;
-    if (DtNmosNode_Create(&config, &node) != DTNMOS_OK)
+    DtNmosNode* node = DtNmosNode_Alloc();
+    if (node == NULL || DtNmosNode_Open(node, &config) != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
+        DtNmosNode_Free(node);
         return NULL;
     }
     DtNmosDeviceConfig device = {sizeof(device), {DEVICE_ID}, "a card", ""};
@@ -179,7 +180,7 @@ static int ask(DtNmosNode* node, const char* method, const char* path, const cha
         request.Body = body;
         request.BodyLength = strlen(body);
     }
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     CHECK(DtNmosNode_Handle(node, &request, response) == DTNMOS_OK);
     const int status = DtNmosHttpResponse_Status(response);
     if (json != NULL)
@@ -280,7 +281,7 @@ void connection_answers_its_parameters(void)
              405);
     CHECK_EQ(ask(node, "POST", "/x-nmos/connection/v1.1/bulk/senders", "[]", NULL), 501);
     CHECK_EQ(seen.sender_calls + seen.receiver_calls, 0);
-    DtNmosNode_Destroy(node);
+    DtNmosNode_Free(node);
 }
 
 static const char* const connect_receiver =
@@ -351,7 +352,7 @@ void connection_connects_a_receiver(void)
     CHECK_EQ(seen.receiver_calls, 2);
     CHECK(!seen.receiver_enabled);
     CHECK(!seen.has_flow);
-    DtNmosNode_Destroy(node);
+    DtNmosNode_Free(node);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- connection_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -406,7 +407,7 @@ void connection_moves_a_sender(void)
     request.Size = sizeof(request);
     request.Method = "GET";
     request.Url = CONNECTION "senders/" SENDER_ID "/transportfile";
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
     CHECK(DtNmosNode_Handle(node, &request, response) == DTNMOS_OK);
     size_t length = 0;
     const char* text = DtNmosHttpResponse_Body(response, &length);
@@ -441,7 +442,7 @@ void connection_moves_a_sender(void)
     CHECK(dtnmos_json_member(dtnmos_json_member(json, "subscription"), "active")->type ==
           DTNMOS_JSON_FALSE);
     dtnmos_json_free(json);
-    DtNmosNode_Destroy(node);
+    DtNmosNode_Free(node);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- connection_refuses_bad_patches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -500,5 +501,5 @@ void connection_refuses_bad_patches(void)
     CHECK_STR(dtnmos_json_text(leg_member(json, "destination_ip")), "239.0.0.1");
     dtnmos_json_free(json);
     CHECK(DtNmosNode_IsRegistered(node));
-    DtNmosNode_Destroy(node);
+    DtNmosNode_Free(node);
 }
