@@ -115,7 +115,10 @@ and its section.
   where the code makes them true; otherwise the cases are named.
 - **A banner names the function directly below it**, and `Scripts/fix_banners.py` draws
   it.
-- **A test's comment says what its assertions check**, with the numbers they use.
+- **A test's comment says what its assertions check**, with the numbers they use. A
+  suite is one file under `Tests/`, built on `Tests/NmosTest.h` into a program of its
+  own: a case is an `NMOS_TEST` with a line in the file's `NMOS_TEST_MAIN`, and a new
+  suite a line in `Tests/CMakeLists.txt`.
 - **A change of behaviour updates every description of it**, not only the comment above
   the change: search `Include/`, `README.md` and the examples for what the old behaviour
   was called.

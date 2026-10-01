@@ -1,54 +1,43 @@
 # #*#*#*#*#*#*#*#*#*#*#*#*#*#* CMakeLists.txt *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 #
-# dtnmos - The dtnmos tests, one ctest per test of tests.h, and the package tests
+# dtnmos - The test suites, one program and one ctest each, and the package tests
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-add_executable(
-  dtnmos_tests
-  main.c
-  Loopback/TestConnection.c
-  Loopback/TestController.c
-  Loopback/TestDiscovery.c
-  Loopback/TestNode.c
-  Loopback/TestQuery.c
-  Loopback/TestSubscription.c
-  Unit/TestCommon.c
-  Unit/TestSdp.c
-  check.h
-  tests.h)
-# The directories on disk are the Visual Studio filters.
-get_target_property(_dtnmos_test_sources dtnmos_tests SOURCES)
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Tests"
-             FILES ${_dtnmos_test_sources})
-target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
-# The tests of the JSON parser reach the internal headers of the library, and the tests
-# in the directories below this one include check.h and tests.h from it.
-target_include_directories(dtnmos_tests PRIVATE ${DTNMOS_INTERNAL_INCLUDE_DIRS}
-                                                "${CMAKE_CURRENT_SOURCE_DIR}")
-if(MSVC)
-  target_compile_definitions(dtnmos_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-# The test of the WebSocket on libcurl serves one on a socket of its own.
-if(WIN32)
-  target_link_libraries(dtnmos_tests PRIVATE ws2_32)
-endif()
-dtnmos_set_warnings(dtnmos_tests)
-
-# The names of the tests are read from their list, so that a new one needs no entry here.
-# The list continues its lines with a backslash, so the file is read whole, and a change
-# of it configures again.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS tests.h)
-file(READ tests.h _dtnmos_tests_header)
-string(REGEX MATCHALL "DTNMOS_TEST\\([a-z0-9_]+\\)" _dtnmos_test_calls
-             "${_dtnmos_tests_header}")
-foreach(_call IN LISTS _dtnmos_test_calls)
-  string(REGEX REPLACE "DTNMOS_TEST\\(([a-z0-9_]+)\\)" "\\1" _name "${_call}")
-  # The macro that declares each test has a parameter called name.
-  if(NOT _name STREQUAL "name")
-    add_test(NAME dtnmos.${_name} COMMAND dtnmos_tests ${_name})
+# dtnmos_add_test(<suite> <source>) builds the suite of one source file into a program of
+# its own, test_<suite>, and registers it with CTest as dtnmos.<suite>, as CDTAPI does.
+# NmosTest.h is the whole framework.
+function(dtnmos_add_test suite source)
+  set(target "test_${suite}")
+  set(framework "${CMAKE_CURRENT_SOURCE_DIR}/NmosTest.h")
+  add_executable(${target} "${source}" "${framework}")
+  # The directories on disk are the Visual Studio filters.
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Tests"
+               FILES "${CMAKE_CURRENT_SOURCE_DIR}/${source}" "${framework}")
+  set_target_properties(${target} PROPERTIES FOLDER "Tests")
+  target_link_libraries(${target} PRIVATE dtnmos::dtnmos)
+  # The tests reach the internal headers of the library, and NmosTest.h here.
+  target_include_directories(${target} PRIVATE ${DTNMOS_INTERNAL_INCLUDE_DIRS}
+                                               "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(MSVC)
+    target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
   endif()
-endforeach()
+  # The tests of discovery and of the WebSocket on libcurl serve on sockets of their own.
+  if(WIN32)
+    target_link_libraries(${target} PRIVATE ws2_32)
+  endif()
+  dtnmos_set_warnings(${target})
+  add_test(NAME dtnmos.${suite} COMMAND ${target})
+endfunction()
+
+dtnmos_add_test(Common Unit/TestCommon.c)
+dtnmos_add_test(Connection Loopback/TestConnection.c)
+dtnmos_add_test(Controller Loopback/TestController.c)
+dtnmos_add_test(Discovery Loopback/TestDiscovery.c)
+dtnmos_add_test(Node Loopback/TestNode.c)
+dtnmos_add_test(Query Loopback/TestQuery.c)
+dtnmos_add_test(Sdp Unit/TestSdp.c)
+dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 
 # The package tests install dtnmos into the build tree and build a consumer of it.
 if(DTNMOS_INSTALL)

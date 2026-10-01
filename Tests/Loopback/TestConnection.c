@@ -10,9 +10,8 @@
 #include <string.h>
 
 #include "NmosJson.h"
-#include "check.h"
+#include "NmosTest.h"
 #include "dtnmos_node.h"
-#include "tests.h"
 
 #define NODE_ID "bbbbbbbb-0000-4000-8000-000000000001"
 #define DEVICE_ID "bbbbbbbb-0000-4000-8000-000000000002"
@@ -48,7 +47,7 @@ static DtNmosResult ActivateSender(void* User, const DtNmosId* Sender,
                                    const DtNmosSenderActivation* Activation)
 {
     NmosActivations* Seen = User;
-    CHECK_STR(Sender->Text, SENDER_ID);
+    NMOS_EXPECT(strcmp(Sender->Text, SENDER_ID) == 0);
     ++Seen->SenderCalls;
     Seen->SenderEnabled = Activation->MasterEnable;
     snprintf(Seen->Destination, sizeof(Seen->Destination), "%s",
@@ -68,7 +67,7 @@ static DtNmosResult ActivateReceiver(void* User, const DtNmosId* Receiver,
                                      const DtNmosReceiverActivation* Activation)
 {
     NmosActivations* Seen = User;
-    CHECK_STR(Receiver->Text, RECEIVER_ID);
+    NMOS_EXPECT(strcmp(Receiver->Text, RECEIVER_ID) == 0);
     ++Seen->ReceiverCalls;
     Seen->ReceiverEnabled = Activation->MasterEnable;
     Seen->HasFlow = Activation->HasFlow;
@@ -135,7 +134,7 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
         return NULL;
     }
     DtNmosDeviceConfig Device = {sizeof(Device), {DEVICE_ID}, "a card", ""};
-    CHECK(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_OK);
     DtNmosFlow Flow = {0};
     Flow.Size = sizeof(Flow);
     Flow.Media = DTNMOS_MEDIA_VIDEO;
@@ -152,12 +151,13 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
              "YCbCr-4:2:2");
     DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
                                  &Flow,          "192.168.1.5"};
-    CHECK(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {
         sizeof(Receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
-    CHECK(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, Seen) == DTNMOS_OK);
-    CHECK(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(Node));
+    NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, Seen) ==
+                DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_IsRegistered(Node));
     return Node;
 }
 
@@ -181,7 +181,7 @@ static int Ask(DtNmosNode* Node, const char* Method, const char* Path, const cha
         Request.BodyLength = strlen(Body);
     }
     DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
-    CHECK(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
     const int Status = DtNmosHttpResponse_Status(Response);
     if (Json != NULL)
     {
@@ -211,76 +211,79 @@ static const NmosJson* LegMember(const NmosJson* Json, const char* Name)
     return NmosJson_Member(&Legs->Items[0], Name);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_answers_its_parameters -.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersItsParameters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void connection_answers_its_parameters(void)
+NMOS_TEST(ConnectionAnswersItsParameters)
 {
     NmosActivations Seen;
     memset(&Seen, 0, sizeof(Seen));
     DtNmosNode* Node = MakeNode(&Seen);
-    REQUIRE(Node != NULL);
+    NMOS_ASSERT(Node != NULL);
     NmosJson* Json = NULL;
-    CHECK_EQ(Ask(Node, "GET", "/x-nmos/connection/v1.1/", NULL, &Json), 200);
-    REQUIRE(Json != NULL && Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 2);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", "/x-nmos/connection/v1.1/", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL && Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 2);
     NmosJson_Free(Json);
 
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/", NULL, &Json), 200);
-    REQUIRE(Json != NULL && Json->Count == 1);
-    CHECK_STR(NmosJson_Text(&Json->Items[0]), SENDER_ID "/");
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "senders/", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL && Json->Count == 1);
+    NMOS_ASSERT_STR(NmosJson_Text(&Json->Items[0]), SENDER_ID "/");
     NmosJson_Free(Json);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "receivers", NULL, &Json), 200);
-    REQUIRE(Json != NULL && Json->Count == 1);
-    CHECK_STR(NmosJson_Text(&Json->Items[0]), RECEIVER_ID "/");
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "receivers", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL && Json->Count == 1);
+    NMOS_ASSERT_STR(NmosJson_Text(&Json->Items[0]), RECEIVER_ID "/");
     NmosJson_Free(Json);
 
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID, NULL, &Json), 200);
-    REQUIRE(Json != NULL);
-    CHECK_EQ(Json->Count, 5);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID, NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_EQ(Json->Count, 5);
     NmosJson_Free(Json);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/transporttype", NULL,
-                 &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_Text(Json), "urn:x-nmos:transport:rtp");
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/transporttype",
+                       NULL, &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(Json), "urn:x-nmos:transport:rtp");
     NmosJson_Free(Json);
-    CHECK_EQ(
+    NMOS_ASSERT_EQ(
         Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/constraints", NULL, &Json),
         200);
-    REQUIRE(Json != NULL && Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 1);
-    CHECK(NmosJson_Member(&Json->Items[0], "destination_ip") != NULL);
+    NMOS_ASSERT(Json != NULL && Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 1);
+    NMOS_ASSERT(NmosJson_Member(&Json->Items[0], "destination_ip") != NULL);
     NmosJson_Free(Json);
 
     // The active parameters of the sender are where its element sends.
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK(NmosJson_Member(Json, "master_enable")->Type == DTNMOS_JSON_TRUE);
-    CHECK(NmosJson_Member(Json, "receiver_id")->Type == DTNMOS_JSON_NULL);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
-    CHECK_EQ(LegMember(Json, "destination_port")->Number, 5004);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "source_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT(NmosJson_Member(Json, "master_enable")->Type == DTNMOS_JSON_TRUE);
+    NMOS_ASSERT(NmosJson_Member(Json, "receiver_id")->Type == DTNMOS_JSON_NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5004);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "source_ip")), "192.168.1.5");
     NmosJson_Free(Json);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/staged", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/staged", NULL, &Json),
+        200);
+    NMOS_ASSERT(Json != NULL);
     const NmosJson* File = NmosJson_Member(Json, "transport_file");
-    REQUIRE(File != NULL);
-    CHECK(NmosJson_Member(File, "data")->Type == DTNMOS_JSON_NULL);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "destination_port")), "auto");
+    NMOS_ASSERT(File != NULL);
+    NMOS_ASSERT(NmosJson_Member(File, "data")->Type == DTNMOS_JSON_NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_port")), "auto");
     NmosJson_Free(Json);
 
     // A receiver has no transport file, and unknown resources are not found.
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/transportfile", NULL,
-                 NULL),
-             404);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" PEER_ID "/active", NULL, NULL), 404);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "flows/", NULL, NULL), 404);
-    CHECK_EQ(Ask(Node, "PUT", CONNECTION "senders/" SENDER_ID "/staged", "{}", NULL),
-             405);
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/active", "{}", NULL),
-             405);
-    CHECK_EQ(Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/senders", "[]", NULL), 501);
-    CHECK_EQ(Seen.SenderCalls + Seen.ReceiverCalls, 0);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/transportfile",
+                       NULL, NULL),
+                   404);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "senders/" PEER_ID "/active", NULL, NULL),
+                   404);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", CONNECTION "flows/", NULL, NULL), 404);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "PUT", CONNECTION "senders/" SENDER_ID "/staged", "{}", NULL), 405);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/active", "{}", NULL), 405);
+    NMOS_ASSERT_EQ(Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/senders", "[]", NULL),
+                   501);
+    NMOS_ASSERT_EQ(Seen.SenderCalls + Seen.ReceiverCalls, 0);
     DtNmosNode_Free(Node);
 }
 
@@ -294,111 +297,114 @@ static const char* const ConnectReceiver =
     "a=ptime:1\\n\"}, "
     "\"transport_params\": [{\"destination_port\": 5008}]}";
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_connects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionConnectsAReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void connection_connects_a_receiver(void)
+NMOS_TEST(ConnectionConnectsAReceiver)
 {
     NmosActivations Seen;
     memset(&Seen, 0, sizeof(Seen));
     DtNmosNode* Node = MakeNode(&Seen);
-    REQUIRE(Node != NULL);
+    NMOS_ASSERT(Node != NULL);
     const int Registered = Seen.Registrations;
     NmosJson* Json = NULL;
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
-                 ConnectReceiver, &Json),
-             200);
-    REQUIRE(Json != NULL);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+                       ConnectReceiver, &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL);
     const NmosJson* Activation = NmosJson_Member(Json, "activation");
-    CHECK_STR(NmosJson_MemberText(Activation, "mode"), "activate_immediate");
-    CHECK(NmosJson_MemberText(Activation, "activation_time") != NULL);
+    NMOS_ASSERT_STR(NmosJson_MemberText(Activation, "mode"), "activate_immediate");
+    NMOS_ASSERT(NmosJson_MemberText(Activation, "activation_time") != NULL);
     NmosJson_Free(Json);
 
     // The callback gets the audio flow of the transport file, on the port of the PATCH.
-    CHECK_EQ(Seen.ReceiverCalls, 1);
-    CHECK(Seen.ReceiverEnabled);
-    CHECK(Seen.HasFlow);
-    CHECK_EQ(Seen.Media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(Seen.Receives, "239.1.1.2");
-    CHECK_EQ(Seen.ReceivesPort, 5008);
-    CHECK_STR(Seen.SenderId, PEER_ID);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 1);
+    NMOS_ASSERT(Seen.ReceiverEnabled);
+    NMOS_ASSERT(Seen.HasFlow);
+    NMOS_ASSERT_EQ(Seen.Media, DTNMOS_MEDIA_AUDIO);
+    NMOS_ASSERT_STR(Seen.Receives, "239.1.1.2");
+    NMOS_ASSERT_EQ(Seen.ReceivesPort, 5008);
+    NMOS_ASSERT_STR(Seen.SenderId, PEER_ID);
 
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/active", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_MemberText(Json, "sender_id"), PEER_ID);
-    CHECK(NmosJson_MemberText(NmosJson_Member(Json, "transport_file"), "data") != NULL);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/active", NULL, &Json),
+        200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_MemberText(Json, "sender_id"), PEER_ID);
+    NMOS_ASSERT(NmosJson_MemberText(NmosJson_Member(Json, "transport_file"), "data") !=
+                NULL);
     NmosJson_Free(Json);
 
     // The receiver registers its subscription anew.
-    CHECK_EQ(Ask(Node, "GET", "/x-nmos/node/v1.3/receivers/" RECEIVER_ID, NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", "/x-nmos/node/v1.3/receivers/" RECEIVER_ID, NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
     const NmosJson* Subscription = NmosJson_Member(Json, "subscription");
-    CHECK_STR(NmosJson_MemberText(Subscription, "sender_id"), PEER_ID);
-    CHECK(NmosJson_Member(Subscription, "active")->Type == DTNMOS_JSON_TRUE);
+    NMOS_ASSERT_STR(NmosJson_MemberText(Subscription, "sender_id"), PEER_ID);
+    NMOS_ASSERT(NmosJson_Member(Subscription, "active")->Type == DTNMOS_JSON_TRUE);
     NmosJson_Free(Json);
-    CHECK(!DtNmosNode_IsRegistered(Node));
-    CHECK(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
-    CHECK_EQ(Seen.Registrations, Registered + 1);
-    CHECK_STR(Seen.LastRegistered, "receiver");
+    NMOS_ASSERT(!DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.Registrations, Registered + 1);
+    NMOS_ASSERT_STR(Seen.LastRegistered, "receiver");
 
     // Disabling hands no flow over, and keeps what it received from.
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
-                 "{\"master_enable\": false, \"transport_file\": {\"data\": null}, "
-                 "\"activation\": {\"mode\": \"activate_immediate\"}}",
-                 NULL),
-             200);
-    CHECK_EQ(Seen.ReceiverCalls, 2);
-    CHECK(!Seen.ReceiverEnabled);
-    CHECK(!Seen.HasFlow);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+                       "{\"master_enable\": false, \"transport_file\": {\"data\": null}, "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 2);
+    NMOS_ASSERT(!Seen.ReceiverEnabled);
+    NMOS_ASSERT(!Seen.HasFlow);
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- connection_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionMovesASender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void connection_moves_a_sender(void)
+NMOS_TEST(ConnectionMovesASender)
 {
     NmosActivations Seen;
     memset(&Seen, 0, sizeof(Seen));
     DtNmosNode* Node = MakeNode(&Seen);
-    REQUIRE(Node != NULL);
+    NMOS_ASSERT(Node != NULL);
 
     // A PATCH without activation stages only.
     NmosJson* Json = NULL;
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
-                 "{\"transport_params\": [{\"destination_ip\": \"192.168.1.9\", "
-                 "\"destination_port\": 6000}]}",
-                 &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK(NmosJson_Member(NmosJson_Member(Json, "activation"), "mode")->Type ==
-          DTNMOS_JSON_NULL);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"transport_params\": [{\"destination_ip\": \"192.168.1.9\", "
+                       "\"destination_port\": 6000}]}",
+                       &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT(NmosJson_Member(NmosJson_Member(Json, "activation"), "mode")->Type ==
+                DTNMOS_JSON_NULL);
     NmosJson_Free(Json);
-    CHECK_EQ(Seen.SenderCalls, 0);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/staged", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "192.168.1.9");
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 0);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/staged", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "192.168.1.9");
     NmosJson_Free(Json);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
     NmosJson_Free(Json);
 
     // The activation moves the sender, and its transport file with it.
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
-                 "{\"receiver_id\": \"" PEER_ID "\", "
-                 "\"activation\": {\"mode\": \"activate_immediate\", \"requested_time\": "
-                 "null}}",
-                 NULL),
-             200);
-    CHECK_EQ(Seen.SenderCalls, 1);
-    CHECK(Seen.SenderEnabled);
-    CHECK_STR(Seen.Destination, "192.168.1.9");
-    CHECK_EQ(Seen.DestinationPort, 6000);
-    CHECK_STR(Seen.Source, "192.168.1.5");
-    CHECK_EQ(
+    NMOS_ASSERT_EQ(
+        Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+            "{\"receiver_id\": \"" PEER_ID "\", "
+            "\"activation\": {\"mode\": \"activate_immediate\", \"requested_time\": "
+            "null}}",
+            NULL),
+        200);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(Seen.SenderEnabled);
+    NMOS_ASSERT_STR(Seen.Destination, "192.168.1.9");
+    NMOS_ASSERT_EQ(Seen.DestinationPort, 6000);
+    NMOS_ASSERT_STR(Seen.Source, "192.168.1.5");
+    NMOS_ASSERT_EQ(
         Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/transportfile", NULL, NULL),
         200);
     DtNmosHttpRequest Request;
@@ -407,70 +413,75 @@ void connection_moves_a_sender(void)
     Request.Method = "GET";
     Request.Url = CONNECTION "senders/" SENDER_ID "/transportfile";
     DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
-    CHECK(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
     size_t Length = 0;
     const char* Text = DtNmosHttpResponse_Body(Response, &Length);
     DtNmosSdp* Sdp = NULL;
-    REQUIRE(DtNmosSdp_Parse(Text, Length, &Sdp) == DTNMOS_OK);
-    CHECK_STR(DtNmosSdp_Flow(Sdp, 0)->DestinationIp, "192.168.1.9");
-    CHECK_EQ(DtNmosSdp_Flow(Sdp, 0)->DestinationPort, 6000);
-    CHECK_EQ(DtNmosSdp_Session(Sdp)->SessionVersion, 2);
+    NMOS_ASSERT(DtNmosSdp_Parse(Text, Length, &Sdp) == DTNMOS_OK);
+    NMOS_ASSERT_STR(DtNmosSdp_Flow(Sdp, 0)->DestinationIp, "192.168.1.9");
+    NMOS_ASSERT_EQ(DtNmosSdp_Flow(Sdp, 0)->DestinationPort, 6000);
+    NMOS_ASSERT_EQ(DtNmosSdp_Session(Sdp)->SessionVersion, 2);
     DtNmosSdp_Free(Sdp);
     DtNmosHttpResponse_Free(Response);
 
-    CHECK_EQ(Ask(Node, "GET", "/x-nmos/node/v1.3/senders/" SENDER_ID, NULL, &Json), 200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_MemberText(Json, "transport"), "urn:x-nmos:transport:rtp.ucast");
-    CHECK_STR(NmosJson_MemberText(NmosJson_Member(Json, "subscription"), "receiver_id"),
-              PEER_ID);
+    NMOS_ASSERT_EQ(Ask(Node, "GET", "/x-nmos/node/v1.3/senders/" SENDER_ID, NULL, &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_MemberText(Json, "transport"),
+                    "urn:x-nmos:transport:rtp.ucast");
+    NMOS_ASSERT_STR(
+        NmosJson_MemberText(NmosJson_Member(Json, "subscription"), "receiver_id"),
+        PEER_ID);
     NmosJson_Free(Json);
 
     // Disabling it keeps where it sends.
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
-                 "{\"master_enable\": false, \"activation\": {\"mode\": "
-                 "\"activate_immediate\"}}",
-                 NULL),
-             200);
-    CHECK_EQ(Seen.SenderCalls, 2);
-    CHECK(!Seen.SenderEnabled);
-    CHECK_STR(Seen.Destination, "192.168.1.9");
-    CHECK_EQ(Ask(Node, "GET", "/x-nmos/node/v1.3/senders/" SENDER_ID, NULL, &Json), 200);
-    REQUIRE(Json != NULL);
-    CHECK(NmosJson_Member(NmosJson_Member(Json, "subscription"), "active")->Type ==
-          DTNMOS_JSON_FALSE);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"master_enable\": false, \"activation\": {\"mode\": "
+                       "\"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 2);
+    NMOS_ASSERT(!Seen.SenderEnabled);
+    NMOS_ASSERT_STR(Seen.Destination, "192.168.1.9");
+    NMOS_ASSERT_EQ(Ask(Node, "GET", "/x-nmos/node/v1.3/senders/" SENDER_ID, NULL, &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT(NmosJson_Member(NmosJson_Member(Json, "subscription"), "active")->Type ==
+                DTNMOS_JSON_FALSE);
     NmosJson_Free(Json);
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- connection_refuses_bad_patches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionRefusesBadPatches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void connection_refuses_bad_patches(void)
+NMOS_TEST(ConnectionRefusesBadPatches)
 {
     NmosActivations Seen;
     memset(&Seen, 0, sizeof(Seen));
     DtNmosNode* Node = MakeNode(&Seen);
-    REQUIRE(Node != NULL);
+    NMOS_ASSERT(Node != NULL);
     const char* const Staged = CONNECTION "senders/" SENDER_ID "/staged";
-    CHECK_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": ", NULL), 400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged, "[]", NULL), 400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged, "{\"colour\": \"red\"}", NULL), 400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": 1}", NULL), 400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged,
-                 "{\"transport_params\": [{\"multicast_ip\": null}]}", NULL),
-             400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged,
-                 "{\"transport_params\": [{\"destination_port\": 70000}]}", NULL),
-             400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged, "{\"transport_params\": [{}, {}]}", NULL), 400);
-    CHECK_EQ(Ask(Node, "PATCH", Staged,
-                 "{\"activation\": {\"mode\": \"activate_scheduled_relative\", "
-                 "\"requested_time\": \"0:0\"}}",
-                 NULL),
-             501);
-    CHECK_EQ(Ask(Node, "PATCH", CONNECTION "senders/" PEER_ID "/staged", "{}", NULL),
-             404);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": ", NULL), 400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "[]", NULL), 400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"colour\": \"red\"}", NULL), 400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": 1}", NULL), 400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"transport_params\": [{\"multicast_ip\": null}]}", NULL),
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"transport_params\": [{\"destination_port\": 70000}]}", NULL),
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"transport_params\": [{}, {}]}", NULL),
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"activation\": {\"mode\": \"activate_scheduled_relative\", "
+                       "\"requested_time\": \"0:0\"}}",
+                       NULL),
+                   501);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "PATCH", CONNECTION "senders/" PEER_ID "/staged", "{}", NULL), 404);
     // A transport file without audio does not connect the audio receiver.
-    CHECK_EQ(
+    NMOS_ASSERT_EQ(
         Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
             "{\"transport_file\": {\"data\": \"v=0\\no=- 1 1 IN IP4 10.0.0.1\\ns=x\\n"
             "t=0 0\\nm=video 5000 RTP/AVP 96\\nc=IN IP4 239.1.1.1\\n"
@@ -478,25 +489,29 @@ void connection_refuses_bad_patches(void)
             "\"activation\": {\"mode\": \"activate_immediate\"}}",
             NULL),
         400);
-    CHECK_EQ(Seen.ReceiverCalls, 0);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 0);
 
     // An activation the callback fails leaves the active parameters as they were.
     Seen.Answer = DTNMOS_E_STATE;
     NmosJson* Json = NULL;
-    CHECK_EQ(Ask(Node, "PATCH", Staged,
-                 "{\"transport_params\": [{\"destination_ip\": \"192.168.1.9\"}], "
-                 "\"activation\": {\"mode\": \"activate_immediate\"}}",
-                 &Json),
-             500);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_MemberText(Json, "error"), "the card refused it");
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"transport_params\": [{\"destination_ip\": \"192.168.1.9\"}], "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       &Json),
+                   500);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_MemberText(Json, "error"), "the card refused it");
     NmosJson_Free(Json);
-    CHECK_EQ(Seen.SenderCalls, 1);
-    CHECK_EQ(Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json),
-             200);
-    REQUIRE(Json != NULL);
-    CHECK_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_ip")), "239.0.0.1");
     NmosJson_Free(Json);
-    CHECK(DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
     DtNmosNode_Free(Node);
 }
+
+NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
+               NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
+               NMOS_RUN(ConnectionRefusesBadPatches))
