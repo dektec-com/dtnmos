@@ -3,12 +3,13 @@
 A small C library that reads and writes the SDP of SMPTE ST 2110 flows: ST 2110-20
 uncompressed video, -22 compressed video (JPEG XS), -30 audio and -40 ancillary data. It
 also asks an NMOS registry (AMWA IS-04 v1.3) for its senders and their SDP, and finds the
-registries on the network with multicast DNS and the DNS server of the host. And it is an NMOS node that registers senders
-and receivers with a registry (IS-04) and serves its Node API, and a controller that
-connects the receivers of a registry to its senders (IS-05). It follows a registry
-through the subscriptions of its Query API.
-It is the NMOS support of gst-dektec, and is meant to be used by other projects as well,
-such as CDTAPI and FFmpeg (plan [0016](../../docs/plans/0016-st-2110-sdp-and-nmos.md)).
+registries on the network with multicast DNS and the DNS server of the host. And it is an
+NMOS node that registers senders and receivers with a registry (IS-04) and serves its
+Node API, and a controller that connects the receivers of a registry to its senders
+(IS-05). It follows a registry through the subscriptions of its Query API.
+
+It is the NMOS support of DekTec's GStreamer plugins, and is meant to be used by other
+projects as well, such as CDTAPI and FFmpeg.
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
 - No dependencies. HTTP goes through a function the caller passes in; with

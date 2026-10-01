@@ -445,7 +445,7 @@ void sdp_writes_an_audio_sender(void)
     dtnmos_session session = {0};
     session.size = sizeof(session);
     dtnmos_string_set_text(&session.name, "dt2110audiosink");
-    dtnmos_string_set_text(&session.origin_ip, "192.168.39.68");
+    dtnmos_string_set_text(&session.origin_ip, "192.168.1.10");
     session.session_id = 42;
     session.session_version = 1;
     dtnmos_flow flow = {0};
@@ -464,7 +464,7 @@ void sdp_writes_an_audio_sender(void)
     dtnmos_string text = {0};
     REQUIRE(dtnmos_sdp_write(&session, &flow, 1, &text, NULL) == DTNMOS_OK);
     CHECK_STR(dtnmos_string_get(&text), "v=0\r\n"
-                                        "o=- 42 1 IN IP4 192.168.39.68\r\n"
+                                        "o=- 42 1 IN IP4 192.168.1.10\r\n"
                                         "s=dt2110audiosink\r\n"
                                         "t=0 0\r\n"
                                         "m=audio 5004 RTP/AVP 97\r\n"
