@@ -80,6 +80,18 @@ add_library(
   Source/Sdp/DtNmosSdpParse.c
   Source/Sdp/DtNmosSdpWrite.c)
 add_library(dtnmos::dtnmos ALIAS dtnmos)
+# The headers, public and internal, are added to the target as well, so that an IDE shows
+# them, and source_group turns the directories on disk into the Visual Studio filters. The
+# glob only decides what is shown; what is compiled stays the list above.
+file(GLOB_RECURSE _dtnmos_headers CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.in"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
+target_sources(dtnmos PRIVATE ${_dtnmos_headers})
+get_target_property(_dtnmos_sources dtnmos SOURCES)
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${_dtnmos_sources})
+# The version header is made in the build directory, outside the tree.
+target_sources(dtnmos PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/Generated/dtnmos_version.h")
+source_group("Generated" FILES "${CMAKE_CURRENT_BINARY_DIR}/Generated/dtnmos_version.h")
 target_include_directories(
   dtnmos PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include>"
                 "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/Generated>"

@@ -14,7 +14,13 @@ add_executable(
   Loopback/TestQuery.c
   Loopback/TestSubscription.c
   Unit/TestCommon.c
-  Unit/TestSdp.c)
+  Unit/TestSdp.c
+  check.h
+  tests.h)
+# The directories on disk are the Visual Studio filters.
+get_target_property(_dtnmos_test_sources dtnmos_tests SOURCES)
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Tests"
+             FILES ${_dtnmos_test_sources})
 target_link_libraries(dtnmos_tests PRIVATE dtnmos::dtnmos)
 # The tests of the JSON parser reach the internal headers of the library, and the tests
 # in the directories below this one include check.h and tests.h from it.
