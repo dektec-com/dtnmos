@@ -41,6 +41,21 @@ void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size);
 // host cannot be resolved or reached.
 int NmosOs_AddressToward(const char* Host, char* Address, size_t Size);
 
+// An address of a network interface of the host, which is up: a port of a card of
+// DekTec among them, which the operating system has as a network interface too.
+typedef struct NmosInterface
+{
+    char Name[64];    // as the operating system names it, e.g. "eth0" or "Ethernet 2"
+    char PortId[18];  // its MAC address, as IS-04 writes it: "00-14-f4-00-00-01"
+    char Address[64]; // one address of IPv4 or IPv6 of the interface
+} NmosInterface;
+
+// Returns the addresses of the network interfaces of the host, one entry for each, and
+// sets *Count to their number; returns null, *Count 0, when there are none or the
+// memory ran out. The caller frees the array. An interface without a MAC address, such
+// as loopback, has "00-00-00-00-00-00".
+NmosInterface* NmosOs_Interfaces(size_t* Count);
+
 // Returns a TCP port that is free on the address host now, or 0 when there is none.
 uint16_t NmosOs_FreePort(const char* Host);
 

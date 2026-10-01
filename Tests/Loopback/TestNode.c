@@ -123,12 +123,13 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
     Flow.Format.Video.Depth = 10;
     snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
              "YCbCr-4:2:2");
-    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
-                                 &Flow,          "192.168.1.5"};
+    // The sender and the receiver are on the address of the APIs.
+    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "",
+                                 &Flow,          Host};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {
         sizeof(Receiver),   {RECEIVER_ID}, {DEVICE_ID}, "monitor", "",
-        DTNMOS_MEDIA_AUDIO, "192.168.1.5"};
+        DTNMOS_MEDIA_AUDIO, Host};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, NULL, NULL) == DTNMOS_OK);
     return Node;
 }
@@ -523,6 +524,79 @@ NMOS_TEST(NodeAnswersItsNodeApiAndTransportFiles)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BindingOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Asks the node for the one sender or receiver of Path and writes the name of its one
+// interface binding into Name; returns how many bindings it has.
+//
+static size_t BindingOf(DtNmosNode* Node, const char* Path, char* Name, size_t Size)
+{
+    Name[0] = '\0';
+    DtNmosHttpResponse* Response = Ask(Node, "GET", Path);
+    size_t Length = 0;
+    const char* Body = DtNmosHttpResponse_Body(Response, &Length);
+    NmosJson* Json = NULL;
+    size_t Count = 0;
+    if (NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK && Json->Count == 1)
+    {
+        const NmosJson* Bindings = NmosJson_Member(&Json->Items[0], "interface_bindings");
+        Count = Bindings != NULL ? Bindings->Count : 0;
+        if (Count == 1 && NmosJson_Text(&Bindings->Items[0]) != NULL)
+        {
+            snprintf(Name, Size, "%s", NmosJson_Text(&Bindings->Items[0]));
+        }
+    }
+    NmosJson_Free(Json);
+    DtNmosHttpResponse_Free(Response);
+    return Count;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeBindsToTheInterfaceOfItsAddress -.-.-.-.-.-.-.-.-.-.-.
+//
+// The node lists the network interfaces of the host, and binds a sender and a receiver to
+// the one that has their address; one on an address of no interface is bound to none.
+//
+NMOS_TEST(NodeBindsToTheInterfaceOfItsAddress)
+{
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosNode* Node = MakeNode(&Registry, "127.0.0.1", 8080, RecordHttp);
+    NMOS_ASSERT(Node != NULL);
+    char Sender[64];
+    char Receiver[64];
+    NMOS_ASSERT_EQ(BindingOf(Node, "/x-nmos/node/v1.3/senders/", Sender, sizeof(Sender)),
+                   1);
+    NMOS_ASSERT_EQ(
+        BindingOf(Node, "/x-nmos/node/v1.3/receivers/", Receiver, sizeof(Receiver)), 1);
+    NMOS_ASSERT_STR(Sender, Receiver);
+
+    DtNmosHttpResponse* Response = Ask(Node, "GET", "/x-nmos/node/v1.3/self");
+    size_t Length = 0;
+    const char* Body = DtNmosHttpResponse_Body(Response, &Length);
+    NmosJson* Json = NULL;
+    const int Parsed = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
+    DtNmosHttpResponse_Free(Response);
+    NMOS_ASSERT(Parsed);
+    const NmosJson* Interfaces = NmosJson_Member(Json, "interfaces");
+    int Listed = 0;
+    for (size_t i = 0; Interfaces != NULL && i < Interfaces->Count; ++i)
+    {
+        const char* Name = NmosJson_MemberText(&Interfaces->Items[i], "name");
+        const char* PortId = NmosJson_MemberText(&Interfaces->Items[i], "port_id");
+        NMOS_EXPECT(PortId != NULL && strlen(PortId) == 17);
+        Listed += Name != NULL && strcmp(Name, Sender) == 0;
+    }
+    NmosJson_Free(Json);
+    NMOS_ASSERT_EQ(Listed, 1);
+    DtNmosNode_Free(Node);
+
+    Node = MakeNode(&Registry, "192.0.2.1", 8080, RecordHttp);
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT_EQ(BindingOf(Node, "/x-nmos/node/v1.3/senders/", Sender, sizeof(Sender)),
+                   0);
+    DtNmosNode_Free(Node);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeServesItselfOverHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 NMOS_TEST(NodeServesItselfOverHttp)
@@ -576,4 +650,5 @@ NMOS_TEST_MAIN("Node", NMOS_RUN(NodeRegistersParentsBeforeChildren),
                NMOS_RUN(NodeChecksTheSizeOfAConfig), NMOS_RUN(NodeMovesToTheNextRegistry),
                NMOS_RUN(NodeDeletesWhatIsRemovedAndWhatItHad),
                NMOS_RUN(NodeAnswersItsNodeApiAndTransportFiles),
-               NMOS_RUN(NodeServesItselfOverHttp))
+               NMOS_RUN(NodeServesItselfOverHttp),
+               NMOS_RUN(NodeBindsToTheInterfaceOfItsAddress))

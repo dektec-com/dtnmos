@@ -377,6 +377,59 @@ void NmosNode_WriteBaseUrl(const DtNmosNode* Node, NmosBuffer* b)
                       Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Writes the network interfaces of the host, each once, as IS-04 lists them in a node.
+//
+static void WriteInterfaces(NmosBuffer* b)
+{
+    size_t Count = 0;
+    NmosInterface* List = NmosOs_Interfaces(&Count);
+    DTNMOS_APPEND_LITERAL(b, "[");
+    int First = 1;
+    for (size_t i = 0; i < Count; ++i)
+    {
+        int Listed = 0;
+        for (size_t j = 0; j < i && !Listed; ++j)
+        {
+            Listed = strcmp(List[j].Name, List[i].Name) == 0;
+        }
+        if (Listed)
+        {
+            continue;
+        }
+        NmosBuffer_Printf(b, "%s{\"chassis_id\": null, \"port_id\": \"%s\", \"name\": ",
+                          First ? "" : ", ", List[i].PortId);
+        NmosJson_WriteString(b, List[i].Name);
+        DTNMOS_APPEND_LITERAL(b, "}");
+        First = 0;
+    }
+    DTNMOS_APPEND_LITERAL(b, "]");
+    free(List);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteBindings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Writes the interface bindings of a sender or receiver of the one leg on Address: the
+// name of the interface of the host that has it, or none when no interface has it.
+//
+static void WriteBindings(NmosBuffer* b, const char* Address)
+{
+    size_t Count = 0;
+    NmosInterface* List = NmosOs_Interfaces(&Count);
+    DTNMOS_APPEND_LITERAL(b, "[");
+    for (size_t i = 0; i < Count; ++i)
+    {
+        if (strcmp(List[i].Address, Address) == 0)
+        {
+            NmosJson_WriteString(b, List[i].Name);
+            break;
+        }
+    }
+    DTNMOS_APPEND_LITERAL(b, "]");
+    free(List);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_WriteSelf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void NmosNode_WriteSelf(const DtNmosNode* Node, NmosBuffer* b)
@@ -394,8 +447,10 @@ void NmosNode_WriteSelf(const DtNmosNode* Node, NmosBuffer* b)
         b,
         ", \"port\": %u, \"protocol\": \"http\"}]}, \"caps\": {}, \"services\": "
         "[], \"clocks\": [{\"name\": \"clk0\", \"ref_type\": \"internal\"}], "
-        "\"interfaces\": []}",
+        "\"interfaces\": ",
         (unsigned)Node->ApiPort);
+    WriteInterfaces(b);
+    DTNMOS_APPEND_LITERAL(b, "}");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_WriteDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -542,8 +597,10 @@ void NmosNode_WriteSender(const DtNmosNode* Node, const NmosNodeSender* Sender,
     NmosNode_WriteBaseUrl(Node, b);
     NmosBuffer_Printf(b,
                       "/x-nmos/connection/v1.1/single/senders/%s/transportfile\", "
-                      "\"interface_bindings\": [], \"subscription\": {\"receiver_id\": ",
+                      "\"interface_bindings\": ",
                       Sender->Id.Text);
+    WriteBindings(b, Sender->ActiveSourceIp);
+    DTNMOS_APPEND_LITERAL(b, ", \"subscription\": {\"receiver_id\": ");
     if (Sender->ReceiverId.Text[0] != '\0')
     {
         NmosBuffer_Printf(b, "\"%s\"", Sender->ReceiverId.Text);
@@ -567,11 +624,12 @@ void NmosNode_WriteReceiver(const NmosNodeReceiver* Receiver, NmosBuffer* b)
         b,
         ", \"format\": \"urn:x-nmos:format:%s\", \"caps\": {\"media_types\": "
         "[%s]}, \"device_id\": \"%s\", \"transport\": "
-        "\"urn:x-nmos:transport:rtp\", \"interface_bindings\": [], "
-        "\"subscription\": {\"sender_id\": ",
+        "\"urn:x-nmos:transport:rtp\", \"interface_bindings\": ",
         Video ? "video" : "audio",
         Video ? "\"video/raw\"" : "\"audio/L24\", \"audio/L16\"",
         Receiver->DeviceId.Text);
+    WriteBindings(b, Receiver->InterfaceIp);
+    DTNMOS_APPEND_LITERAL(b, ", \"subscription\": {\"sender_id\": ");
     if (Receiver->SenderId.Text[0] != '\0')
     {
         NmosBuffer_Printf(b, "\"%s\"", Receiver->SenderId.Text);

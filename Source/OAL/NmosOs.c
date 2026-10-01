@@ -22,8 +22,12 @@
     #endif
 #else
     #include <arpa/inet.h>
+    #include <ifaddrs.h>
     #include <netdb.h>
     #include <netinet/in.h>
+    #if defined(__linux__)
+        #include <netpacket/packet.h>
+    #endif
     #include <pthread.h>
     #include <sys/select.h>
     #include <sys/socket.h>
@@ -394,6 +398,200 @@ uint16_t NmosOs_FreePort(const char* Host)
     return Port;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddressText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Writes an address of IPv4 or IPv6 into text; returns 0 for null or another family.
+//
+static int AddressText(const struct sockaddr* Address, char* Text, size_t Size)
+{
+    if (Address != NULL && Address->sa_family == AF_INET)
+    {
+        return inet_ntop(AF_INET, &((const struct sockaddr_in*)Address)->sin_addr, Text,
+                         (socklen_t)Size) != NULL;
+    }
+    if (Address != NULL && Address->sa_family == AF_INET6)
+    {
+        return inet_ntop(AF_INET6, &((const struct sockaddr_in6*)Address)->sin6_addr,
+                         Text, (socklen_t)Size) != NULL;
+    }
+    return 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteMac -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Writes the MAC address Mac, of Length bytes, into PortId as IS-04 writes it; an address
+// of another length than 6 bytes is written as all zero.
+//
+static void WriteMac(const unsigned char* Mac, size_t Length, char* PortId, size_t Size)
+{
+    static const unsigned char Zero[6] = {0};
+    const unsigned char* m = Mac != NULL && Length == 6 ? Mac : Zero;
+    snprintf(PortId, Size, "%02x-%02x-%02x-%02x-%02x-%02x", m[0], m[1], m[2], m[3], m[4],
+             m[5]);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddInterface -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Appends an empty entry to *List, of *Count entries with room for *Capacity, and
+// returns it; returns null when the memory ran out.
+//
+static NmosInterface* AddInterface(NmosInterface** List, size_t* Count, size_t* Capacity)
+{
+    if (*Count == *Capacity)
+    {
+        const size_t Grown = *Capacity == 0 ? 8 : *Capacity * 2;
+        NmosInterface* More = realloc(*List, Grown * sizeof(**List));
+        if (More == NULL)
+        {
+            return NULL;
+        }
+        *List = More;
+        *Capacity = Grown;
+    }
+    NmosInterface* Added = &(*List)[(*Count)++];
+    memset(Added, 0, sizeof(*Added));
+    return Added;
+}
+
+#if defined(_WIN32)
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GetAdapters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Returns the adapters of the host as GetAdaptersAddresses() gives them with Flags,
+// which the caller frees, or null when it fails.
+//
+static IP_ADAPTER_ADDRESSES* GetAdapters(ULONG Flags)
+{
+    ULONG Size = 16 * 1024;
+    IP_ADAPTER_ADDRESSES* Adapters = NULL;
+    ULONG Status = ERROR_BUFFER_OVERFLOW;
+    for (int Attempt = 0; Attempt < 3 && Status == ERROR_BUFFER_OVERFLOW; ++Attempt)
+    {
+        free(Adapters);
+        Adapters = malloc(Size);
+        if (Adapters == NULL)
+        {
+            return NULL;
+        }
+        Status = GetAdaptersAddresses(AF_UNSPEC, Flags, NULL, Adapters, &Size);
+    }
+    if (Status != NO_ERROR)
+    {
+        free(Adapters);
+        return NULL;
+    }
+    return Adapters;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_Interfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+NmosInterface* NmosOs_Interfaces(size_t* Count)
+{
+    *Count = 0;
+    NmosInterface* List = NULL;
+    size_t Capacity = 0;
+    int Failed = 0;
+    IP_ADAPTER_ADDRESSES* Adapters = GetAdapters(
+        GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER);
+    for (const IP_ADAPTER_ADDRESSES* Adapter = Adapters; Adapter != NULL && !Failed;
+         Adapter = Adapter->Next)
+    {
+        if (Adapter->OperStatus != IfOperStatusUp)
+        {
+            continue;
+        }
+        for (const IP_ADAPTER_UNICAST_ADDRESS* Unicast = Adapter->FirstUnicastAddress;
+             Unicast != NULL && !Failed; Unicast = Unicast->Next)
+        {
+            char Address[64];
+            if (!AddressText(Unicast->Address.lpSockaddr, Address, sizeof(Address)))
+            {
+                continue;
+            }
+            NmosInterface* Added = AddInterface(&List, Count, &Capacity);
+            Failed = Added == NULL;
+            if (Added == NULL)
+            {
+                break;
+            }
+            if (WideCharToMultiByte(CP_UTF8, 0, Adapter->FriendlyName, -1, Added->Name,
+                                    (int)sizeof(Added->Name), NULL, NULL) == 0)
+            {
+                snprintf(Added->Name, sizeof(Added->Name), "%s", Adapter->AdapterName);
+            }
+            WriteMac(Adapter->PhysicalAddress, Adapter->PhysicalAddressLength,
+                     Added->PortId, sizeof(Added->PortId));
+            memcpy(Added->Address, Address, sizeof(Address));
+        }
+    }
+    free(Adapters);
+    if (Failed)
+    {
+        free(List);
+        *Count = 0;
+        return NULL;
+    }
+    return List;
+}
+
+#else
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_Interfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+NmosInterface* NmosOs_Interfaces(size_t* Count)
+{
+    *Count = 0;
+    struct ifaddrs* Addresses = NULL;
+    if (getifaddrs(&Addresses) != 0)
+    {
+        return NULL;
+    }
+    NmosInterface* List = NULL;
+    size_t Capacity = 0;
+    int Failed = 0;
+    for (const struct ifaddrs* a = Addresses; a != NULL && !Failed; a = a->ifa_next)
+    {
+        char Address[64];
+        if (!AddressText(a->ifa_addr, Address, sizeof(Address)))
+        {
+            continue;
+        }
+        NmosInterface* Added = AddInterface(&List, Count, &Capacity);
+        Failed = Added == NULL;
+        if (Added == NULL)
+        {
+            break;
+        }
+        snprintf(Added->Name, sizeof(Added->Name), "%s", a->ifa_name);
+        WriteMac(NULL, 0, Added->PortId, sizeof(Added->PortId));
+        memcpy(Added->Address, Address, sizeof(Address));
+    #if defined(__linux__)
+        // The MAC address is that of the entry of the interface with its link layer.
+        for (const struct ifaddrs* l = Addresses; l != NULL; l = l->ifa_next)
+        {
+            if (l->ifa_addr != NULL && l->ifa_addr->sa_family == AF_PACKET &&
+                strcmp(l->ifa_name, a->ifa_name) == 0)
+            {
+                const struct sockaddr_ll* Link = (const struct sockaddr_ll*)l->ifa_addr;
+                WriteMac(Link->sll_addr, Link->sll_halen, Added->PortId,
+                         sizeof(Added->PortId));
+                break;
+            }
+        }
+    #endif
+    }
+    freeifaddrs(Addresses);
+    if (Failed)
+    {
+        free(List);
+        *Count = 0;
+        return NULL;
+    }
+    return List;
+}
+
+#endif
+
 struct NmosUdp
 {
     NmosSocket Socket;
@@ -546,23 +744,9 @@ void NmosOs_SystemDns(char* Server, size_t ServerSize, char* Domain, size_t Doma
 #if defined(_WIN32)
     // The suffix that DHCP gives is the one of the connection, which GetNetworkParams()
     // does not know; that of the domain of the PC is taken when it has none.
-    ULONG Size = 16 * 1024;
-    IP_ADAPTER_ADDRESSES* Adapters = NULL;
-    ULONG Status = ERROR_BUFFER_OVERFLOW;
-    for (int Attempt = 0; Attempt < 3 && Status == ERROR_BUFFER_OVERFLOW; ++Attempt)
-    {
-        free(Adapters);
-        Adapters = malloc(Size);
-        if (Adapters == NULL)
-        {
-            return;
-        }
-        Status = GetAdaptersAddresses(AF_UNSPEC,
-                                      GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
-                                          GAA_FLAG_SKIP_MULTICAST,
-                                      NULL, Adapters, &Size);
-    }
-    for (const IP_ADAPTER_ADDRESSES* Adapter = Status == NO_ERROR ? Adapters : NULL;
+    IP_ADAPTER_ADDRESSES* Adapters = GetAdapters(
+        GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST);
+    for (const IP_ADAPTER_ADDRESSES* Adapter = Adapters;
          Adapter != NULL && Server[0] == '\0'; Adapter = Adapter->Next)
     {
         if (Adapter->OperStatus != IfOperStatusUp ||
