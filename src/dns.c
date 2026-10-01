@@ -16,7 +16,9 @@ enum
 {
     header_size = 12,
     flag_response = 0x8000,
-    max_pointers = 64 // name compression pointers followed within one name
+    flag_qr_byte = 0x80, // QR in the first byte of the flags, the third of the header
+    rcode_mask = 0x0F,   // RCODE in the second byte of the flags, the fourth
+    max_pointers = 64    // name compression pointers followed within one name
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -194,8 +196,11 @@ int dtnmos_dns_read_response(const uint8_t* message, size_t length,
                              void (*record)(void* user, const dtnmos_dns_record* found),
                              void* user)
 {
-    if (message == NULL || length < header_size ||
-        (get16(message + 2) & flag_response) == 0)
+    // The flags of the header are tested in their bytes rather than through get16(): QR
+    // is the top bit of the third byte (RFC 1035, 4.1.1). MSVC 19.51, of Visual Studio
+    // 2026, compiles a mask of what get16() returns wrongly in a release build, and the
+    // test failed for every response.
+    if (message == NULL || length < header_size || (message[2] & flag_qr_byte) == 0)
     {
         return 0;
     }
@@ -343,7 +348,9 @@ int dtnmos_dns_read_header(const uint8_t* message, size_t length, uint16_t* id,
         return 0;
     }
     *id = get16(message);
-    *rcode = get16(message + 2) & 0x000Fu;
+    // RCODE is the low four bits of the fourth byte, read there for the reason
+    // dtnmos_dns_read_response() gives.
+    *rcode = message[3] & rcode_mask;
     return 1;
 }
 
