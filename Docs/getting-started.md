@@ -71,7 +71,7 @@ Building the sources as part of a project needs no install step:
     include(FetchContent)
     FetchContent_Declare(dtnmos
         GIT_REPOSITORY https://github.com/dektec-com/dtnmos.git
-        GIT_TAG v0.3.0)
+        GIT_TAG v0.4.0)
     set(DTNMOS_WITH_CURL ON)
     FetchContent_MakeAvailable(dtnmos)
     target_link_libraries(myapp PRIVATE dtnmos::dtnmos)
