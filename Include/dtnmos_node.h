@@ -58,14 +58,19 @@ typedef struct DtNmosNodeConfig
     // Optional: moves the node to another registry when its registry fails.
     DtNmosRegistryFailedFunc RegistryFailed;
     void* RegistryFailedUser;
-    uint32_t FailuresBeforeSwitch; // polls that fail in a row first; 3 when 0
+    // Polls that fail in a row first; when 0, 3, or 1 for a node that searches for its
+    // registry, as IS-04 has such a node move on at the first failure.
+    uint32_t FailuresBeforeSwitch;
     // How a node without a RegistrationUrl searches for its registry, as
     // DtNmos_Discover() does, for the Registration API whatever Service says; copied.
     // Null searches through multicast DNS and the DNS server of the host, on the
-    // interface of the default route. The node registers with the most preferred usable
-    // registry it finds, moves to the next when one fails FailuresBeforeSwitch polls in a
-    // row, after asking RegistryFailed when that is set, and searches again when none is
-    // left, every second at first and every 8 seconds at most, as IS-04 asks of a node.
+    // interface of the default route. The node searches on a thread of its own, from its
+    // first poll until it is closed: every 3 seconds while it has a registry, so that it
+    // knows the registries it can fail over to, and without one every second at first
+    // and every 8 seconds at most. It registers with the most preferred usable registry
+    // it found; when one fails FailuresBeforeSwitch polls in a row, it asks
+    // RegistryFailed, when that is set, and else moves to the next one that has not
+    // failed since it last registered, with a heartbeat first, as IS-04 asks of a node.
     const DtNmosDiscoveryConfig* Discovery;
 } DtNmosNodeConfig;
 
@@ -206,13 +211,14 @@ DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
 // its handle.
 DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config);
 
-// Applies the scheduled activations that are due, searches for a registry when the node
-// has none and it is time to, registers what is not registered yet, deletes what was
-// removed, and sends a heartbeat when one is due, registering everything again when the
-// registry has lost the node. A search blocks for as long as DtNmos_Discover() does, and
-// finding no registry is no failure. Sets NextMs, when it is not null, to when it wants
-// to be called again, which a scheduled activation brings forward. Fails with the first
-// request that failed; the next poll tries again.
+// Applies the scheduled activations that are due, takes a registry the search found when
+// the node has none, registers what is not registered yet, deletes what was removed, and
+// sends a heartbeat when one is due, registering everything again when the registry has
+// lost the node. A registry that answers the first registration of the node with 200
+// holds an old node of its ID, which the node deletes and registers again. Having no
+// registry is no failure. Sets NextMs, when it is not null, to when it wants to be called
+// again, which a scheduled activation or a move to another registry brings forward.
+// Fails with the first request that failed; the next poll tries again.
 DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 
 // Removes a device, sender or receiver, and the senders and receivers of a device; the

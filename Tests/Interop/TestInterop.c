@@ -119,6 +119,8 @@ static void StartNode(NmosInteropNode* Interop, int Searches)
     Config.Hostname = "dtnmos-interop";
     Config.RegistrationUrl = Registry;
     Config.Http = DtNmos_CurlHttp;
+    // A registry that does not answer is given up within a heartbeat, as IS-04-01 tests.
+    Config.TimeoutMs = 2000;
     Interop->Node = DtNmosNode_Alloc();
     NMOS_ASSERT(Interop->Node != NULL);
     NmosTest_SetCleanup(StopNode, Interop);

@@ -792,6 +792,7 @@ typedef struct NmosFakeRegistries
 {
     const char* Urls[2]; // the base URLs of the two
     int Requests[2];
+    int Registrations[2]; // POSTs of a resource
     int Down[2];
 } NmosFakeRegistries;
 
@@ -809,6 +810,7 @@ static DtNmosResult FakeRegistry(void* User, const DtNmosHttpRequest* Request,
         if (strncmp(Request->Url, f->Urls[i], strlen(f->Urls[i])) == 0)
         {
             ++f->Requests[i];
+            f->Registrations[i] += strstr(Request->Url, "/resource") != NULL;
             if (f->Down[i])
             {
                 return DtNmos_SetLastError(DTNMOS_E_HTTP,
@@ -821,10 +823,26 @@ static DtNmosResult FakeRegistry(void* User, const DtNmosHttpRequest* Request,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PollUntil -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Polls the node every 20 ms, for two seconds at most, until *Count exceeds Above;
+// returns whether it did.
+//
+static int PollUntil(DtNmosNode* Node, const int* Count, int Above)
+{
+    for (int i = 0; i < 100 && *Count <= Above; ++i)
+    {
+        DtNmosNode_Poll(Node, NULL);
+        NmosOs_SleepMs(20);
+    }
+    return *Count > Above;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.- NodeSearchesForItsRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // A node without the URL of a registry searches for one, registers with the most
-// preferred, moves to the next when it fails, and searches again when none is left.
+// preferred, moves to the next with a heartbeat when it fails, and starts over with the
+// first when all failed.
 //
 NMOS_TEST(NodeSearchesForItsRegistry)
 {
@@ -876,32 +894,32 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     }
     NMOS_ASSERT(Opened == DTNMOS_OK);
 
-    // The first poll finds both, and registers with the one of priority 0.
-    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    // The search finds both, and the node registers with the one of priority 0.
+    NMOS_ASSERT(PollUntil(Node, &Fake.Registrations[0], 0));
     NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
-    NMOS_ASSERT(Fake.Requests[0] > 0);
     NMOS_ASSERT_EQ(Fake.Requests[1], 0);
 
-    // When it fails, the node registers with the other.
+    // When it fails, the node moves to the other, with a heartbeat: what it registered
+    // stays registered.
     Fake.Down[0] = 1;
-    NmosOs_SleepMs(5);
-    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
-    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(PollUntil(Node, &Fake.Requests[1], 0));
+    for (int i = 0; i < 5; ++i)
+    {
+        DtNmosNode_Poll(Node, NULL);
+    }
+    NMOS_ASSERT_EQ(Fake.Registrations[1], 0);
     NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
-    NMOS_ASSERT(Fake.Requests[1] > 0);
 
-    // When that fails too, none is left, and the node searches again.
+    // When that fails too, the node starts over with the first, once it answers again.
     Fake.Down[1] = 1;
-    NmosOs_SleepMs(5);
-    NmosOs_MutexLock(r.Mutex);
-    const int Queries = r.Queries;
-    NmosOs_MutexUnlock(r.Mutex);
-    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
-    DtNmosNode_Poll(Node, NULL);
-    NmosOs_MutexLock(r.Mutex);
-    const int QueriesAfter = r.Queries;
-    NmosOs_MutexUnlock(r.Mutex);
-    NMOS_ASSERT(QueriesAfter > Queries);
+    for (int i = 0; i < 10; ++i)
+    {
+        DtNmosNode_Poll(Node, NULL);
+        NmosOs_SleepMs(5);
+    }
+    Fake.Down[0] = 0;
+    const int Before = Fake.Requests[0];
+    NMOS_ASSERT(PollUntil(Node, &Fake.Requests[0], Before));
     DtNmosNode_Free(Node);
     StopResponder(&r);
 }

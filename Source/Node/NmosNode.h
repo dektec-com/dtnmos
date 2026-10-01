@@ -106,14 +106,20 @@ struct DtNmosNode
     void* RegistryFailedUser;
     uint32_t FailuresBeforeSwitch;
     uint32_t Failures; // polls that failed in a row; the poll thread's own
-    // The search for a registry of a node opened without one; the poll thread's own. The
-    // strings of Discovery are the node's copies.
+    // The search for a registry of a node opened without one, on a thread of its own. The
+    // strings of Discovery are the node's copies, which do not change while it runs.
     int Searches;
     DtNmosDiscoveryConfig Discovery;
-    DtNmosRegistryList* Found; // what the last search found
-    size_t FoundNext;          // the index in Found of the next to try
-    uint64_t NextSearchMs;     // of the monotonic clock
-    uint32_t SearchWaitMs;     // between searches that find none, doubling
+    NmosThread* Searcher;      // the search thread, from the first poll on
+    int StopSearching;         // under the lock
+    DtNmosRegistryList* Found; // what the last search found, under the lock
+    // The base URLs of the registries that failed since the node last registered; the
+    // poll thread's own.
+    char* Failed[16];
+    size_t FailedCount;
+    // The node has not registered with its registry yet; a 200 to that first registration
+    // says the registry holds an old node of its ID. The poll thread's own.
+    int FirstRegistration;
     NmosNodeDevice* Devices;
     size_t DeviceCount;
     size_t DeviceCapacity;

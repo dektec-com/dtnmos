@@ -32,6 +32,7 @@ typedef struct NmosFakeRegistration
     int Count;
     int HeartbeatStatus;
     const char* Unreachable; // a request to a URL that holds it gets no answer
+    int FirstNodeStatus;     // when set, the answer to the first registration of the node
 } NmosFakeRegistration;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RecordHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -62,6 +63,11 @@ static DtNmosResult RecordHttp(void* User, const DtNmosHttpRequest* Request,
             NmosJson_Free(Json);
         }
         Status = 201;
+        if (strcmp(r->Type, "node") == 0 && Registry->FirstNodeStatus != 0)
+        {
+            Status = Registry->FirstNodeStatus;
+            Registry->FirstNodeStatus = 0;
+        }
     }
     else if (strstr(Request->Url, "/health/nodes/") != NULL)
     {
@@ -225,6 +231,30 @@ NMOS_TEST(NodeRegistersAgainWhenTheRegistryLostIt)
     NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
     NMOS_ASSERT_STR(Registry.Requests[Registered + 1].Type, "node");
     NMOS_ASSERT_STR(Registry.Requests[Registered + 6].Type, "receiver");
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.- NodeDeletesAnOldNodeOfItsIdFirst -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A registry that answers the first registration of the node with 200 holds an old node
+// of its ID, which the node deletes before it registers again, as IS-04 asks.
+//
+NMOS_TEST(NodeDeletesAnOldNodeOfItsIdFirst)
+{
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    Registry.FirstNodeStatus = 200;
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(Registry.Count >= 3);
+    NMOS_ASSERT_STR(Registry.Requests[0].Type, "node");
+    NMOS_ASSERT_STR(Registry.Requests[1].Method, "DELETE");
+    NMOS_ASSERT(strstr(Registry.Requests[1].Url, "resource/nodes/" NODE_ID) != NULL);
+    NMOS_ASSERT_STR(Registry.Requests[2].Type, "node");
+    NMOS_ASSERT_STR(Registry.Requests[3].Type, "device");
     DtNmosNode_Free(Node);
 }
 
@@ -656,6 +686,7 @@ NMOS_TEST(NodeServesItselfOverHttp)
 
 NMOS_TEST_MAIN("Node", NMOS_RUN(NodeRegistersParentsBeforeChildren),
                NMOS_RUN(NodeRegistersAgainWhenTheRegistryLostIt),
+               NMOS_RUN(NodeDeletesAnOldNodeOfItsIdFirst),
                NMOS_RUN(NodeIsOpenedClosedAndOpenedAgain),
                NMOS_RUN(NodeChecksTheSizeOfAConfig), NMOS_RUN(NodeMovesToTheNextRegistry),
                NMOS_RUN(NodeDeletesWhatIsRemovedAndWhatItHad),

@@ -115,8 +115,14 @@ DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
                  Request->ContentType);
         Headers = curl_slist_append(Headers, ContentType);
     }
-    Headers =
-        curl_slist_append(Headers, "Accept: application/json, application/sdp, */*");
+    else if (Request->Body == NULL)
+    {
+        // A request without a body has no type; libcurl would give an empty POST one.
+        Headers = curl_slist_append(Headers, "Content-Type:");
+    }
+    // JSON is preferred, as the APIs of NMOS ask; an SDP is taken where one is asked for.
+    Headers = curl_slist_append(
+        Headers, "Accept: application/json, application/sdp;q=0.9, */*;q=0.8");
     curl_easy_setopt(Curl, CURLOPT_URL, Request->Url);
     curl_easy_setopt(Curl, CURLOPT_CUSTOMREQUEST, Request->Method);
     curl_easy_setopt(Curl, CURLOPT_HTTPHEADER, Headers);
