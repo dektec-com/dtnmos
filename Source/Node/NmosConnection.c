@@ -324,34 +324,34 @@ static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
     const NmosJson* Params = &Value->Items[0];
     for (size_t i = 0; i < Params->Count; ++i)
     {
-        const char* name = Params->Keys[i];
+        const char* Name = Params->Keys[i];
         const NmosJson* Member = &Params->Items[i];
         int Valid = 0;
-        if (strcmp(name, "source_ip") == 0)
+        if (strcmp(Name, "source_ip") == 0)
         {
             Valid = ReadAddress(Member, t->SourceIp, sizeof(t->SourceIp));
         }
-        else if (Sender && strcmp(name, "destination_ip") == 0)
+        else if (Sender && strcmp(Name, "destination_ip") == 0)
         {
             Valid = ReadAddress(Member, t->DestinationIp, sizeof(t->DestinationIp));
         }
-        else if (!Sender && strcmp(name, "multicast_ip") == 0)
+        else if (!Sender && strcmp(Name, "multicast_ip") == 0)
         {
             Valid = ReadAddress(Member, t->MulticastIp, sizeof(t->MulticastIp));
         }
-        else if (!Sender && strcmp(name, "interface_ip") == 0)
+        else if (!Sender && strcmp(Name, "interface_ip") == 0)
         {
             Valid = ReadAddress(Member, t->InterfaceIp, sizeof(t->InterfaceIp));
         }
-        else if (Sender && strcmp(name, "source_port") == 0)
+        else if (Sender && strcmp(Name, "source_port") == 0)
         {
             Valid = ReadPort(Member, &t->SourcePort);
         }
-        else if (strcmp(name, "destination_port") == 0)
+        else if (strcmp(Name, "destination_port") == 0)
         {
             Valid = ReadPort(Member, &t->DestinationPort);
         }
-        else if (strcmp(name, "rtp_enabled") == 0)
+        else if (strcmp(Name, "rtp_enabled") == 0)
         {
             Valid = ReadBool(Member, &t->RtpEnabled);
         }
@@ -423,16 +423,16 @@ static const char* MergePatch(const NmosJson* Body, int Sender, NmosParameters* 
         else if (strcmp(Key, "activation") == 0)
         {
             const NmosJson* Mode = NmosJson_Member(Value, "mode");
-            const char* name = NmosJson_Text(Mode);
-            if (Mode == NULL || (Mode->Type != DTNMOS_JSON_NULL && name == NULL))
+            const char* Name = NmosJson_Text(Mode);
+            if (Mode == NULL || (Mode->Type != DTNMOS_JSON_NULL && Name == NULL))
             {
                 return "activation holds a mode.";
             }
-            if (name != NULL && strcmp(name, "activate_immediate") == 0)
+            if (Name != NULL && strcmp(Name, "activate_immediate") == 0)
             {
                 *Activate = 1;
             }
-            else if (name != NULL)
+            else if (Name != NULL)
             {
                 *Status = 501;
                 return "The node activates immediately only.";

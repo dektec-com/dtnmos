@@ -65,26 +65,26 @@ static void Separate(NmosFmtpWriter* Writer)
 //
 // Writes name=value; nothing when value is null or empty.
 //
-static void WriteText(NmosFmtpWriter* Writer, const char* name, const char* Value)
+static void WriteText(NmosFmtpWriter* Writer, const char* Name, const char* Value)
 {
     if (Value == NULL || Value[0] == '\0')
     {
         return;
     }
     Separate(Writer);
-    NmosBuffer_Printf(Writer->Buffer, "%s=%s", name, Value);
+    NmosBuffer_Printf(Writer->Buffer, "%s=%s", Name, Value);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteNumber -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void WriteNumber(NmosFmtpWriter* Writer, const char* name, uint32_t Value)
+static void WriteNumber(NmosFmtpWriter* Writer, const char* Name, uint32_t Value)
 {
     if (Value == 0)
     {
         return;
     }
     Separate(Writer);
-    NmosBuffer_Printf(Writer->Buffer, "%s=%u", name, (unsigned)Value);
+    NmosBuffer_Printf(Writer->Buffer, "%s=%u", Name, (unsigned)Value);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteRate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -109,14 +109,14 @@ static void WriteRate(NmosFmtpWriter* Writer, uint32_t Numerator, uint32_t Denom
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteFlag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void WriteFlag(NmosFmtpWriter* Writer, const char* name, int Set)
+static void WriteFlag(NmosFmtpWriter* Writer, const char* Name, int Set)
 {
     if (!Set)
     {
         return;
     }
     Separate(Writer);
-    NmosBuffer_Append(Writer->Buffer, name, strlen(name));
+    NmosBuffer_Append(Writer->Buffer, Name, strlen(Name));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- EndFmtp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

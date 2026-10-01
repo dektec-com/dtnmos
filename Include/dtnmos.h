@@ -82,7 +82,7 @@ typedef struct DtNmosId
 // namespace_id, so that a node, a device, a sender or a receiver keeps its ID across
 // restarts, e.g. from the serial number of a card, its port and the label of an
 // element. Fails with DTNMOS_E_INVALID_ARGUMENT when namespace_id is no UUID.
-DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* name,
+DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* Name,
                                           DtNmosId* Id);
 
 // Where log messages go.

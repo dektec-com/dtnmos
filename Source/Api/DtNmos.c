@@ -200,10 +200,10 @@ static int ReadUuid(const char* Text, uint8_t Bytes[16])
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosId_FromName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* name,
+DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* Name,
                                DtNmosId* Id)
 {
-    if (NamespaceId == NULL || name == NULL || Id == NULL)
+    if (NamespaceId == NULL || Name == NULL || Id == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmosId_FromName() needs a namespace, a name and an ID.");
@@ -217,7 +217,7 @@ DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* name,
     NmosSha1 Sha1;
     NmosSha1_Init(&Sha1);
     NmosSha1_Update(&Sha1, Space, sizeof(Space));
-    NmosSha1_Update(&Sha1, name, strlen(name));
+    NmosSha1_Update(&Sha1, Name, strlen(Name));
     uint8_t Digest[20];
     NmosSha1_Final(&Sha1, Digest);
     // Version 5 in the high nibble of byte 6, and the variant of RFC 9562 in byte 8.

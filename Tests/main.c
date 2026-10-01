@@ -24,7 +24,7 @@ void CheckReport(const char* File, int Line, const char* Expression)
 
 typedef struct NmosTest
 {
-    const char* name;
+    const char* Name;
     void (*Run)(void);
 } NmosTest;
 
@@ -43,14 +43,14 @@ int main(int Argc, char** Argv)
     int Ran = 0;
     for (size_t i = 0; i < sizeof(Tests) / sizeof(Tests[0]); ++i)
     {
-        if (Only != NULL && strcmp(Only, Tests[i].name) != 0)
+        if (Only != NULL && strcmp(Only, Tests[i].Name) != 0)
         {
             continue;
         }
         CheckFailures = 0;
         Tests[i].Run();
         ++Ran;
-        printf("%s %s\n", CheckFailures == 0 ? "[  OK  ]" : "[FAILED]", Tests[i].name);
+        printf("%s %s\n", CheckFailures == 0 ? "[  OK  ]" : "[FAILED]", Tests[i].Name);
         Failed += CheckFailures != 0;
     }
     if (Ran == 0)

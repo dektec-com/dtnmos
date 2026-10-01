@@ -201,14 +201,14 @@ static int Ask(DtNmosNode* Node, const char* Method, const char* Path, const cha
 //
 // Returns the member name of the one leg of the transport parameters of json.
 //
-static const NmosJson* LegMember(const NmosJson* Json, const char* name)
+static const NmosJson* LegMember(const NmosJson* Json, const char* Name)
 {
     const NmosJson* Legs = NmosJson_Member(Json, "transport_params");
     if (Legs == NULL || Legs->Type != DTNMOS_JSON_ARRAY || Legs->Count != 1)
     {
         return NULL;
     }
-    return NmosJson_Member(&Legs->Items[0], name);
+    return NmosJson_Member(&Legs->Items[0], Name);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- connection_answers_its_parameters -.-.-.-.-.-.-.-.-.-.-.-.-.

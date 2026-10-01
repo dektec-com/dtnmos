@@ -68,7 +68,7 @@ DTNMOS_API DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* Respon
 
 // Adds a header, whose name and value it copies.
 DTNMOS_API DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* Response,
-                                                     const char* name, const char* Value);
+                                                     const char* Name, const char* Value);
 
 DTNMOS_API int DtNmosHttpResponse_Status(const DtNmosHttpResponse* Response);
 
@@ -88,7 +88,7 @@ DTNMOS_API DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* 
 // Returns the value of the first header called name, compared without regard to case,
 // or null when there is none.
 DTNMOS_API const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* Response,
-                                                     const char* name);
+                                                     const char* Name);
 
 // Performs a client request and fills response, which is empty. Returns DTNMOS_OK when
 // an answer came, whatever its status; DTNMOS_E_TIMEOUT when none came in time, and

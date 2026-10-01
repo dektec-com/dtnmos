@@ -51,9 +51,9 @@ static uint32_t Get32(const uint8_t* At)
 // labels at buffer + *Offset; returns 0 when it does not fit or a label is empty or
 // longer than 63 bytes.
 //
-static int WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* name)
+static int WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* Name)
 {
-    const char* At = name;
+    const char* At = Name;
     while (*At != '\0')
     {
         uint8_t Label[63];
@@ -107,8 +107,8 @@ size_t NmosDns_WriteQuery(uint8_t* Buffer, size_t Size, uint16_t Id, uint16_t Fl
     size_t Offset = NMOS_HEADER_SIZE;
     for (size_t i = 0; i < Count; ++i)
     {
-        if (Questions[i].name == NULL ||
-            !WriteName(Buffer, Size, &Offset, Questions[i].name) || Offset + 4 > Size)
+        if (Questions[i].Name == NULL ||
+            !WriteName(Buffer, Size, &Offset, Questions[i].Name) || Offset + 4 > Size)
         {
             return 0;
         }
@@ -210,10 +210,10 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
     const unsigned Records =
         (unsigned)Get16(Message + 6) + Get16(Message + 8) + Get16(Message + 10);
     size_t Offset = NMOS_HEADER_SIZE;
-    char name[DTNMOS_DNS_NAME_SIZE];
+    char Name[DTNMOS_DNS_NAME_SIZE];
     for (unsigned i = 0; i < Questions; ++i)
     {
-        if (!ReadName(Message, Length, &Offset, name) || Offset + 4 > Length)
+        if (!ReadName(Message, Length, &Offset, Name) || Offset + 4 > Length)
         {
             return 0;
         }
@@ -223,7 +223,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
     {
         NmosDnsRecord Found;
         memset(&Found, 0, sizeof(Found));
-        if (!ReadName(Message, Length, &Offset, Found.name) || Offset + 10 > Length)
+        if (!ReadName(Message, Length, &Offset, Found.Name) || Offset + 10 > Length)
         {
             return 0;
         }

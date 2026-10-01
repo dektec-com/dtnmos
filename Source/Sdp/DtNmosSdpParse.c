@@ -290,15 +290,15 @@ static DtNmosResult ReadSourceFilter(NmosParser* p, NmosSpan Value,
 //
 static DtNmosResult ReadAttribute(NmosParser* p, NmosSpan Line)
 {
-    NmosSpan name;
-    const NmosSpan Value = NmosSpan_Split(Line, ':', &name);
+    NmosSpan Name;
+    const NmosSpan Value = NmosSpan_Split(Line, ':', &Name);
     NmosSection* s = p->Count == 0 ? NULL : &p->Sections[p->Count - 1];
     NmosSharedLines* Lines = s == NULL ? &p->SessionLines : &s->Shared;
-    if (NmosSpan_Equals(name, "source-filter", 0))
+    if (NmosSpan_Equals(Name, "source-filter", 0))
     {
         return ReadSourceFilter(p, Value, Lines);
     }
-    if (NmosSpan_Equals(name, "ts-refclk", 0))
+    if (NmosSpan_Equals(Name, "ts-refclk", 0))
     {
         if (Lines->TsRefclk.Length == 0)
         {
@@ -306,12 +306,12 @@ static DtNmosResult ReadAttribute(NmosParser* p, NmosSpan Line)
         }
         return DTNMOS_OK;
     }
-    if (NmosSpan_Equals(name, "mediaclk", 0))
+    if (NmosSpan_Equals(Name, "mediaclk", 0))
     {
         Lines->Mediaclk = NmosSpan_Trim(Value);
         return DTNMOS_OK;
     }
-    if (NmosSpan_Equals(name, "group", 0))
+    if (NmosSpan_Equals(Name, "group", 0))
     {
         NmosSpan Semantics;
         NmosSpan Rest = NextWord(Value, &Semantics);
@@ -330,11 +330,11 @@ static DtNmosResult ReadAttribute(NmosParser* p, NmosSpan Line)
     {
         return DTNMOS_OK;
     }
-    if (NmosSpan_Equals(name, "rtpmap", 0))
+    if (NmosSpan_Equals(Name, "rtpmap", 0))
     {
         return ReadRtpmap(p, s, Value);
     }
-    if (NmosSpan_Equals(name, "fmtp", 0))
+    if (NmosSpan_Equals(Name, "fmtp", 0))
     {
         uint32_t PayloadType = 0;
         NmosSpan Parameters;
@@ -349,13 +349,13 @@ static DtNmosResult ReadAttribute(NmosParser* p, NmosSpan Line)
         }
         return DTNMOS_OK;
     }
-    if (NmosSpan_Equals(name, "ptime", 0))
+    if (NmosSpan_Equals(Name, "ptime", 0))
     {
         s->Ptime = NmosSpan_Trim(Value);
         s->PtimeLine = p->Line;
         return DTNMOS_OK;
     }
-    if (NmosSpan_Equals(name, "mid", 0))
+    if (NmosSpan_Equals(Name, "mid", 0))
     {
         s->Mid = NmosSpan_Trim(Value);
         return DTNMOS_OK;
@@ -473,7 +473,7 @@ typedef struct NmosFmtpReader
 // Reads the next parameter into name and value; value is empty for a flag such as
 // interlace.
 //
-static int NextParameter(NmosFmtpReader* Reader, NmosSpan* name, NmosSpan* Value)
+static int NextParameter(NmosFmtpReader* Reader, NmosSpan* Name, NmosSpan* Value)
 {
     while (Reader->Rest.Data != NULL)
     {
@@ -484,8 +484,8 @@ static int NextParameter(NmosFmtpReader* Reader, NmosSpan* name, NmosSpan* Value
         {
             continue;
         }
-        const NmosSpan After = NmosSpan_Split(Parameter, '=', name);
-        *name = NmosSpan_Trim(*name);
+        const NmosSpan After = NmosSpan_Split(Parameter, '=', Name);
+        *Name = NmosSpan_Trim(*Name);
         if (After.Data == NULL)
         {
             Value->Data = Parameter.Data + Parameter.Length;
@@ -533,12 +533,12 @@ typedef struct NmosRaster
 // Copies the value of the parameter name of a=fmtp into the array target of size bytes;
 // fails when it does not fit.
 //
-static DtNmosResult CopyValue(size_t Line, NmosSpan name, NmosSpan Value, char* Target,
+static DtNmosResult CopyValue(size_t Line, NmosSpan Name, NmosSpan Value, char* Target,
                               size_t Size)
 {
     if (!NmosText_CopySpan(Target, Size, Value))
     {
-        return FailAt(Line, "a=fmtp has a value longer than its standard allows", name);
+        return FailAt(Line, "a=fmtp has a value longer than its standard allows", Name);
     }
     return DTNMOS_OK;
 }
@@ -547,58 +547,58 @@ static DtNmosResult CopyValue(size_t Line, NmosSpan name, NmosSpan Value, char* 
 //
 // Reads the parameter name of the raster; sets handled when it is one of them.
 //
-static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan name,
+static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan Name,
                                NmosSpan Value, int* Handled)
 {
     *Handled = 1;
     int Valid = 1;
     char* Text = NULL;
     size_t Size = DTNMOS_MAX_VALUE_SIZE;
-    if (NmosSpan_Equals(name, "width", 1))
+    if (NmosSpan_Equals(Name, "width", 1))
     {
         Valid = NmosText_ParseU32(Value, 65535, r->Width);
     }
-    else if (NmosSpan_Equals(name, "height", 1))
+    else if (NmosSpan_Equals(Name, "height", 1))
     {
         Valid = NmosText_ParseU32(Value, 65535, r->Height);
     }
-    else if (NmosSpan_Equals(name, "exactframerate", 1))
+    else if (NmosSpan_Equals(Name, "exactframerate", 1))
     {
         Valid = NmosText_ParseRate(Value, r->RateNumerator, r->RateDenominator);
     }
-    else if (NmosSpan_Equals(name, "depth", 1))
+    else if (NmosSpan_Equals(Name, "depth", 1))
     {
         Valid = NmosText_ParseU32(Value, 64, r->Depth);
     }
-    else if (NmosSpan_Equals(name, "interlace", 1))
+    else if (NmosSpan_Equals(Name, "interlace", 1))
     {
         *r->Interlaced = FlagValue(Value);
     }
-    else if (NmosSpan_Equals(name, "segmented", 1))
+    else if (NmosSpan_Equals(Name, "segmented", 1))
     {
         *r->Segmented = FlagValue(Value);
     }
-    else if (NmosSpan_Equals(name, "sampling", 1))
+    else if (NmosSpan_Equals(Name, "sampling", 1))
     {
         Text = r->Sampling;
     }
-    else if (NmosSpan_Equals(name, "colorimetry", 1))
+    else if (NmosSpan_Equals(Name, "colorimetry", 1))
     {
         Text = r->Colorimetry;
     }
-    else if (NmosSpan_Equals(name, "TCS", 1))
+    else if (NmosSpan_Equals(Name, "TCS", 1))
     {
         Text = r->Tcs;
     }
-    else if (NmosSpan_Equals(name, "RANGE", 1))
+    else if (NmosSpan_Equals(Name, "RANGE", 1))
     {
         Text = r->Range;
     }
-    else if (NmosSpan_Equals(name, "SSN", 1))
+    else if (NmosSpan_Equals(Name, "SSN", 1))
     {
         Text = r->Ssn;
     }
-    else if (NmosSpan_Equals(name, "TP", 1))
+    else if (NmosSpan_Equals(Name, "TP", 1))
     {
         Text = r->TransmitterType;
         Size = DTNMOS_MAX_SHORT_SIZE;
@@ -610,9 +610,9 @@ static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan name,
     if (!Valid)
     {
         return FailAt(Line, "a=fmtp has a parameter whose value is no number or rate",
-                      name);
+                      Name);
     }
-    return Text == NULL ? DTNMOS_OK : CopyValue(Line, name, Value, Text, Size);
+    return Text == NULL ? DTNMOS_OK : CopyValue(Line, Name, Value, Text, Size);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -627,15 +627,15 @@ static DtNmosResult BuildVideo(const NmosSection* s, DtNmosVideoFormat* Video)
                           Video->Range,          Video->Ssn,
                           Video->TransmitterType};
     NmosFmtpReader Reader = {s->Fmtp};
-    NmosSpan name;
+    NmosSpan Name;
     NmosSpan Value;
-    while (NextParameter(&Reader, &name, &Value))
+    while (NextParameter(&Reader, &Name, &Value))
     {
         int Handled = 0;
-        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, name, Value, &Handled);
-        if (Result == DTNMOS_OK && !Handled && NmosSpan_Equals(name, "PM", 1))
+        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
+        if (Result == DTNMOS_OK && !Handled && NmosSpan_Equals(Name, "PM", 1))
         {
-            Result = CopyValue(s->FmtpLine, name, Value, Video->PackingMode,
+            Result = CopyValue(s->FmtpLine, Name, Value, Video->PackingMode,
                                sizeof(Video->PackingMode));
         }
         if (Result != DTNMOS_OK)
@@ -666,12 +666,12 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
                           Video->Range,          Video->Ssn,
                           Video->TransmitterType};
     NmosFmtpReader Reader = {s->Fmtp};
-    NmosSpan name;
+    NmosSpan Name;
     NmosSpan Value;
-    while (NextParameter(&Reader, &name, &Value))
+    while (NextParameter(&Reader, &Name, &Value))
     {
         int Handled = 0;
-        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, name, Value, &Handled);
+        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
         if (Result != DTNMOS_OK)
         {
             return Result;
@@ -682,29 +682,29 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
         }
         char* Text = NULL;
         uint32_t* Number = NULL;
-        if (NmosSpan_Equals(name, "profile", 1))
+        if (NmosSpan_Equals(Name, "profile", 1))
         {
             Text = Video->Profile;
         }
-        else if (NmosSpan_Equals(name, "level", 1))
+        else if (NmosSpan_Equals(Name, "level", 1))
         {
             Text = Video->Level;
         }
-        else if (NmosSpan_Equals(name, "sublevel", 1))
+        else if (NmosSpan_Equals(Name, "sublevel", 1))
         {
             Text = Video->Sublevel;
         }
-        else if (NmosSpan_Equals(name, "packetmode", 1))
+        else if (NmosSpan_Equals(Name, "packetmode", 1))
         {
             Number = &Video->PacketMode;
         }
-        else if (NmosSpan_Equals(name, "transmode", 1))
+        else if (NmosSpan_Equals(Name, "transmode", 1))
         {
             Number = &Video->TransmissionMode;
         }
         if (Text != NULL)
         {
-            Result = CopyValue(s->FmtpLine, name, Value, Text, DTNMOS_MAX_VALUE_SIZE);
+            Result = CopyValue(s->FmtpLine, Name, Value, Text, DTNMOS_MAX_VALUE_SIZE);
             if (Result != DTNMOS_OK)
             {
                 return Result;
@@ -713,7 +713,7 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
         if (Number != NULL && !NmosText_ParseU32(Value, 255, Number))
         {
             return FailAt(s->FmtpLine, "a=fmtp has a parameter whose value is no number",
-                          name);
+                          Name);
         }
     }
     return DTNMOS_OK;
@@ -739,11 +739,11 @@ static DtNmosResult BuildAudio(const NmosSection* s, NmosStore* Store,
                       s->Ptime);
     }
     NmosFmtpReader Reader = {s->Fmtp};
-    NmosSpan name;
+    NmosSpan Name;
     NmosSpan Value;
-    while (NextParameter(&Reader, &name, &Value))
+    while (NextParameter(&Reader, &Name, &Value))
     {
-        if (NmosSpan_Equals(name, "channel-order", 1))
+        if (NmosSpan_Equals(Name, "channel-order", 1))
         {
             Audio->ChannelOrder = NmosStore_Text(Store, Value.Data, Value.Length);
             if (Audio->ChannelOrder == NULL)
@@ -780,35 +780,35 @@ static DtNmosResult BuildAnc(const NmosSection* s, NmosStore* Store, DtNmosFlow*
     DtNmosDidSdid Pairs[64];
     size_t Count = 0;
     NmosFmtpReader Reader = {s->Fmtp};
-    NmosSpan name;
+    NmosSpan Name;
     NmosSpan Value;
-    while (NextParameter(&Reader, &name, &Value))
+    while (NextParameter(&Reader, &Name, &Value))
     {
         int Valid = 1;
         char* Text = NULL;
         size_t Size = 0;
-        if (NmosSpan_Equals(name, "DID_SDID", 1))
+        if (NmosSpan_Equals(Name, "DID_SDID", 1))
         {
             if (Count == sizeof(Pairs) / sizeof(Pairs[0]))
             {
-                return FailAt(s->FmtpLine, "a=fmtp has more DID_SDID than 64", name);
+                return FailAt(s->FmtpLine, "a=fmtp has more DID_SDID than 64", Name);
             }
             Valid = ReadDidSdid(Value, &Pairs[Count++]);
         }
-        else if (NmosSpan_Equals(name, "VPID_Code", 1))
+        else if (NmosSpan_Equals(Name, "VPID_Code", 1))
         {
             Valid = NmosText_ParseU32(Value, 255, &Anc->VpidCode);
         }
-        else if (NmosSpan_Equals(name, "exactframerate", 1))
+        else if (NmosSpan_Equals(Name, "exactframerate", 1))
         {
             Valid = NmosText_ParseRate(Value, &Anc->RateNumerator, &Anc->RateDenominator);
         }
-        else if (NmosSpan_Equals(name, "TM", 1))
+        else if (NmosSpan_Equals(Name, "TM", 1))
         {
             Text = Anc->TransmissionModel;
             Size = sizeof(Anc->TransmissionModel);
         }
-        else if (NmosSpan_Equals(name, "SSN", 1))
+        else if (NmosSpan_Equals(Name, "SSN", 1))
         {
             Text = Anc->Ssn;
             Size = sizeof(Anc->Ssn);
@@ -820,7 +820,7 @@ static DtNmosResult BuildAnc(const NmosSection* s, NmosStore* Store, DtNmosFlow*
         }
         if (Text != NULL)
         {
-            const DtNmosResult Result = CopyValue(s->FmtpLine, name, Value, Text, Size);
+            const DtNmosResult Result = CopyValue(s->FmtpLine, Name, Value, Text, Size);
             if (Result != DTNMOS_OK)
             {
                 return Result;

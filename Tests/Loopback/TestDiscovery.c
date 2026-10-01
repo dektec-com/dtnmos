@@ -50,17 +50,17 @@ static void Put32(NmosMessage* m, uint32_t Value)
 //
 // Writes the labels of name, split at every dot; returns where the name starts.
 //
-static size_t PutName(NmosMessage* m, const char* name)
+static size_t PutName(NmosMessage* m, const char* Name)
 {
     const size_t Start = m->Length;
-    while (*name != '\0')
+    while (*Name != '\0')
     {
-        const char* End = strchr(name, '.');
-        const size_t Length = End != NULL ? (size_t)(End - name) : strlen(name);
+        const char* End = strchr(Name, '.');
+        const size_t Length = End != NULL ? (size_t)(End - Name) : strlen(Name);
         Put8(m, (unsigned)Length);
-        memcpy(m->Bytes + m->Length, name, Length);
+        memcpy(m->Bytes + m->Length, Name, Length);
         m->Length += Length;
-        name += Length + (End != NULL ? 1 : 0);
+        Name += Length + (End != NULL ? 1 : 0);
     }
     Put8(m, 0);
     return Start;
@@ -252,10 +252,10 @@ void dns_reads_records_and_compression(void)
     REQUIRE(NmosDns_ReadResponse(m.Bytes, m.Length, KeepRecord, &Kept));
     REQUIRE(Kept.Count == 4);
     CHECK_EQ(Kept.Found[0].Type, DTNMOS_DNS_TYPE_PTR);
-    CHECK_STR(Kept.Found[0].name, "_nmos-query._tcp.local");
+    CHECK_STR(Kept.Found[0].Name, "_nmos-query._tcp.local");
     CHECK_STR(Kept.Found[0].Target, "Registry B._nmos-query._tcp.local");
     CHECK_EQ(Kept.Found[1].Type, DTNMOS_DNS_TYPE_SRV);
-    CHECK_STR(Kept.Found[1].name, "Registry B._nmos-query._tcp.local");
+    CHECK_STR(Kept.Found[1].Name, "Registry B._nmos-query._tcp.local");
     CHECK_STR(Kept.Found[1].Target, "registry-b.local");
     CHECK_EQ(Kept.Found[1].Port, 8080);
     CHECK_EQ(Kept.Found[1].Ttl, 120);
@@ -271,7 +271,7 @@ void dns_reads_records_and_compression(void)
                             sizeof(Value)));
     CHECK(!NmosDns_TxtValue(Kept.Found[2].Txt, Kept.Found[2].TxtLength, "pri", Value, 2));
     CHECK_EQ(Kept.Found[3].Type, DTNMOS_DNS_TYPE_A);
-    CHECK_STR(Kept.Found[3].name, "registry-b.local");
+    CHECK_STR(Kept.Found[3].Name, "registry-b.local");
     CHECK_EQ(Kept.Found[3].Address[3], 2);
 
     // A key without "=" has an empty value.

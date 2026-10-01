@@ -60,9 +60,9 @@ static size_t ReceiveHeader(char* Data, size_t Size, size_t Count, void* User)
     {
         return Length;
     }
-    NmosSpan name;
-    const NmosSpan Value = NmosSpan_Split(Line, ':', &name);
-    if (Value.Data == NULL || name.Length == 0 || name.Length > 255 ||
+    NmosSpan Name;
+    const NmosSpan Value = NmosSpan_Split(Line, ':', &Name);
+    if (Value.Data == NULL || Name.Length == 0 || Name.Length > 255 ||
         Value.Length > 8191)
     {
         return Length;
@@ -70,8 +70,8 @@ static size_t ReceiveHeader(char* Data, size_t Size, size_t Count, void* User)
     char NameText[256];
     char ValueText[8192];
     const NmosSpan Trimmed = NmosSpan_Trim(Value);
-    memcpy(NameText, name.Data, name.Length);
-    NameText[name.Length] = '\0';
+    memcpy(NameText, Name.Data, Name.Length);
+    NameText[Name.Length] = '\0';
     memcpy(ValueText, Trimmed.Data, Trimmed.Length);
     ValueText[Trimmed.Length] = '\0';
     if (DtNmosHttpResponse_AddHeader(t->Response, NameText, ValueText) != DTNMOS_OK)

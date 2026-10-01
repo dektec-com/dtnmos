@@ -30,7 +30,7 @@ enum
 // A question of a query: a name, e.g. "_nmos-query._tcp.local", and the type of record.
 typedef struct NmosDnsQuestion
 {
-    const char* name;
+    const char* Name;
     uint16_t Type;
 } NmosDnsQuestion;
 
@@ -56,7 +56,7 @@ void NmosDns_ReadResolvConf(const char* Text, char* Server, size_t ServerSize,
 // does not use stays zero.
 typedef struct NmosDnsRecord
 {
-    char name[DTNMOS_DNS_NAME_SIZE];
+    char Name[DTNMOS_DNS_NAME_SIZE];
     uint16_t Type;
     uint32_t Ttl;
     char Target[DTNMOS_DNS_NAME_SIZE]; // of a PTR or SRV record

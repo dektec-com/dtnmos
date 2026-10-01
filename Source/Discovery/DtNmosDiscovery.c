@@ -32,7 +32,7 @@ static const char* const MdnsAddress = "224.0.0.251";
 // A service instance as its records describe it.
 typedef struct NmosInstance
 {
-    char name[DTNMOS_DNS_NAME_SIZE]; // e.g. "Registry 1._nmos-query._tcp.local"
+    char Name[DTNMOS_DNS_NAME_SIZE]; // e.g. "Registry 1._nmos-query._tcp.local"
     int HasSrv;
     int HasTxt;
     char Host[DTNMOS_DNS_NAME_SIZE];
@@ -45,7 +45,7 @@ typedef struct NmosInstance
 
 typedef struct NmosHostAddress
 {
-    char name[DTNMOS_DNS_NAME_SIZE];
+    char Name[DTNMOS_DNS_NAME_SIZE];
     uint8_t Address[4];
 } NmosHostAddress;
 
@@ -132,13 +132,13 @@ static void LogMessage(const DtNmosDiscoveryConfig* Config, DtNmosLogLevel Level
 //
 // Whether name is an instance of the service, "<instance>.<service>".
 //
-static int IsInstanceOf(const char* name, const char* Service)
+static int IsInstanceOf(const char* Name, const char* Service)
 {
-    const size_t NameLength = strlen(name);
+    const size_t NameLength = strlen(Name);
     const size_t ServiceLength = strlen(Service);
     return NameLength > ServiceLength + 1 &&
-           name[NameLength - ServiceLength - 1] == '.' &&
-           NmosDns_SameName(name + NameLength - ServiceLength, Service);
+           Name[NameLength - ServiceLength - 1] == '.' &&
+           NmosDns_SameName(Name + NameLength - ServiceLength, Service);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- InstanceNamed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -146,11 +146,11 @@ static int IsInstanceOf(const char* name, const char* Service)
 // Returns the instance of that name, adding it when it is new; null when there is no
 // room.
 //
-static NmosInstance* InstanceNamed(NmosGathered* Found, const char* name)
+static NmosInstance* InstanceNamed(NmosGathered* Found, const char* Name)
 {
     for (size_t i = 0; i < Found->InstanceCount; ++i)
     {
-        if (NmosDns_SameName(Found->Instances[i].name, name))
+        if (NmosDns_SameName(Found->Instances[i].Name, Name))
         {
             return &Found->Instances[i];
         }
@@ -161,18 +161,18 @@ static NmosInstance* InstanceNamed(NmosGathered* Found, const char* name)
     }
     NmosInstance* Added = &Found->Instances[Found->InstanceCount++];
     memset(Added, 0, sizeof(*Added));
-    snprintf(Added->name, sizeof(Added->name), "%s", name);
+    snprintf(Added->Name, sizeof(Added->Name), "%s", Name);
     Added->Priority = -1;
     return Added;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HostNamed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static const NmosHostAddress* HostNamed(const NmosGathered* Found, const char* name)
+static const NmosHostAddress* HostNamed(const NmosGathered* Found, const char* Name)
 {
     for (size_t i = 0; i < Found->HostCount; ++i)
     {
-        if (NmosDns_SameName(Found->Hosts[i].name, name))
+        if (NmosDns_SameName(Found->Hosts[i].Name, Name))
         {
             return &Found->Hosts[i];
         }
@@ -186,7 +186,7 @@ static void TakeRecord(void* User, const NmosDnsRecord* Record)
 {
     NmosGathered* Found = User;
     if (Record->Type == DTNMOS_DNS_TYPE_PTR &&
-        NmosDns_SameName(Record->name, Found->Service))
+        NmosDns_SameName(Record->Name, Found->Service))
     {
         if (IsInstanceOf(Record->Target, Found->Service))
         {
@@ -196,20 +196,20 @@ static void TakeRecord(void* User, const NmosDnsRecord* Record)
     }
     if (Record->Type == DTNMOS_DNS_TYPE_A)
     {
-        if (HostNamed(Found, Record->name) == NULL && Found->HostCount < NMOS_MAX_HOSTS)
+        if (HostNamed(Found, Record->Name) == NULL && Found->HostCount < NMOS_MAX_HOSTS)
         {
             NmosHostAddress* Added = &Found->Hosts[Found->HostCount++];
-            snprintf(Added->name, sizeof(Added->name), "%s", Record->name);
+            snprintf(Added->Name, sizeof(Added->Name), "%s", Record->Name);
             memcpy(Added->Address, Record->Address, 4);
         }
         return;
     }
     if ((Record->Type != DTNMOS_DNS_TYPE_SRV && Record->Type != DTNMOS_DNS_TYPE_TXT) ||
-        !IsInstanceOf(Record->name, Found->Service))
+        !IsInstanceOf(Record->Name, Found->Service))
     {
         return;
     }
-    NmosInstance* Service = InstanceNamed(Found, Record->name);
+    NmosInstance* Service = InstanceNamed(Found, Record->Name);
     if (Service == NULL)
     {
         return;
@@ -331,12 +331,12 @@ static int AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
         if (!Service->HasSrv)
         {
             Missing[MissingCount++] =
-                (NmosDnsQuestion){Service->name, DTNMOS_DNS_TYPE_SRV};
+                (NmosDnsQuestion){Service->Name, DTNMOS_DNS_TYPE_SRV};
         }
         if (!Service->HasTxt)
         {
             Missing[MissingCount++] =
-                (NmosDnsQuestion){Service->name, DTNMOS_DNS_TYPE_TXT};
+                (NmosDnsQuestion){Service->Name, DTNMOS_DNS_TYPE_TXT};
         }
         else if (Service->HasSrv && HostNamed(Found, Service->Host) == NULL &&
                  MissingCount < 2 * NMOS_MAX_INSTANCES)
@@ -368,17 +368,17 @@ static int AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
 //
 // Writes the name of an instance as people read it: its first label, unescaped.
 //
-static void InstanceLabel(const char* name, const char* Service, char* Label, size_t Size)
+static void InstanceLabel(const char* Name, const char* Service, char* Label, size_t Size)
 {
-    const size_t Length = strlen(name) - strlen(Service) - 1;
+    const size_t Length = strlen(Name) - strlen(Service) - 1;
     size_t Used = 0;
     for (size_t i = 0; i < Length && Used + 1 < Size; ++i)
     {
-        if (name[i] == '\\' && i + 1 < Length)
+        if (Name[i] == '\\' && i + 1 < Length)
         {
             ++i;
         }
-        Label[Used++] = name[i];
+        Label[Used++] = Name[i];
     }
     Label[Used] = '\0';
 }
@@ -448,7 +448,7 @@ static int Describe(const NmosGathered* Found, const NmosInstance* Service,
                        HasVersion(Service->Versions, "v1.3");
 
     char Label[DTNMOS_DNS_NAME_SIZE];
-    InstanceLabel(Service->name, Found->Service, Label, sizeof(Label));
+    InstanceLabel(Service->Name, Found->Service, Label, sizeof(Label));
     char Address[16] = "";
     const NmosHostAddress* Host = HostNamed(Found, Service->Host);
     if (Host != NULL)
@@ -610,7 +610,7 @@ static DtNmosResult ListRegistries(const DtNmosDiscoveryConfig* Config,
             if (!Service->HasSrv)
             {
                 LogMessage(Config, DTNMOS_LOG_DEBUG, "%s did not say where it is.",
-                           Service->name);
+                           Service->Name);
                 continue;
             }
             DtNmosRegistryInfo* Registry = &ResultList->Registries[ResultList->Count];
