@@ -1,0 +1,8 @@
+/build/
+/out/
+/vcpkg_installed/
+/.vs/
+/.vscode/
+/.idea/
+CMakeUserPresets.json
+*.user
