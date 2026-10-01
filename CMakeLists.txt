@@ -9,7 +9,7 @@ project(
   dtnmos
   VERSION 0.1.0
   DESCRIPTION "SDP of SMPTE ST 2110 flows, and NMOS"
-  HOMEPAGE_URL "https://github.com/dektec-com/gst-dektec"
+  HOMEPAGE_URL "https://github.com/dektec-com/dtnmos"
   LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
