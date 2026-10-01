@@ -6,6 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -119,6 +120,13 @@ void names_results_and_media(void)
     CHECK_STR(DtNmosResult_Name(DTNMOS_E_AMBIGUOUS), "DTNMOS_E_AMBIGUOUS");
     CHECK_STR(DtNmosMedia_Name(DTNMOS_MEDIA_ANC), "ancillary data");
     int major = -1;
-    DtNmos_Version(&major, NULL, NULL);
+    int minor = -1;
+    int patch = -1;
+    DtNmos_Version(&major, &minor, &patch);
     CHECK_EQ(major, DTNMOS_VERSION_MAJOR);
+    CHECK_EQ(minor, DTNMOS_VERSION_MINOR);
+    CHECK_EQ(patch, DTNMOS_VERSION_PATCH);
+    char text[32];
+    snprintf(text, sizeof(text), "%d.%d.%d", major, minor, patch);
+    CHECK_STR(text, DTNMOS_VERSION);
 }

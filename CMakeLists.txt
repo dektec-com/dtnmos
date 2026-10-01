@@ -16,19 +16,10 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-# The version dtnmos_version() reports is that of the macros of dtnmos.h, which a program
-# compiles against as well; they must be the project's, or a release reports another.
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Include/dtnmos.h" _dtnmos_version_lines
-     REGEX "^#define DTNMOS_VERSION_(MAJOR|MINOR|PATCH) ")
-foreach(_part IN ITEMS MAJOR MINOR PATCH)
-  string(REGEX MATCH "DTNMOS_VERSION_${_part} ([0-9]+)" _match "${_dtnmos_version_lines}")
-  if(NOT CMAKE_MATCH_1 STREQUAL PROJECT_VERSION_${_part})
-    message(
-      FATAL_ERROR
-        "DTNMOS_VERSION_${_part} in Include/dtnmos.h is '${CMAKE_MATCH_1}', and the "
-        "project's version is ${PROJECT_VERSION}; give both the same version.")
-  endif()
-endforeach()
+# The version of dtnmos_version.h, which DtNmos_Version() reports, is the project's, so
+# that the version is stated in one place only.
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Include/dtnmos_version.h.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/Generated/dtnmos_version.h" @ONLY)
 
 include(GNUInstallDirs)
 
@@ -91,6 +82,7 @@ add_library(
 add_library(dtnmos::dtnmos ALIAS dtnmos)
 target_include_directories(
   dtnmos PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include>"
+                "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/Generated>"
                 "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 # The internal headers are named without their directory, from any source.
 set(DTNMOS_INTERNAL_INCLUDE_DIRS
@@ -140,7 +132,13 @@ if(DTNMOS_INSTALL)
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-  install(DIRECTORY Include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+  install(
+    DIRECTORY Include/
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    FILES_MATCHING
+    PATTERN "*.h")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Generated/dtnmos_version.h"
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
   install(
     EXPORT dtnmos-targets
     NAMESPACE dtnmos::

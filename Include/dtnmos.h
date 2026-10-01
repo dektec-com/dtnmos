@@ -11,6 +11,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "dtnmos_version.h" // DTNMOS_VERSION, generated from the project's version
+
 #if defined(DTNMOS_SHARED)
     #if defined(_WIN32)
         #if defined(DTNMOS_BUILDING)
@@ -30,11 +32,8 @@ extern "C"
 {
 #endif
 
-#define DTNMOS_VERSION_MAJOR 0
-#define DTNMOS_VERSION_MINOR 1
-#define DTNMOS_VERSION_PATCH 1
-
-// Returns the version of the library the program runs with; each pointer may be null.
+// Returns the version of the library the program runs with, which may differ from the
+// DTNMOS_VERSION of dtnmos_version.h it was built against; each pointer may be null.
 DTNMOS_API void DtNmos_Version(int* major, int* minor, int* patch);
 
 typedef enum DtNmosResult
