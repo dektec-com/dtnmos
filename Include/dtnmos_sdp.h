@@ -26,7 +26,7 @@ typedef enum DtNmosMedia
 } DtNmosMedia;
 
 // Returns the name of a media, e.g. "video"; a static string.
-DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia media);
+DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia Media);
 
 // The sizes of the strings of a flow, each the longest value the standards allow and its
 // terminating null, with room. The parser refuses a value that does not fit.
@@ -192,29 +192,29 @@ typedef struct DtNmosSdp DtNmosSdp;
 // Parses the SDP of length bytes of text. Fails with DTNMOS_E_PARSE, naming the line,
 // on a malformed description or a value longer than its field, and with
 // DTNMOS_E_INVALID_ARGUMENT on one without media sections.
-DTNMOS_API DtNmosResult DtNmosSdp_Parse(const char* text, size_t length, DtNmosSdp** sdp);
+DTNMOS_API DtNmosResult DtNmosSdp_Parse(const char* Text, size_t Length, DtNmosSdp** Sdp);
 
 // Returns the session of sdp; valid until sdp is freed.
-DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* sdp);
+DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* Sdp);
 
 // Returns the number of flows of sdp, one per media section, and the flow at index in
 // the order of the sections, or null past them; valid, with its strings, until sdp is
 // freed.
-DTNMOS_API size_t DtNmosSdp_FlowCount(const DtNmosSdp* sdp);
-DTNMOS_API const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* sdp, size_t index);
+DTNMOS_API size_t DtNmosSdp_FlowCount(const DtNmosSdp* Sdp);
+DTNMOS_API const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* Sdp, size_t Index);
 
 // Frees sdp and what it holds; null does nothing.
-DTNMOS_API void DtNmosSdp_Free(DtNmosSdp* sdp);
+DTNMOS_API void DtNmosSdp_Free(DtNmosSdp* Sdp);
 
 // Writes the SDP of session with the count flows of flows into buffer, which holds
-// *size bytes, with a terminating null. A flow of leg 1 is the second path of the flow
+// *Size bytes, with a terminating null. A flow of leg 1 is the second path of the flow
 // of leg 0 before it, which a=group:DUP pairs it with. An IPv4 multicast destination
 // gets a TTL of 64. When the text does not fit, or buffer is null, it fails with
-// DTNMOS_E_BUFFER_TOO_SMALL and sets *size to the bytes it needs; on success *size is
+// DTNMOS_E_BUFFER_TOO_SMALL and sets *Size to the bytes it needs; on success *Size is
 // the length of the text.
-DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* session,
-                                        const DtNmosFlow* flows, size_t count,
-                                        char* buffer, size_t* size);
+DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* Session,
+                                        const DtNmosFlow* Flows, size_t Count,
+                                        char* Buffer, size_t* Size);
 
 #ifdef __cplusplus
 }

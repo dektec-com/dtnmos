@@ -20,10 +20,10 @@
 
 typedef struct NmosServer
 {
-    struct mg_context* context;
-    NmosThread* poller;
-    NmosMutex* mutex; // guards stopping
-    int stopping;
+    struct mg_context* Context;
+    NmosThread* Poller;
+    NmosMutex* Mutex; // guards stopping
+    int Stopping;
 } NmosServer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasServer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -33,99 +33,99 @@ int DtNmos_HasServer(void)
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- handle_request -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HandleRequest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int handle_request(struct mg_connection* connection, void* user)
+static int HandleRequest(struct mg_connection* Connection, void* User)
 {
-    DtNmosNode* node = user;
-    const struct mg_request_info* info = mg_get_request_info(connection);
-    NmosBuffer url;
-    memset(&url, 0, sizeof(url));
-    NmosBuffer_Printf(&url, "%s%s%s", info->local_uri,
-                      info->query_string != NULL ? "?" : "",
-                      info->query_string != NULL ? info->query_string : "");
-    NmosBuffer body;
-    memset(&body, 0, sizeof(body));
-    NmosBuffer_Append(&body, "", 0);
-    if (info->content_length > 0 && info->content_length <= DTNMOS_MAX_REQUEST_BODY)
+    DtNmosNode* Node = User;
+    const struct mg_request_info* Info = mg_get_request_info(Connection);
+    NmosBuffer Url;
+    memset(&Url, 0, sizeof(Url));
+    NmosBuffer_Printf(&Url, "%s%s%s", Info->local_uri,
+                      Info->query_string != NULL ? "?" : "",
+                      Info->query_string != NULL ? Info->query_string : "");
+    NmosBuffer Body;
+    memset(&Body, 0, sizeof(Body));
+    NmosBuffer_Append(&Body, "", 0);
+    if (Info->content_length > 0 && Info->content_length <= DTNMOS_MAX_REQUEST_BODY)
     {
-        char chunk[4096];
-        int read = 0;
-        while ((read = mg_read(connection, chunk, sizeof(chunk))) > 0)
+        char Chunk[4096];
+        int Read = 0;
+        while ((Read = mg_read(Connection, Chunk, sizeof(Chunk))) > 0)
         {
-            NmosBuffer_Append(&body, chunk, (size_t)read);
+            NmosBuffer_Append(&Body, Chunk, (size_t)Read);
         }
     }
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
-    if (url.failed || body.failed || response == NULL)
+    DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+    if (Url.Failed || Body.Failed || Response == NULL)
     {
-        mg_send_http_error(connection, 500, "%s", "Out of memory.");
-        NmosBuffer_Free(&url);
-        NmosBuffer_Free(&body);
-        DtNmosHttpResponse_Free(response);
+        mg_send_http_error(Connection, 500, "%s", "Out of memory.");
+        NmosBuffer_Free(&Url);
+        NmosBuffer_Free(&Body);
+        DtNmosHttpResponse_Free(Response);
         return 500;
     }
-    DtNmosHttpRequest request;
-    memset(&request, 0, sizeof(request));
-    request.Size = sizeof(request);
-    request.Method = info->request_method;
-    request.Url = url.data;
-    request.ContentType = mg_get_header(connection, "Content-Type");
-    request.Body = body.data;
-    request.BodyLength = body.length;
-    if (DtNmosNode_Handle(node, &request, response) != DTNMOS_OK)
+    DtNmosHttpRequest Request;
+    memset(&Request, 0, sizeof(Request));
+    Request.Size = sizeof(Request);
+    Request.Method = Info->request_method;
+    Request.Url = Url.Data;
+    Request.ContentType = mg_get_header(Connection, "Content-Type");
+    Request.Body = Body.Data;
+    Request.BodyLength = Body.Length;
+    if (DtNmosNode_Handle(Node, &Request, Response) != DTNMOS_OK)
     {
-        NmosNode_AnswerError(response, 500, DtNmos_GetLastError());
+        NmosNode_AnswerError(Response, 500, DtNmos_GetLastError());
     }
-    const int status = DtNmosHttpResponse_Status(response);
-    size_t length = 0;
-    const char* answer = DtNmosHttpResponse_Body(response, &length);
-    char content_length[32];
-    snprintf(content_length, sizeof(content_length), "%zu", length);
-    mg_response_header_start(connection, status);
-    mg_response_header_add(connection, "Content-Type",
-                           DtNmosHttpResponse_ContentType(response), -1);
-    mg_response_header_add(connection, "Content-Length", content_length, -1);
+    const int Status = DtNmosHttpResponse_Status(Response);
+    size_t Length = 0;
+    const char* Answer = DtNmosHttpResponse_Body(Response, &Length);
+    char ContentLength[32];
+    snprintf(ContentLength, sizeof(ContentLength), "%zu", Length);
+    mg_response_header_start(Connection, Status);
+    mg_response_header_add(Connection, "Content-Type",
+                           DtNmosHttpResponse_ContentType(Response), -1);
+    mg_response_header_add(Connection, "Content-Length", ContentLength, -1);
     // Controllers that run in a browser ask the APIs from pages of other origins.
-    mg_response_header_add(connection, "Access-Control-Allow-Origin", "*", -1);
-    mg_response_header_send(connection);
-    if (strcmp(info->request_method, "HEAD") != 0 && length > 0)
+    mg_response_header_add(Connection, "Access-Control-Allow-Origin", "*", -1);
+    mg_response_header_send(Connection);
+    if (strcmp(Info->request_method, "HEAD") != 0 && Length > 0)
     {
-        mg_write(connection, answer, length);
+        mg_write(Connection, Answer, Length);
     }
-    NmosBuffer_Free(&url);
-    NmosBuffer_Free(&body);
-    DtNmosHttpResponse_Free(response);
-    return status;
+    NmosBuffer_Free(&Url);
+    NmosBuffer_Free(&Body);
+    DtNmosHttpResponse_Free(Response);
+    return Status;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- stopping -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Stopping -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int stopping(NmosServer* s)
+static int Stopping(NmosServer* s)
 {
-    NmosOs_MutexLock(s->mutex);
-    const int result = s->stopping;
-    NmosOs_MutexUnlock(s->mutex);
-    return result;
+    NmosOs_MutexLock(s->Mutex);
+    const int Result = s->Stopping;
+    NmosOs_MutexUnlock(s->Mutex);
+    return Result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- poll_loop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PollLoop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void poll_loop(void* argument)
+static void PollLoop(void* Argument)
 {
-    DtNmosNode* node = argument;
-    NmosServer* s = node->server;
-    while (!stopping(s))
+    DtNmosNode* Node = Argument;
+    NmosServer* s = Node->Server;
+    while (!Stopping(s))
     {
-        uint32_t next_ms = 1000;
+        uint32_t NextMs = 1000;
         NmosError_Clear();
-        if (DtNmosNode_Poll(node, &next_ms) != DTNMOS_OK && node->log != NULL)
+        if (DtNmosNode_Poll(Node, &NextMs) != DTNMOS_OK && Node->Log != NULL)
         {
-            node->log(node->log_user, DTNMOS_LOG_WARNING, DtNmos_GetLastError());
+            Node->Log(Node->LogUser, DTNMOS_LOG_WARNING, DtNmos_GetLastError());
         }
         // Sleep in steps, so that stopping does not wait for a heartbeat.
-        for (uint32_t slept = 0; slept < next_ms && slept < 5000 && !stopping(s);
-             slept += 50)
+        for (uint32_t Slept = 0; Slept < NextMs && Slept < 5000 && !Stopping(s);
+             Slept += 50)
         {
             NmosOs_SleepMs(50);
         }
@@ -134,54 +134,54 @@ static void poll_loop(void* argument)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
+DtNmosResult DtNmosNode_Serve(DtNmosNode* Node)
 {
-    const DtNmosResult open = NmosNode_CheckOpen(node, "DtNmosNode_Serve");
-    if (open != DTNMOS_OK)
+    const DtNmosResult Open = NmosNode_CheckOpen(Node, "DtNmosNode_Serve");
+    if (Open != DTNMOS_OK)
     {
-        return open;
+        return Open;
     }
-    if (node->server != NULL)
+    if (Node->Server != NULL)
     {
         return NmosError_Fail(DTNMOS_E_STATE, "The node serves already.");
     }
-    if (node->api_port == 0)
+    if (Node->ApiPort == 0)
     {
-        node->api_port = NmosOs_FreePort(node->api_host);
-        if (node->api_port == 0)
+        Node->ApiPort = NmosOs_FreePort(Node->ApiHost);
+        if (Node->ApiPort == 0)
         {
             return NmosError_Fail(DTNMOS_E_HTTP, "No TCP port is free on %s.",
-                                  node->api_host);
+                                  Node->ApiHost);
         }
     }
     NmosServer* s = calloc(1, sizeof(*s));
-    if (s == NULL || (s->mutex = NmosOs_MutexCreate()) == NULL)
+    if (s == NULL || (s->Mutex = NmosOs_MutexCreate()) == NULL)
     {
         free(s);
         return NmosError_FailMemory();
     }
-    char ports[300];
-    const int ipv6 = strchr(node->api_host, ':') != NULL;
-    snprintf(ports, sizeof(ports), "%s%s%s:%u", ipv6 ? "[" : "", node->api_host,
-             ipv6 ? "]" : "", (unsigned)node->api_port);
-    const char* options[] = {"listening_ports", ports, "num_threads", "4", NULL};
+    char Ports[300];
+    const int Ipv6 = strchr(Node->ApiHost, ':') != NULL;
+    snprintf(Ports, sizeof(Ports), "%s%s%s:%u", Ipv6 ? "[" : "", Node->ApiHost,
+             Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
+    const char* Options[] = {"listening_ports", Ports, "num_threads", "4", NULL};
     mg_init_library(0);
-    struct mg_callbacks callbacks;
-    memset(&callbacks, 0, sizeof(callbacks));
-    s->context = mg_start(&callbacks, NULL, options);
-    if (s->context == NULL)
+    struct mg_callbacks Callbacks;
+    memset(&Callbacks, 0, sizeof(Callbacks));
+    s->Context = mg_start(&Callbacks, NULL, Options);
+    if (s->Context == NULL)
     {
         mg_exit_library();
-        NmosOs_MutexFree(s->mutex);
+        NmosOs_MutexFree(s->Mutex);
         free(s);
-        return NmosError_Fail(DTNMOS_E_HTTP, "The node cannot listen on %s.", ports);
+        return NmosError_Fail(DTNMOS_E_HTTP, "The node cannot listen on %s.", Ports);
     }
-    mg_set_request_handler(s->context, "/", handle_request, node);
-    node->server = s;
-    s->poller = NmosOs_ThreadStart(poll_loop, node);
-    if (s->poller == NULL)
+    mg_set_request_handler(s->Context, "/", HandleRequest, Node);
+    Node->Server = s;
+    s->Poller = NmosOs_ThreadStart(PollLoop, Node);
+    if (s->Poller == NULL)
     {
-        NmosServer_Stop(node);
+        NmosServer_Stop(Node);
         return NmosError_Fail(DTNMOS_E_INTERNAL, "The node cannot start its thread.");
     }
     return DTNMOS_OK;
@@ -189,22 +189,22 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosServer_Stop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosServer_Stop(DtNmosNode* node)
+void NmosServer_Stop(DtNmosNode* Node)
 {
-    NmosServer* s = node->server;
+    NmosServer* s = Node->Server;
     if (s == NULL)
     {
         return;
     }
-    NmosOs_MutexLock(s->mutex);
-    s->stopping = 1;
-    NmosOs_MutexUnlock(s->mutex);
-    NmosOs_ThreadJoin(s->poller);
-    mg_stop(s->context);
+    NmosOs_MutexLock(s->Mutex);
+    s->Stopping = 1;
+    NmosOs_MutexUnlock(s->Mutex);
+    NmosOs_ThreadJoin(s->Poller);
+    mg_stop(s->Context);
     mg_exit_library();
-    NmosOs_MutexFree(s->mutex);
+    NmosOs_MutexFree(s->Mutex);
     free(s);
-    node->server = NULL;
+    Node->Server = NULL;
 }
 
 #else
@@ -218,9 +218,9 @@ int DtNmos_HasServer(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
+DtNmosResult DtNmosNode_Serve(DtNmosNode* Node)
 {
-    (void)node;
+    (void)Node;
     return NmosError_Fail(
         DTNMOS_E_STATE,
         "dtnmos was built without its server; answer the requests of the node "
@@ -229,9 +229,9 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosServer_Stop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosServer_Stop(DtNmosNode* node)
+void NmosServer_Stop(DtNmosNode* Node)
 {
-    (void)node;
+    (void)Node;
 }
 
 #endif

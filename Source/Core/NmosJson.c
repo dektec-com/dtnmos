@@ -17,57 +17,57 @@
 
 typedef struct NmosReader
 {
-    const char* text;
-    size_t length;
-    size_t position;
+    const char* Text;
+    size_t Length;
+    size_t Position;
 } NmosReader;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fail(NmosReader* r, const char* what)
+static DtNmosResult Fail(NmosReader* r, const char* What)
 {
-    return NmosError_Fail(DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position, what);
+    return NmosError_Fail(DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->Position, What);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- skip_space -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SkipSpace -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void skip_space(NmosReader* r)
+static void SkipSpace(NmosReader* r)
 {
-    while (r->position < r->length)
+    while (r->Position < r->Length)
     {
-        const char c = r->text[r->position];
+        const char c = r->Text[r->Position];
         if (c != ' ' && c != '\t' && c != '\n' && c != '\r')
         {
             return;
         }
-        ++r->position;
+        ++r->Position;
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_is -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextIs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int next_is(NmosReader* r, char c)
+static int NextIs(NmosReader* r, char c)
 {
-    return r->position < r->length && r->text[r->position] == c;
+    return r->Position < r->Length && r->Text[r->Position] == c;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadWord -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int read_word(NmosReader* r, const char* word)
+static int ReadWord(NmosReader* r, const char* Word)
 {
-    const size_t length = strlen(word);
-    if (r->length - r->position < length ||
-        memcmp(r->text + r->position, word, length) != 0)
+    const size_t Length = strlen(Word);
+    if (r->Length - r->Position < Length ||
+        memcmp(r->Text + r->Position, Word, Length) != 0)
     {
         return 0;
     }
-    r->position += length;
+    r->Position += Length;
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- hex_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HexValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int hex_value(char c)
+static int HexValue(char c)
 {
     if (c >= '0' && c <= '9')
     {
@@ -84,417 +84,417 @@ static int hex_value(char c)
     return -1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_hex4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadHex4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads the four hexadecimal digits of \u.
 //
-static int read_hex4(NmosReader* r, unsigned* code)
+static int ReadHex4(NmosReader* r, unsigned* Code)
 {
-    if (r->length - r->position < 4)
+    if (r->Length - r->Position < 4)
     {
         return 0;
     }
-    unsigned value = 0;
+    unsigned Value = 0;
     for (int i = 0; i < 4; ++i)
     {
-        const int digit = hex_value(r->text[r->position + (size_t)i]);
-        if (digit < 0)
+        const int Digit = HexValue(r->Text[r->Position + (size_t)i]);
+        if (Digit < 0)
         {
             return 0;
         }
-        value = value * 16 + (unsigned)digit;
+        Value = Value * 16 + (unsigned)Digit;
     }
-    r->position += 4;
-    *code = value;
+    r->Position += 4;
+    *Code = Value;
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- append_utf8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AppendUtf8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void append_utf8(NmosBuffer* buffer, unsigned code)
+static void AppendUtf8(NmosBuffer* Buffer, unsigned Code)
 {
-    char bytes[4];
-    size_t count = 0;
-    if (code < 0x80)
+    char Bytes[4];
+    size_t Count = 0;
+    if (Code < 0x80)
     {
-        bytes[count++] = (char)code;
+        Bytes[Count++] = (char)Code;
     }
-    else if (code < 0x800)
+    else if (Code < 0x800)
     {
-        bytes[count++] = (char)(0xC0 | (code >> 6));
-        bytes[count++] = (char)(0x80 | (code & 0x3F));
+        Bytes[Count++] = (char)(0xC0 | (Code >> 6));
+        Bytes[Count++] = (char)(0x80 | (Code & 0x3F));
     }
-    else if (code < 0x10000)
+    else if (Code < 0x10000)
     {
-        bytes[count++] = (char)(0xE0 | (code >> 12));
-        bytes[count++] = (char)(0x80 | ((code >> 6) & 0x3F));
-        bytes[count++] = (char)(0x80 | (code & 0x3F));
+        Bytes[Count++] = (char)(0xE0 | (Code >> 12));
+        Bytes[Count++] = (char)(0x80 | ((Code >> 6) & 0x3F));
+        Bytes[Count++] = (char)(0x80 | (Code & 0x3F));
     }
     else
     {
-        bytes[count++] = (char)(0xF0 | (code >> 18));
-        bytes[count++] = (char)(0x80 | ((code >> 12) & 0x3F));
-        bytes[count++] = (char)(0x80 | ((code >> 6) & 0x3F));
-        bytes[count++] = (char)(0x80 | (code & 0x3F));
+        Bytes[Count++] = (char)(0xF0 | (Code >> 18));
+        Bytes[Count++] = (char)(0x80 | ((Code >> 12) & 0x3F));
+        Bytes[Count++] = (char)(0x80 | ((Code >> 6) & 0x3F));
+        Bytes[Count++] = (char)(0x80 | (Code & 0x3F));
     }
-    NmosBuffer_Append(buffer, bytes, count);
+    NmosBuffer_Append(Buffer, Bytes, Count);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_string -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadString -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads a string after its opening quote into a text of its own.
 //
-static DtNmosResult read_string(NmosReader* r, char** text, size_t* length)
+static DtNmosResult ReadString(NmosReader* r, char** Text, size_t* Length)
 {
-    NmosBuffer buffer;
-    memset(&buffer, 0, sizeof(buffer));
-    DTNMOS_APPEND_LITERAL(&buffer, "");
-    while (r->position < r->length)
+    NmosBuffer Buffer;
+    memset(&Buffer, 0, sizeof(Buffer));
+    DTNMOS_APPEND_LITERAL(&Buffer, "");
+    while (r->Position < r->Length)
     {
-        const char c = r->text[r->position++];
+        const char c = r->Text[r->Position++];
         if (c == '"')
         {
-            if (buffer.failed)
+            if (Buffer.Failed)
             {
-                NmosBuffer_Free(&buffer);
+                NmosBuffer_Free(&Buffer);
                 return NmosError_FailMemory();
             }
-            *text = buffer.data;
-            *length = buffer.length;
+            *Text = Buffer.Data;
+            *Length = Buffer.Length;
             return DTNMOS_OK;
         }
         if ((unsigned char)c < 0x20)
         {
-            NmosBuffer_Free(&buffer);
-            return fail(r, "a string holds a control character");
+            NmosBuffer_Free(&Buffer);
+            return Fail(r, "a string holds a control character");
         }
         if (c != '\\')
         {
-            NmosBuffer_Append(&buffer, &c, 1);
+            NmosBuffer_Append(&Buffer, &c, 1);
             continue;
         }
-        if (r->position >= r->length)
+        if (r->Position >= r->Length)
         {
             break;
         }
-        const char escape = r->text[r->position++];
-        const char* simple = NULL;
-        switch (escape)
+        const char Escaped = r->Text[r->Position++];
+        const char* Simple = NULL;
+        switch (Escaped)
         {
         case '"':
-            simple = "\"";
+            Simple = "\"";
             break;
         case '\\':
-            simple = "\\";
+            Simple = "\\";
             break;
         case '/':
-            simple = "/";
+            Simple = "/";
             break;
         case 'b':
-            simple = "\b";
+            Simple = "\b";
             break;
         case 'f':
-            simple = "\f";
+            Simple = "\f";
             break;
         case 'n':
-            simple = "\n";
+            Simple = "\n";
             break;
         case 'r':
-            simple = "\r";
+            Simple = "\r";
             break;
         case 't':
-            simple = "\t";
+            Simple = "\t";
             break;
         case 'u':
         {
-            unsigned code = 0;
-            if (!read_hex4(r, &code))
+            unsigned Code = 0;
+            if (!ReadHex4(r, &Code))
             {
-                NmosBuffer_Free(&buffer);
-                return fail(r, "\\u needs four hexadecimal digits");
+                NmosBuffer_Free(&Buffer);
+                return Fail(r, "\\u needs four hexadecimal digits");
             }
             // A high surrogate and the low one after it make one character beyond U+FFFF.
-            if (code >= 0xD800 && code <= 0xDBFF)
+            if (Code >= 0xD800 && Code <= 0xDBFF)
             {
-                unsigned low = 0;
-                if (!read_word(r, "\\u") || !read_hex4(r, &low) || low < 0xDC00 ||
-                    low > 0xDFFF)
+                unsigned Low = 0;
+                if (!ReadWord(r, "\\u") || !ReadHex4(r, &Low) || Low < 0xDC00 ||
+                    Low > 0xDFFF)
                 {
-                    NmosBuffer_Free(&buffer);
-                    return fail(r, "a high surrogate lacks its low one");
+                    NmosBuffer_Free(&Buffer);
+                    return Fail(r, "a high surrogate lacks its low one");
                 }
-                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                Code = 0x10000 + ((Code - 0xD800) << 10) + (Low - 0xDC00);
             }
-            append_utf8(&buffer, code);
+            AppendUtf8(&Buffer, Code);
             continue;
         }
         default:
-            NmosBuffer_Free(&buffer);
-            return fail(r, "a string holds an unknown escape");
+            NmosBuffer_Free(&Buffer);
+            return Fail(r, "a string holds an unknown escape");
         }
-        NmosBuffer_Append(&buffer, simple, 1);
+        NmosBuffer_Append(&Buffer, Simple, 1);
     }
-    NmosBuffer_Free(&buffer);
-    return fail(r, "a string does not end");
+    NmosBuffer_Free(&Buffer);
+    return Fail(r, "a string does not end");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadNumber -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_number(NmosReader* r, NmosJson* value)
+static DtNmosResult ReadNumber(NmosReader* r, NmosJson* Value)
 {
-    const size_t start = r->position;
-    if (next_is(r, '-'))
+    const size_t Start = r->Position;
+    if (NextIs(r, '-'))
     {
-        ++r->position;
+        ++r->Position;
     }
-    while (r->position < r->length)
+    while (r->Position < r->Length)
     {
-        const char c = r->text[r->position];
+        const char c = r->Text[r->Position];
         if ((c < '0' || c > '9') && c != '.' && c != 'e' && c != 'E' && c != '+' &&
             c != '-')
         {
             break;
         }
-        ++r->position;
+        ++r->Position;
     }
-    const size_t length = r->position - start;
-    char digits[64];
-    if (length == 0 || length >= sizeof(digits))
+    const size_t Length = r->Position - Start;
+    char Digits[64];
+    if (Length == 0 || Length >= sizeof(Digits))
     {
-        return fail(r, "a number is malformed");
+        return Fail(r, "a number is malformed");
     }
-    memcpy(digits, r->text + start, length);
-    digits[length] = '\0';
-    char* end = NULL;
-    value->number = strtod(digits, &end);
-    if (end != digits + length)
+    memcpy(Digits, r->Text + Start, Length);
+    Digits[Length] = '\0';
+    char* End = NULL;
+    Value->Number = strtod(Digits, &End);
+    if (End != Digits + Length)
     {
-        return fail(r, "a number is malformed");
+        return Fail(r, "a number is malformed");
     }
-    value->type = DTNMOS_JSON_NUMBER;
+    Value->Type = DTNMOS_JSON_NUMBER;
     return DTNMOS_OK;
 }
 
-static DtNmosResult read_value(NmosReader* r, NmosJson* value, int depth);
+static DtNmosResult ReadValue(NmosReader* r, NmosJson* Value, int Depth);
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- add_item -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddItem -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Appends an item to a value, and for an object its key, which it takes over.
 //
-static NmosJson* add_item(NmosJson* value, char* key, size_t* capacity)
+static NmosJson* AddItem(NmosJson* Value, char* Key, size_t* Capacity)
 {
-    if (value->count == *capacity)
+    if (Value->Count == *Capacity)
     {
-        const size_t grown = *capacity == 0 ? 8 : *capacity * 2;
-        NmosJson* items = realloc(value->items, grown * sizeof(*items));
-        if (items == NULL)
+        const size_t Grown = *Capacity == 0 ? 8 : *Capacity * 2;
+        NmosJson* Items = realloc(Value->Items, Grown * sizeof(*Items));
+        if (Items == NULL)
         {
             return NULL;
         }
-        value->items = items;
-        if (value->type == DTNMOS_JSON_OBJECT)
+        Value->Items = Items;
+        if (Value->Type == DTNMOS_JSON_OBJECT)
         {
-            char** keys = realloc(value->keys, grown * sizeof(*keys));
-            if (keys == NULL)
+            char** Keys = realloc(Value->Keys, Grown * sizeof(*Keys));
+            if (Keys == NULL)
             {
                 return NULL;
             }
-            value->keys = keys;
+            Value->Keys = Keys;
         }
-        *capacity = grown;
+        *Capacity = Grown;
     }
-    NmosJson* item = &value->items[value->count];
-    memset(item, 0, sizeof(*item));
-    if (value->type == DTNMOS_JSON_OBJECT)
+    NmosJson* Item = &Value->Items[Value->Count];
+    memset(Item, 0, sizeof(*Item));
+    if (Value->Type == DTNMOS_JSON_OBJECT)
     {
-        value->keys[value->count] = key;
+        Value->Keys[Value->Count] = Key;
     }
-    ++value->count;
-    return item;
+    ++Value->Count;
+    return Item;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_container -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadContainer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_container(NmosReader* r, NmosJson* value, int depth, char close)
+static DtNmosResult ReadContainer(NmosReader* r, NmosJson* Value, int Depth, char Close)
 {
-    const int object = close == '}';
-    value->type = object ? DTNMOS_JSON_OBJECT : DTNMOS_JSON_ARRAY;
-    size_t capacity = 0;
-    skip_space(r);
-    if (next_is(r, close))
+    const int Object = Close == '}';
+    Value->Type = Object ? DTNMOS_JSON_OBJECT : DTNMOS_JSON_ARRAY;
+    size_t Capacity = 0;
+    SkipSpace(r);
+    if (NextIs(r, Close))
     {
-        ++r->position;
+        ++r->Position;
         return DTNMOS_OK;
     }
     for (;;)
     {
-        char* key = NULL;
-        if (object)
+        char* Key = NULL;
+        if (Object)
         {
-            skip_space(r);
-            if (!next_is(r, '"'))
+            SkipSpace(r);
+            if (!NextIs(r, '"'))
             {
-                return fail(r, "an object needs a string as key");
+                return Fail(r, "an object needs a string as key");
             }
-            ++r->position;
-            size_t key_length = 0;
-            DtNmosResult result = read_string(r, &key, &key_length);
-            if (result != DTNMOS_OK)
+            ++r->Position;
+            size_t KeyLength = 0;
+            DtNmosResult Result = ReadString(r, &Key, &KeyLength);
+            if (Result != DTNMOS_OK)
             {
-                return result;
+                return Result;
             }
-            skip_space(r);
-            if (!next_is(r, ':'))
+            SkipSpace(r);
+            if (!NextIs(r, ':'))
             {
-                free(key);
-                return fail(r, "a key needs a colon after it");
+                free(Key);
+                return Fail(r, "a key needs a colon after it");
             }
-            ++r->position;
+            ++r->Position;
         }
-        NmosJson* item = add_item(value, key, &capacity);
-        if (item == NULL)
+        NmosJson* Item = AddItem(Value, Key, &Capacity);
+        if (Item == NULL)
         {
-            free(key);
+            free(Key);
             return NmosError_FailMemory();
         }
-        DtNmosResult result = read_value(r, item, depth + 1);
-        if (result != DTNMOS_OK)
+        DtNmosResult Result = ReadValue(r, Item, Depth + 1);
+        if (Result != DTNMOS_OK)
         {
-            return result;
+            return Result;
         }
-        skip_space(r);
-        if (next_is(r, ','))
+        SkipSpace(r);
+        if (NextIs(r, ','))
         {
-            ++r->position;
+            ++r->Position;
             continue;
         }
-        if (next_is(r, close))
+        if (NextIs(r, Close))
         {
-            ++r->position;
+            ++r->Position;
             return DTNMOS_OK;
         }
-        return fail(r, object ? "an object needs , or }" : "an array needs , or ]");
+        return Fail(r, Object ? "an object needs , or }" : "an array needs , or ]");
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_value(NmosReader* r, NmosJson* value, int depth)
+static DtNmosResult ReadValue(NmosReader* r, NmosJson* Value, int Depth)
 {
-    if (depth > DTNMOS_JSON_MAX_DEPTH)
+    if (Depth > DTNMOS_JSON_MAX_DEPTH)
     {
-        return fail(r, "the values nest too deep");
+        return Fail(r, "the values nest too deep");
     }
-    skip_space(r);
-    if (r->position >= r->length)
+    SkipSpace(r);
+    if (r->Position >= r->Length)
     {
-        return fail(r, "a value is missing");
+        return Fail(r, "a value is missing");
     }
-    const char c = r->text[r->position];
+    const char c = r->Text[r->Position];
     if (c == '{' || c == '[')
     {
-        ++r->position;
-        return read_container(r, value, depth, c == '{' ? '}' : ']');
+        ++r->Position;
+        return ReadContainer(r, Value, Depth, c == '{' ? '}' : ']');
     }
     if (c == '"')
     {
-        ++r->position;
-        value->type = DTNMOS_JSON_STRING;
-        return read_string(r, &value->string, &value->string_length);
+        ++r->Position;
+        Value->Type = DTNMOS_JSON_STRING;
+        return ReadString(r, &Value->String, &Value->StringLength);
     }
-    if (read_word(r, "null"))
+    if (ReadWord(r, "null"))
     {
-        value->type = DTNMOS_JSON_NULL;
+        Value->Type = DTNMOS_JSON_NULL;
         return DTNMOS_OK;
     }
-    if (read_word(r, "true"))
+    if (ReadWord(r, "true"))
     {
-        value->type = DTNMOS_JSON_TRUE;
+        Value->Type = DTNMOS_JSON_TRUE;
         return DTNMOS_OK;
     }
-    if (read_word(r, "false"))
+    if (ReadWord(r, "false"))
     {
-        value->type = DTNMOS_JSON_FALSE;
+        Value->Type = DTNMOS_JSON_FALSE;
         return DTNMOS_OK;
     }
-    return read_number(r, value);
+    return ReadNumber(r, Value);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ClearValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void clear_value(NmosJson* value)
+static void ClearValue(NmosJson* Value)
 {
-    free(value->string);
-    for (size_t i = 0; i < value->count; ++i)
+    free(Value->String);
+    for (size_t i = 0; i < Value->Count; ++i)
     {
-        clear_value(&value->items[i]);
-        if (value->type == DTNMOS_JSON_OBJECT)
+        ClearValue(&Value->Items[i]);
+        if (Value->Type == DTNMOS_JSON_OBJECT)
         {
-            free(value->keys[i]);
+            free(Value->Keys[i]);
         }
     }
-    free(value->items);
-    free(value->keys);
+    free(Value->Items);
+    free(Value->Keys);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult NmosJson_Parse(const char* text, size_t length, NmosJson** value)
+DtNmosResult NmosJson_Parse(const char* Text, size_t Length, NmosJson** Value)
 {
-    if (value == NULL || (text == NULL && length > 0))
+    if (Value == NULL || (Text == NULL && Length > 0))
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "NmosJson_Parse() needs text.");
     }
-    *value = NULL;
-    NmosJson* root = calloc(1, sizeof(*root));
-    if (root == NULL)
+    *Value = NULL;
+    NmosJson* Root = calloc(1, sizeof(*Root));
+    if (Root == NULL)
     {
         return NmosError_FailMemory();
     }
-    NmosReader r = {text, length, 0};
-    DtNmosResult result = read_value(&r, root, 0);
-    if (result == DTNMOS_OK)
+    NmosReader r = {Text, Length, 0};
+    DtNmosResult Result = ReadValue(&r, Root, 0);
+    if (Result == DTNMOS_OK)
     {
-        skip_space(&r);
-        if (r.position != r.length)
+        SkipSpace(&r);
+        if (r.Position != r.Length)
         {
-            result = fail(&r, "text follows the value");
+            Result = Fail(&r, "text follows the value");
         }
     }
-    if (result != DTNMOS_OK)
+    if (Result != DTNMOS_OK)
     {
-        NmosJson_Free(root);
-        return result;
+        NmosJson_Free(Root);
+        return Result;
     }
-    *value = root;
+    *Value = Root;
     return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosJson_Free(NmosJson* value)
+void NmosJson_Free(NmosJson* Value)
 {
-    if (value == NULL)
+    if (Value == NULL)
     {
         return;
     }
-    clear_value(value);
-    free(value);
+    ClearValue(Value);
+    free(Value);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Member -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const NmosJson* NmosJson_Member(const NmosJson* value, const char* key)
+const NmosJson* NmosJson_Member(const NmosJson* Value, const char* Key)
 {
-    if (value == NULL || value->type != DTNMOS_JSON_OBJECT || key == NULL)
+    if (Value == NULL || Value->Type != DTNMOS_JSON_OBJECT || Key == NULL)
     {
         return NULL;
     }
-    for (size_t i = 0; i < value->count; ++i)
+    for (size_t i = 0; i < Value->Count; ++i)
     {
-        if (strcmp(value->keys[i], key) == 0)
+        if (strcmp(Value->Keys[i], Key) == 0)
         {
-            return &value->items[i];
+            return &Value->Items[i];
         }
     }
     return NULL;
@@ -502,105 +502,105 @@ const NmosJson* NmosJson_Member(const NmosJson* value, const char* key)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* NmosJson_Text(const NmosJson* value)
+const char* NmosJson_Text(const NmosJson* Value)
 {
-    return value != NULL && value->type == DTNMOS_JSON_STRING ? value->string : NULL;
+    return Value != NULL && Value->Type == DTNMOS_JSON_STRING ? Value->String : NULL;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_MemberText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* NmosJson_MemberText(const NmosJson* value, const char* key)
+const char* NmosJson_MemberText(const NmosJson* Value, const char* Key)
 {
-    return NmosJson_Text(NmosJson_Member(value, key));
+    return NmosJson_Text(NmosJson_Member(Value, Key));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_WriteString -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosJson_WriteString(NmosBuffer* buffer, const char* text)
+void NmosJson_WriteString(NmosBuffer* Buffer, const char* Text)
 {
-    DTNMOS_APPEND_LITERAL(buffer, "\"");
-    for (const char* c = text == NULL ? "" : text; *c != '\0'; ++c)
+    DTNMOS_APPEND_LITERAL(Buffer, "\"");
+    for (const char* c = Text == NULL ? "" : Text; *c != '\0'; ++c)
     {
         switch (*c)
         {
         case '"':
-            DTNMOS_APPEND_LITERAL(buffer, "\\\"");
+            DTNMOS_APPEND_LITERAL(Buffer, "\\\"");
             break;
         case '\\':
-            DTNMOS_APPEND_LITERAL(buffer, "\\\\");
+            DTNMOS_APPEND_LITERAL(Buffer, "\\\\");
             break;
         case '\n':
-            DTNMOS_APPEND_LITERAL(buffer, "\\n");
+            DTNMOS_APPEND_LITERAL(Buffer, "\\n");
             break;
         case '\r':
-            DTNMOS_APPEND_LITERAL(buffer, "\\r");
+            DTNMOS_APPEND_LITERAL(Buffer, "\\r");
             break;
         case '\t':
-            DTNMOS_APPEND_LITERAL(buffer, "\\t");
+            DTNMOS_APPEND_LITERAL(Buffer, "\\t");
             break;
         default:
             if ((unsigned char)*c < 0x20)
             {
-                NmosBuffer_Printf(buffer, "\\u%04x", (unsigned)(unsigned char)*c);
+                NmosBuffer_Printf(Buffer, "\\u%04x", (unsigned)(unsigned char)*c);
             }
             else
             {
-                NmosBuffer_Append(buffer, c, 1);
+                NmosBuffer_Append(Buffer, c, 1);
             }
             break;
         }
     }
-    DTNMOS_APPEND_LITERAL(buffer, "\"");
+    DTNMOS_APPEND_LITERAL(Buffer, "\"");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosJson_Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosJson_Write(NmosBuffer* buffer, const NmosJson* value)
+void NmosJson_Write(NmosBuffer* Buffer, const NmosJson* Value)
 {
-    switch (value->type)
+    switch (Value->Type)
     {
     case DTNMOS_JSON_NULL:
-        DTNMOS_APPEND_LITERAL(buffer, "null");
+        DTNMOS_APPEND_LITERAL(Buffer, "null");
         break;
     case DTNMOS_JSON_FALSE:
-        DTNMOS_APPEND_LITERAL(buffer, "false");
+        DTNMOS_APPEND_LITERAL(Buffer, "false");
         break;
     case DTNMOS_JSON_TRUE:
-        DTNMOS_APPEND_LITERAL(buffer, "true");
+        DTNMOS_APPEND_LITERAL(Buffer, "true");
         break;
     case DTNMOS_JSON_NUMBER:
         // Seventeen digits give a double back exactly; a whole number has none after the
         // point.
-        NmosBuffer_Printf(buffer, "%.17g", value->number);
+        NmosBuffer_Printf(Buffer, "%.17g", Value->Number);
         break;
     case DTNMOS_JSON_STRING:
-        NmosJson_WriteString(buffer, value->string);
+        NmosJson_WriteString(Buffer, Value->String);
         break;
     case DTNMOS_JSON_ARRAY:
-        DTNMOS_APPEND_LITERAL(buffer, "[");
-        for (size_t i = 0; i < value->count; ++i)
+        DTNMOS_APPEND_LITERAL(Buffer, "[");
+        for (size_t i = 0; i < Value->Count; ++i)
         {
             if (i > 0)
             {
-                DTNMOS_APPEND_LITERAL(buffer, ",");
+                DTNMOS_APPEND_LITERAL(Buffer, ",");
             }
-            NmosJson_Write(buffer, &value->items[i]);
+            NmosJson_Write(Buffer, &Value->Items[i]);
         }
-        DTNMOS_APPEND_LITERAL(buffer, "]");
+        DTNMOS_APPEND_LITERAL(Buffer, "]");
         break;
     case DTNMOS_JSON_OBJECT:
-        DTNMOS_APPEND_LITERAL(buffer, "{");
-        for (size_t i = 0; i < value->count; ++i)
+        DTNMOS_APPEND_LITERAL(Buffer, "{");
+        for (size_t i = 0; i < Value->Count; ++i)
         {
             if (i > 0)
             {
-                DTNMOS_APPEND_LITERAL(buffer, ",");
+                DTNMOS_APPEND_LITERAL(Buffer, ",");
             }
-            NmosJson_WriteString(buffer, value->keys[i]);
-            DTNMOS_APPEND_LITERAL(buffer, ":");
-            NmosJson_Write(buffer, &value->items[i]);
+            NmosJson_WriteString(Buffer, Value->Keys[i]);
+            DTNMOS_APPEND_LITERAL(Buffer, ":");
+            NmosJson_Write(Buffer, &Value->Items[i]);
         }
-        DTNMOS_APPEND_LITERAL(buffer, "}");
+        DTNMOS_APPEND_LITERAL(Buffer, "}");
         break;
     }
 }

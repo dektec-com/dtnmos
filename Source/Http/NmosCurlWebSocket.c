@@ -24,22 +24,22 @@
 // the last whole message, which Receive hands out.
 typedef struct NmosCurlConnection
 {
-    CURL* curl;
-    NmosBuffer partial;
-    NmosBuffer message;
+    CURL* Curl;
+    NmosBuffer Partial;
+    NmosBuffer Message;
 } NmosCurlConnection;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- has_ws_protocol -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasWsProtocol -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Whether the libcurl the library runs with carries the ws protocol.
 //
-static int has_ws_protocol(void)
+static int HasWsProtocol(void)
 {
-    const curl_version_info_data* info = curl_version_info(CURLVERSION_NOW);
-    for (const char* const* protocol = info->protocols;
-         protocol != NULL && *protocol != NULL; ++protocol)
+    const curl_version_info_data* Info = curl_version_info(CURLVERSION_NOW);
+    for (const char* const* Protocol = Info->protocols;
+         Protocol != NULL && *Protocol != NULL; ++Protocol)
     {
-        if (strcmp(*protocol, "ws") == 0)
+        if (strcmp(*Protocol, "ws") == 0)
         {
             return 1;
         }
@@ -51,175 +51,175 @@ static int has_ws_protocol(void)
 //
 int DtNmos_HasCurlWebSocket(void)
 {
-    return has_ws_protocol();
+    return HasWsProtocol();
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsConnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult ws_connect(void* user, const char* url, uint32_t timeout_ms,
-                               void** connection)
+static DtNmosResult WsConnect(void* User, const char* Url, uint32_t TimeoutMs,
+                              void** Connection)
 {
-    (void)user;
-    if (url == NULL || connection == NULL)
+    (void)User;
+    if (Url == NULL || Connection == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "A WebSocket needs a URL and a place for its connection.");
     }
-    *connection = NULL;
-    if (!has_ws_protocol())
+    *Connection = NULL;
+    if (!HasWsProtocol())
     {
         return NmosError_Fail(
             DTNMOS_E_STATE, "The libcurl of dtnmos carries no WebSockets; build it with "
                             "them, or pass a WebSocket of your own.");
     }
-    NmosCurlConnection* made = calloc(1, sizeof(*made));
-    if (made == NULL)
+    NmosCurlConnection* Made = calloc(1, sizeof(*Made));
+    if (Made == NULL)
     {
         return NmosError_FailMemory();
     }
-    made->curl = curl_easy_init();
-    if (made->curl == NULL)
+    Made->Curl = curl_easy_init();
+    if (Made->Curl == NULL)
     {
-        free(made);
+        free(Made);
         return NmosError_Fail(DTNMOS_E_INTERNAL, "libcurl could not create a handle.");
     }
     // Connect only: libcurl makes the handshake, and the messages are read with
     // curl_ws_recv().
-    curl_easy_setopt(made->curl, CURLOPT_URL, url);
-    curl_easy_setopt(made->curl, CURLOPT_CONNECT_ONLY, 2L);
-    curl_easy_setopt(made->curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(made->curl, CURLOPT_CONNECTTIMEOUT_MS,
-                     (long)(timeout_ms == 0 ? 5000 : timeout_ms));
-    const CURLcode code = curl_easy_perform(made->curl);
-    if (code != CURLE_OK)
+    curl_easy_setopt(Made->Curl, CURLOPT_URL, Url);
+    curl_easy_setopt(Made->Curl, CURLOPT_CONNECT_ONLY, 2L);
+    curl_easy_setopt(Made->Curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(Made->Curl, CURLOPT_CONNECTTIMEOUT_MS,
+                     (long)(TimeoutMs == 0 ? 5000 : TimeoutMs));
+    const CURLcode Code = curl_easy_perform(Made->Curl);
+    if (Code != CURLE_OK)
     {
-        curl_easy_cleanup(made->curl);
-        free(made);
+        curl_easy_cleanup(Made->Curl);
+        free(Made);
         return NmosError_Fail(
-            code == CURLE_OPERATION_TIMEDOUT ? DTNMOS_E_TIMEOUT : DTNMOS_E_NETWORK,
-            "The WebSocket %s could not be opened: %s.", url, curl_easy_strerror(code));
+            Code == CURLE_OPERATION_TIMEDOUT ? DTNMOS_E_TIMEOUT : DTNMOS_E_NETWORK,
+            "The WebSocket %s could not be opened: %s.", Url, curl_easy_strerror(Code));
     }
     // A server that answered without switching gives no WebSocket to receive on.
-    long status = 0;
-    curl_easy_getinfo(made->curl, CURLINFO_RESPONSE_CODE, &status);
-    if (status != 101)
+    long Status = 0;
+    curl_easy_getinfo(Made->Curl, CURLINFO_RESPONSE_CODE, &Status);
+    if (Status != 101)
     {
-        curl_easy_cleanup(made->curl);
-        free(made);
+        curl_easy_cleanup(Made->Curl);
+        free(Made);
         return NmosError_Fail(DTNMOS_E_NETWORK,
                               "The server of %s answered with %ld, not with a WebSocket.",
-                              url, status);
+                              Url, Status);
     }
-    *connection = made;
+    *Connection = Made;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- wait_readable -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WaitReadable -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Waits at most timeout_ms for the socket of curl to have something to read; returns
 // whether it has.
 //
-static int wait_readable(CURL* curl, uint32_t timeout_ms)
+static int WaitReadable(CURL* Curl, uint32_t TimeoutMs)
 {
-    curl_socket_t socket = CURL_SOCKET_BAD;
-    if (curl_easy_getinfo(curl, CURLINFO_ACTIVESOCKET, &socket) != CURLE_OK ||
-        socket == CURL_SOCKET_BAD)
+    curl_socket_t Socket = CURL_SOCKET_BAD;
+    if (curl_easy_getinfo(Curl, CURLINFO_ACTIVESOCKET, &Socket) != CURLE_OK ||
+        Socket == CURL_SOCKET_BAD)
     {
         return 0;
     }
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(socket, &readable);
-    struct timeval wait;
-    wait.tv_sec = (long)(timeout_ms / 1000);
-    wait.tv_usec = (long)(timeout_ms % 1000) * 1000;
+    fd_set Readable;
+    FD_ZERO(&Readable);
+    FD_SET(Socket, &Readable);
+    struct timeval Wait;
+    Wait.tv_sec = (long)(TimeoutMs / 1000);
+    Wait.tv_usec = (long)(TimeoutMs % 1000) * 1000;
     #ifdef _WIN32
-    return select(0, &readable, NULL, NULL, &wait) > 0;
+    return select(0, &Readable, NULL, NULL, &Wait) > 0;
     #else
-    return select(socket + 1, &readable, NULL, NULL, &wait) > 0;
+    return select(Socket + 1, &Readable, NULL, NULL, &Wait) > 0;
     #endif
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                               const char** message, size_t* length)
+static DtNmosResult WsReceive(void* User, void* Connection, uint32_t TimeoutMs,
+                              const char** Message, size_t* Length)
 {
-    (void)user;
-    NmosCurlConnection* c = connection;
-    if (c == NULL || message == NULL || length == NULL)
+    (void)User;
+    NmosCurlConnection* c = Connection;
+    if (c == NULL || Message == NULL || Length == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "A WebSocket receives on a connection into a message.");
     }
     // The message handed out before is valid until this call.
-    NmosBuffer_Free(&c->message);
-    const uint64_t deadline = NmosOs_MonotonicMs() + timeout_ms;
+    NmosBuffer_Free(&c->Message);
+    const uint64_t Deadline = NmosOs_MonotonicMs() + TimeoutMs;
     for (;;)
     {
-        char data[16384];
-        size_t received = 0;
-        const struct curl_ws_frame* frame = NULL;
-        const CURLcode code =
-            curl_ws_recv(c->curl, data, sizeof(data), &received, &frame);
-        if (code == CURLE_AGAIN)
+        char Data[16384];
+        size_t Received = 0;
+        const struct curl_ws_frame* Frame = NULL;
+        const CURLcode Code =
+            curl_ws_recv(c->Curl, Data, sizeof(Data), &Received, &Frame);
+        if (Code == CURLE_AGAIN)
         {
-            const uint64_t now = NmosOs_MonotonicMs();
-            if (now >= deadline)
+            const uint64_t Now = NmosOs_MonotonicMs();
+            if (Now >= Deadline)
             {
                 return NmosError_Fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
-                                      (unsigned)timeout_ms);
+                                      (unsigned)TimeoutMs);
             }
-            wait_readable(c->curl, (uint32_t)(deadline - now));
+            WaitReadable(c->Curl, (uint32_t)(Deadline - Now));
             continue;
         }
-        if (code != CURLE_OK)
+        if (Code != CURLE_OK)
         {
             return NmosError_Fail(DTNMOS_E_NETWORK, "The WebSocket failed: %s.",
-                                  curl_easy_strerror(code));
+                                  curl_easy_strerror(Code));
         }
-        if ((frame->flags & CURLWS_CLOSE) != 0)
+        if ((Frame->flags & CURLWS_CLOSE) != 0)
         {
             return NmosError_Fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
         }
-        if ((frame->flags & (CURLWS_TEXT | CURLWS_BINARY | CURLWS_CONT)) == 0)
+        if ((Frame->flags & (CURLWS_TEXT | CURLWS_BINARY | CURLWS_CONT)) == 0)
         {
             // A ping or a pong, which libcurl answers itself.
             continue;
         }
-        NmosBuffer_Append(&c->partial, data, received);
-        if (c->partial.failed)
+        NmosBuffer_Append(&c->Partial, Data, Received);
+        if (c->Partial.Failed)
         {
-            NmosBuffer_Free(&c->partial);
+            NmosBuffer_Free(&c->Partial);
             return NmosError_FailMemory();
         }
         // The message is whole at the end of a frame that is not followed by another.
-        if (frame->bytesleft == 0 && (frame->flags & CURLWS_CONT) == 0)
+        if (Frame->bytesleft == 0 && (Frame->flags & CURLWS_CONT) == 0)
         {
-            c->message = c->partial;
-            memset(&c->partial, 0, sizeof(c->partial));
-            *message = c->message.data == NULL ? "" : c->message.data;
-            *length = c->message.length;
+            c->Message = c->Partial;
+            memset(&c->Partial, 0, sizeof(c->Partial));
+            *Message = c->Message.Data == NULL ? "" : c->Message.Data;
+            *Length = c->Message.Length;
             return DTNMOS_OK;
         }
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsClose -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void ws_close(void* user, void* connection)
+static void WsClose(void* User, void* Connection)
 {
-    (void)user;
-    NmosCurlConnection* c = connection;
+    (void)User;
+    NmosCurlConnection* c = Connection;
     if (c == NULL)
     {
         return;
     }
-    size_t sent = 0;
-    curl_ws_send(c->curl, "", 0, &sent, 0, CURLWS_CLOSE);
-    curl_easy_cleanup(c->curl);
-    NmosBuffer_Free(&c->partial);
-    NmosBuffer_Free(&c->message);
+    size_t Sent = 0;
+    curl_ws_send(c->Curl, "", 0, &Sent, 0, CURLWS_CLOSE);
+    curl_easy_cleanup(c->Curl);
+    NmosBuffer_Free(&c->Partial);
+    NmosBuffer_Free(&c->Message);
     free(c);
 }
 
@@ -232,42 +232,42 @@ int DtNmos_HasCurlWebSocket(void)
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsConnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult ws_connect(void* user, const char* url, uint32_t timeout_ms,
-                               void** connection)
+static DtNmosResult WsConnect(void* User, const char* Url, uint32_t TimeoutMs,
+                              void** Connection)
 {
-    (void)user;
-    (void)url;
-    (void)timeout_ms;
-    if (connection != NULL)
+    (void)User;
+    (void)Url;
+    (void)TimeoutMs;
+    if (Connection != NULL)
     {
-        *connection = NULL;
+        *Connection = NULL;
     }
     return NmosError_Fail(
         DTNMOS_E_STATE, "dtnmos was built without libcurl, so it has no WebSocket of its "
                         "own; pass one.");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                               const char** message, size_t* length)
+static DtNmosResult WsReceive(void* User, void* Connection, uint32_t TimeoutMs,
+                              const char** Message, size_t* Length)
 {
-    (void)user;
-    (void)connection;
-    (void)timeout_ms;
-    (void)message;
-    (void)length;
+    (void)User;
+    (void)Connection;
+    (void)TimeoutMs;
+    (void)Message;
+    (void)Length;
     return NmosError_Fail(DTNMOS_E_STATE, "dtnmos was built without libcurl.");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsClose -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void ws_close(void* user, void* connection)
+static void WsClose(void* User, void* Connection)
 {
-    (void)user;
-    (void)connection;
+    (void)User;
+    (void)Connection;
 }
 
 #endif
@@ -276,7 +276,7 @@ static void ws_close(void* user, void* connection)
 //
 const DtNmosWebSocketTransport* DtNmos_CurlWebSocket(void)
 {
-    static const DtNmosWebSocketTransport transport = {
-        sizeof(DtNmosWebSocketTransport), NULL, ws_connect, ws_receive, ws_close};
-    return &transport;
+    static const DtNmosWebSocketTransport Transport = {
+        sizeof(DtNmosWebSocketTransport), NULL, WsConnect, WsReceive, WsClose};
+    return &Transport;
 }

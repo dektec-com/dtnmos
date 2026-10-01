@@ -14,118 +14,118 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Append -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosBuffer_Append(NmosBuffer* buffer, const char* text, size_t length)
+void NmosBuffer_Append(NmosBuffer* Buffer, const char* Text, size_t Length)
 {
-    if (buffer->failed)
+    if (Buffer->Failed)
     {
         return;
     }
-    if (buffer->length + length + 1 > buffer->capacity)
+    if (Buffer->Length + Length + 1 > Buffer->Capacity)
     {
-        size_t capacity = buffer->capacity < 256 ? 256 : buffer->capacity;
-        while (capacity < buffer->length + length + 1)
+        size_t Capacity = Buffer->Capacity < 256 ? 256 : Buffer->Capacity;
+        while (Capacity < Buffer->Length + Length + 1)
         {
-            capacity *= 2;
+            Capacity *= 2;
         }
-        char* data = realloc(buffer->data, capacity);
-        if (data == NULL)
+        char* Data = realloc(Buffer->Data, Capacity);
+        if (Data == NULL)
         {
-            buffer->failed = 1;
+            Buffer->Failed = 1;
             return;
         }
-        buffer->data = data;
-        buffer->capacity = capacity;
+        Buffer->Data = Data;
+        Buffer->Capacity = Capacity;
     }
-    memcpy(buffer->data + buffer->length, text, length);
-    buffer->length += length;
-    buffer->data[buffer->length] = '\0';
+    memcpy(Buffer->Data + Buffer->Length, Text, Length);
+    Buffer->Length += Length;
+    Buffer->Data[Buffer->Length] = '\0';
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Printf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosBuffer_Printf(NmosBuffer* buffer, const char* format, ...)
+void NmosBuffer_Printf(NmosBuffer* Buffer, const char* Format, ...)
 {
-    char local[256];
-    va_list arguments;
-    va_start(arguments, format);
-    const int needed = vsnprintf(local, sizeof(local), format, arguments);
-    va_end(arguments);
-    if (needed < 0)
+    char Local[256];
+    va_list Arguments;
+    va_start(Arguments, Format);
+    const int Needed = vsnprintf(Local, sizeof(Local), Format, Arguments);
+    va_end(Arguments);
+    if (Needed < 0)
     {
-        buffer->failed = 1;
+        Buffer->Failed = 1;
         return;
     }
-    if ((size_t)needed < sizeof(local))
+    if ((size_t)Needed < sizeof(Local))
     {
-        NmosBuffer_Append(buffer, local, (size_t)needed);
+        NmosBuffer_Append(Buffer, Local, (size_t)Needed);
         return;
     }
-    char* text = malloc((size_t)needed + 1);
-    if (text == NULL)
+    char* Text = malloc((size_t)Needed + 1);
+    if (Text == NULL)
     {
-        buffer->failed = 1;
+        Buffer->Failed = 1;
         return;
     }
-    va_start(arguments, format);
-    vsnprintf(text, (size_t)needed + 1, format, arguments);
-    va_end(arguments);
-    NmosBuffer_Append(buffer, text, (size_t)needed);
-    free(text);
+    va_start(Arguments, Format);
+    vsnprintf(Text, (size_t)Needed + 1, Format, Arguments);
+    va_end(Arguments);
+    NmosBuffer_Append(Buffer, Text, (size_t)Needed);
+    free(Text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosBuffer_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosBuffer_Free(NmosBuffer* buffer)
+void NmosBuffer_Free(NmosBuffer* Buffer)
 {
-    free(buffer->data);
-    memset(buffer, 0, sizeof(*buffer));
+    free(Buffer->Data);
+    memset(Buffer, 0, sizeof(*Buffer));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-NmosSpan NmosSpan_Of(const char* text)
+NmosSpan NmosSpan_Of(const char* Text)
 {
-    NmosSpan span = {text, text == NULL ? 0 : strlen(text)};
-    return span;
+    NmosSpan Span = {Text, Text == NULL ? 0 : strlen(Text)};
+    return Span;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Trim -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-NmosSpan NmosSpan_Trim(NmosSpan span)
+NmosSpan NmosSpan_Trim(NmosSpan Span)
 {
-    while (span.length > 0 && (span.data[0] == ' ' || span.data[0] == '\t'))
+    while (Span.Length > 0 && (Span.Data[0] == ' ' || Span.Data[0] == '\t'))
     {
-        ++span.data;
-        --span.length;
+        ++Span.Data;
+        --Span.Length;
     }
-    while (span.length > 0 &&
-           (span.data[span.length - 1] == ' ' || span.data[span.length - 1] == '\t'))
+    while (Span.Length > 0 &&
+           (Span.Data[Span.Length - 1] == ' ' || Span.Data[Span.Length - 1] == '\t'))
     {
-        --span.length;
+        --Span.Length;
     }
-    return span;
+    return Span;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- lower -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Lower -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static char lower(char c)
+static char Lower(char c)
 {
     return c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Equals -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosSpan_Equals(NmosSpan span, const char* text, int fold)
+int NmosSpan_Equals(NmosSpan Span, const char* Text, int Fold)
 {
-    const size_t length = strlen(text);
-    if (span.length != length)
+    const size_t Length = strlen(Text);
+    if (Span.Length != Length)
     {
         return 0;
     }
-    for (size_t i = 0; i < length; ++i)
+    for (size_t i = 0; i < Length; ++i)
     {
-        const char a = fold ? lower(span.data[i]) : span.data[i];
-        const char b = fold ? lower(text[i]) : text[i];
+        const char a = Fold ? Lower(Span.Data[i]) : Span.Data[i];
+        const char b = Fold ? Lower(Text[i]) : Text[i];
         if (a != b)
         {
             return 0;
@@ -136,274 +136,274 @@ int NmosSpan_Equals(NmosSpan span, const char* text, int fold)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_StartsWith -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosSpan_StartsWith(NmosSpan span, const char* prefix)
+int NmosSpan_StartsWith(NmosSpan Span, const char* Prefix)
 {
-    const size_t length = strlen(prefix);
-    return span.length >= length && memcmp(span.data, prefix, length) == 0;
+    const size_t Length = strlen(Prefix);
+    return Span.Length >= Length && memcmp(Span.Data, Prefix, Length) == 0;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Split -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-NmosSpan NmosSpan_Split(NmosSpan span, char separator, NmosSpan* head)
+NmosSpan NmosSpan_Split(NmosSpan Span, char Separator, NmosSpan* Head)
 {
-    const char* found =
-        span.length == 0 ? NULL : memchr(span.data, separator, span.length);
-    if (found == NULL)
+    const char* Found =
+        Span.Length == 0 ? NULL : memchr(Span.Data, Separator, Span.Length);
+    if (Found == NULL)
     {
-        *head = span;
-        NmosSpan rest = {NULL, 0};
-        return rest;
+        *Head = Span;
+        NmosSpan Rest = {NULL, 0};
+        return Rest;
     }
-    head->data = span.data;
-    head->length = (size_t)(found - span.data);
-    NmosSpan rest = {found + 1, span.length - head->length - 1};
-    return rest;
+    Head->Data = Span.Data;
+    Head->Length = (size_t)(Found - Span.Data);
+    NmosSpan Rest = {Found + 1, Span.Length - Head->Length - 1};
+    return Rest;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_ParseU64(NmosSpan span, uint64_t maximum, uint64_t* value)
+int NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value)
 {
-    if (span.length == 0)
+    if (Span.Length == 0)
     {
         return 0;
     }
-    uint64_t result = 0;
-    for (size_t i = 0; i < span.length; ++i)
+    uint64_t Result = 0;
+    for (size_t i = 0; i < Span.Length; ++i)
     {
-        const char c = span.data[i];
+        const char c = Span.Data[i];
         if (c < '0' || c > '9')
         {
             return 0;
         }
-        const uint64_t digit = (uint64_t)(c - '0');
-        if (result > (maximum - digit) / 10)
+        const uint64_t Digit = (uint64_t)(c - '0');
+        if (Result > (Maximum - Digit) / 10)
         {
             return 0;
         }
-        result = result * 10 + digit;
+        Result = Result * 10 + Digit;
     }
-    *value = result;
+    *Value = Result;
     return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_ParseU32(NmosSpan span, uint32_t maximum, uint32_t* value)
+int NmosText_ParseU32(NmosSpan Span, uint32_t Maximum, uint32_t* Value)
 {
-    uint64_t result = 0;
-    if (!NmosText_ParseU64(span, maximum, &result))
+    uint64_t Result = 0;
+    if (!NmosText_ParseU64(Span, Maximum, &Result))
     {
         return 0;
     }
-    *value = (uint32_t)result;
+    *Value = (uint32_t)Result;
     return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseRate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseRate(NmosSpan span, uint32_t* numerator, uint32_t* denominator)
+int NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator)
 {
-    NmosSpan head;
-    const NmosSpan rest = NmosSpan_Split(span, '/', &head);
+    NmosSpan Head;
+    const NmosSpan Rest = NmosSpan_Split(Span, '/', &Head);
     uint32_t n = 0;
     uint32_t d = 1;
-    if (!NmosText_ParseU32(head, UINT32_MAX, &n))
+    if (!NmosText_ParseU32(Head, UINT32_MAX, &n))
     {
         return 0;
     }
-    if (rest.data != NULL && (!NmosText_ParseU32(rest, UINT32_MAX, &d) || d == 0))
+    if (Rest.Data != NULL && (!NmosText_ParseU32(Rest, UINT32_MAX, &d) || d == 0))
     {
         return 0;
     }
-    *numerator = n;
-    *denominator = d;
+    *Numerator = n;
+    *Denominator = d;
     return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseMilliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseMilliseconds(NmosSpan span, uint32_t* nanoseconds)
+int NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds)
 {
-    NmosSpan whole;
-    const NmosSpan fraction = NmosSpan_Split(span, '.', &whole);
-    uint32_t milliseconds = 0;
-    if (!NmosText_ParseU32(whole, 4000, &milliseconds))
+    NmosSpan Whole;
+    const NmosSpan Fraction = NmosSpan_Split(Span, '.', &Whole);
+    uint32_t Milliseconds = 0;
+    if (!NmosText_ParseU32(Whole, 4000, &Milliseconds))
     {
         return 0;
     }
-    uint32_t result = milliseconds * 1000000u;
-    if (fraction.data != NULL)
+    uint32_t Result = Milliseconds * 1000000u;
+    if (Fraction.Data != NULL)
     {
-        if (fraction.length == 0 || fraction.length > 6)
+        if (Fraction.Length == 0 || Fraction.Length > 6)
         {
             return 0;
         }
-        uint32_t digits = 0;
-        if (!NmosText_ParseU32(fraction, 999999, &digits))
+        uint32_t Digits = 0;
+        if (!NmosText_ParseU32(Fraction, 999999, &Digits))
         {
             return 0;
         }
-        for (size_t i = fraction.length; i < 6; ++i)
+        for (size_t i = Fraction.Length; i < 6; ++i)
         {
-            digits *= 10;
+            Digits *= 10;
         }
-        result += digits;
+        Result += Digits;
     }
-    *nanoseconds = result;
+    *Nanoseconds = Result;
     return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseByte -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseByte(NmosSpan span, uint8_t* value)
+int NmosText_ParseByte(NmosSpan Span, uint8_t* Value)
 {
-    if (span.length > 2 && span.data[0] == '0' &&
-        (span.data[1] == 'x' || span.data[1] == 'X'))
+    if (Span.Length > 2 && Span.Data[0] == '0' &&
+        (Span.Data[1] == 'x' || Span.Data[1] == 'X'))
     {
-        unsigned result = 0;
-        for (size_t i = 2; i < span.length; ++i)
+        unsigned Result = 0;
+        for (size_t i = 2; i < Span.Length; ++i)
         {
-            const char c = lower(span.data[i]);
-            unsigned digit = 0;
+            const char c = Lower(Span.Data[i]);
+            unsigned Digit = 0;
             if (c >= '0' && c <= '9')
             {
-                digit = (unsigned)(c - '0');
+                Digit = (unsigned)(c - '0');
             }
             else if (c >= 'a' && c <= 'f')
             {
-                digit = (unsigned)(c - 'a' + 10);
+                Digit = (unsigned)(c - 'a' + 10);
             }
             else
             {
                 return 0;
             }
-            result = result * 16 + digit;
-            if (result > 255)
+            Result = Result * 16 + Digit;
+            if (Result > 255)
             {
                 return 0;
             }
         }
-        *value = (uint8_t)result;
+        *Value = (uint8_t)Result;
         return 1;
     }
-    uint32_t result = 0;
-    if (!NmosText_ParseU32(span, 255, &result))
+    uint32_t Result = 0;
+    if (!NmosText_ParseU32(Span, 255, &Result))
     {
         return 0;
     }
-    *value = (uint8_t)result;
+    *Value = (uint8_t)Result;
     return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_CopySpan -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_CopySpan(char* target, size_t size, NmosSpan span)
+int NmosText_CopySpan(char* Target, size_t Size, NmosSpan Span)
 {
-    if (size == 0)
+    if (Size == 0)
     {
         return 0;
     }
-    if (span.length >= size)
+    if (Span.Length >= Size)
     {
-        target[0] = '\0';
+        Target[0] = '\0';
         return 0;
     }
-    if (span.length > 0)
+    if (Span.Length > 0)
     {
-        memcpy(target, span.data, span.length);
+        memcpy(Target, Span.Data, Span.Length);
     }
-    target[span.length] = '\0';
+    Target[Span.Length] = '\0';
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- store_piece -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StorePiece -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Allocates size bytes that store owns; null when the memory ran out.
 //
-static void* store_piece(NmosStore* store, size_t size)
+static void* StorePiece(NmosStore* Store, size_t Size)
 {
-    if (store->count == store->capacity)
+    if (Store->Count == Store->Capacity)
     {
-        const size_t capacity = store->capacity == 0 ? 8 : store->capacity * 2;
-        void** pieces = realloc(store->pieces, capacity * sizeof(*pieces));
-        if (pieces == NULL)
+        const size_t Capacity = Store->Capacity == 0 ? 8 : Store->Capacity * 2;
+        void** Pieces = realloc(Store->Pieces, Capacity * sizeof(*Pieces));
+        if (Pieces == NULL)
         {
             return NULL;
         }
-        store->pieces = pieces;
-        store->capacity = capacity;
+        Store->Pieces = Pieces;
+        Store->Capacity = Capacity;
     }
-    void* piece = malloc(size);
-    if (piece != NULL)
+    void* Piece = malloc(Size);
+    if (Piece != NULL)
     {
-        store->pieces[store->count++] = piece;
+        Store->Pieces[Store->Count++] = Piece;
     }
-    return piece;
+    return Piece;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-char* NmosStore_Text(NmosStore* store, const char* data, size_t length)
+char* NmosStore_Text(NmosStore* Store, const char* Data, size_t Length)
 {
-    char* text = store_piece(store, length + 1);
-    if (text != NULL)
+    char* Text = StorePiece(Store, Length + 1);
+    if (Text != NULL)
     {
-        if (length > 0)
+        if (Length > 0)
         {
-            memcpy(text, data, length);
+            memcpy(Text, Data, Length);
         }
-        text[length] = '\0';
+        Text[Length] = '\0';
     }
-    return text;
+    return Text;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void* NmosStore_Copy(NmosStore* store, const void* data, size_t size)
+void* NmosStore_Copy(NmosStore* Store, const void* Data, size_t Size)
 {
-    if (size == 0)
+    if (Size == 0)
     {
         return NULL;
     }
-    void* copy = store_piece(store, size);
-    if (copy != NULL)
+    void* Copy = StorePiece(Store, Size);
+    if (Copy != NULL)
     {
-        memcpy(copy, data, size);
+        memcpy(Copy, Data, Size);
     }
-    return copy;
+    return Copy;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosStore_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosStore_Free(NmosStore* store)
+void NmosStore_Free(NmosStore* Store)
 {
-    for (size_t i = 0; i < store->count; ++i)
+    for (size_t i = 0; i < Store->Count; ++i)
     {
-        free(store->pieces[i]);
+        free(Store->Pieces[i]);
     }
-    free(store->pieces);
-    memset(store, 0, sizeof(*store));
+    free(Store->Pieces);
+    memset(Store, 0, sizeof(*Store));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult NmosText_CopyText(char* buffer, size_t* size, const char* data,
-                               size_t length)
+DtNmosResult NmosText_CopyText(char* Buffer, size_t* Size, const char* Data,
+                               size_t Length)
 {
-    if (buffer == NULL || *size < length + 1)
+    if (Buffer == NULL || *Size < Length + 1)
     {
-        const size_t had = *size;
-        *size = length + 1;
+        const size_t Had = *Size;
+        *Size = Length + 1;
         return NmosError_Fail(DTNMOS_E_BUFFER_TOO_SMALL,
                               "The text needs %zu bytes, and the buffer has %zu.",
-                              length + 1, buffer == NULL ? (size_t)0 : had);
+                              Length + 1, Buffer == NULL ? (size_t)0 : Had);
     }
-    if (length > 0)
+    if (Length > 0)
     {
-        memcpy(buffer, data, length);
+        memcpy(Buffer, Data, Length);
     }
-    buffer[length] = '\0';
-    *size = length;
+    Buffer[Length] = '\0';
+    *Size = Length;
     return DTNMOS_OK;
 }

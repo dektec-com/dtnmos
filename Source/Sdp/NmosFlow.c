@@ -10,58 +10,58 @@
 
 #include "NmosFlow.h"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Sets *target to a copy of text owned by store, or to null for null; returns 0 when the
+// Sets *Target to a copy of text owned by store, or to null for null; returns 0 when the
 // memory ran out.
 //
-static int copy_text(const char** target, NmosStore* store, const char* text)
+static int CopyText(const char** Target, NmosStore* Store, const char* Text)
 {
-    if (text == NULL)
+    if (Text == NULL)
     {
-        *target = NULL;
+        *Target = NULL;
         return 1;
     }
-    *target = NmosStore_Text(store, text, strlen(text));
-    return *target != NULL;
+    *Target = NmosStore_Text(Store, Text, strlen(Text));
+    return *Target != NULL;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosFlow_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult NmosFlow_Copy(DtNmosFlow* target, NmosStore* store, const DtNmosFlow* source)
+DtNmosResult NmosFlow_Copy(DtNmosFlow* Target, NmosStore* Store, const DtNmosFlow* Source)
 {
-    DtNmosFlow copy = *source;
-    int copied = copy_text(&copy.RefClock.Text, store, source->RefClock.Text);
-    switch (source->Media)
+    DtNmosFlow Copy = *Source;
+    int Copied = CopyText(&Copy.RefClock.Text, Store, Source->RefClock.Text);
+    switch (Source->Media)
     {
     case DTNMOS_MEDIA_AUDIO:
-        copied = copied && copy_text(&copy.Format.Audio.ChannelOrder, store,
-                                     source->Format.Audio.ChannelOrder);
+        Copied = Copied && CopyText(&Copy.Format.Audio.ChannelOrder, Store,
+                                    Source->Format.Audio.ChannelOrder);
         break;
     case DTNMOS_MEDIA_ANC:
-        if (source->Format.Anc.DidSdidCount > 0)
+        if (Source->Format.Anc.DidSdidCount > 0)
         {
-            copy.Format.Anc.DidSdid = NmosStore_Copy(
-                store, source->Format.Anc.DidSdid,
-                source->Format.Anc.DidSdidCount * sizeof(*source->Format.Anc.DidSdid));
-            copied = copied && copy.Format.Anc.DidSdid != NULL;
+            Copy.Format.Anc.DidSdid = NmosStore_Copy(
+                Store, Source->Format.Anc.DidSdid,
+                Source->Format.Anc.DidSdidCount * sizeof(*Source->Format.Anc.DidSdid));
+            Copied = Copied && Copy.Format.Anc.DidSdid != NULL;
         }
         else
         {
-            copy.Format.Anc.DidSdid = NULL;
+            Copy.Format.Anc.DidSdid = NULL;
         }
         break;
     case DTNMOS_MEDIA_OTHER:
-        copied = copied &&
-                 copy_text(&copy.Format.Other.Fmtp, store, source->Format.Other.Fmtp);
+        Copied =
+            Copied && CopyText(&Copy.Format.Other.Fmtp, Store, Source->Format.Other.Fmtp);
         break;
     default:
         break;
     }
-    if (!copied)
+    if (!Copied)
     {
         return NmosError_FailMemory();
     }
-    *target = copy;
+    *Target = Copy;
     return DTNMOS_OK;
 }

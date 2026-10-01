@@ -12,23 +12,23 @@
 #include "check.h"
 #include "tests.h"
 
-int check_failures = 0;
+int CheckFailures = 0;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- check_report -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CheckReport -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void check_report(const char* file, int line, const char* expression)
+void CheckReport(const char* File, int Line, const char* Expression)
 {
-    printf("  %s:%d: failed: %s\n", file, line, expression);
-    ++check_failures;
+    printf("  %s:%d: failed: %s\n", File, Line, Expression);
+    ++CheckFailures;
 }
 
 typedef struct NmosTest
 {
     const char* name;
-    void (*run)(void);
+    void (*Run)(void);
 } NmosTest;
 
-static const NmosTest tests[] = {
+static const NmosTest Tests[] = {
 #define DTNMOS_TEST(name) {#name, name},
     DTNMOS_TESTS
 #undef DTNMOS_TEST
@@ -36,28 +36,28 @@ static const NmosTest tests[] = {
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- main -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int main(int argc, char** argv)
+int main(int Argc, char** Argv)
 {
-    const char* only = argc > 1 ? argv[1] : NULL;
-    int failed = 0;
-    int ran = 0;
-    for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); ++i)
+    const char* Only = Argc > 1 ? Argv[1] : NULL;
+    int Failed = 0;
+    int Ran = 0;
+    for (size_t i = 0; i < sizeof(Tests) / sizeof(Tests[0]); ++i)
     {
-        if (only != NULL && strcmp(only, tests[i].name) != 0)
+        if (Only != NULL && strcmp(Only, Tests[i].name) != 0)
         {
             continue;
         }
-        check_failures = 0;
-        tests[i].run();
-        ++ran;
-        printf("%s %s\n", check_failures == 0 ? "[  OK  ]" : "[FAILED]", tests[i].name);
-        failed += check_failures != 0;
+        CheckFailures = 0;
+        Tests[i].Run();
+        ++Ran;
+        printf("%s %s\n", CheckFailures == 0 ? "[  OK  ]" : "[FAILED]", Tests[i].name);
+        Failed += CheckFailures != 0;
     }
-    if (ran == 0)
+    if (Ran == 0)
     {
-        printf("No test is named %s.\n", only == NULL ? "" : only);
+        printf("No test is named %s.\n", Only == NULL ? "" : Only);
         return 1;
     }
-    printf("%d of %d tests passed\n", ran - failed, ran);
-    return failed == 0 ? 0 : 1;
+    printf("%d of %d tests passed\n", Ran - Failed, Ran);
+    return Failed == 0 ? 0 : 1;
 }

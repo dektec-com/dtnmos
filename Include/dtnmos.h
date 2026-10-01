@@ -34,7 +34,7 @@ extern "C"
 
 // Returns the version of the library the program runs with, which may differ from the
 // DTNMOS_VERSION of dtnmos_version.h it was built against; each pointer may be null.
-DTNMOS_API void DtNmos_Version(int* major, int* minor, int* patch);
+DTNMOS_API void DtNmos_Version(int* Major, int* Minor, int* Patch);
 
 typedef enum DtNmosResult
 {
@@ -57,7 +57,7 @@ typedef enum DtNmosResult
 } DtNmosResult;
 
 // Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.
-DTNMOS_API const char* DtNmosResult_Name(DtNmosResult result);
+DTNMOS_API const char* DtNmosResult_Name(DtNmosResult Result);
 
 // Returns the message of the last failure of a call on this thread, in English, naming
 // what failed and why; "" when none failed yet. A call that fails sets it, and one that
@@ -69,7 +69,7 @@ DTNMOS_API const char* DtNmos_GetLastError(void);
 // callback the library calls, an activation of the node or an HTTP function, fails this
 // way: it returns DtNmos_SetLastError(DTNMOS_E_..., "what failed"), and the library
 // passes the message on, as the answer of the node to a controller for one.
-DTNMOS_API DtNmosResult DtNmos_SetLastError(DtNmosResult result, const char* message);
+DTNMOS_API DtNmosResult DtNmos_SetLastError(DtNmosResult Result, const char* Message);
 
 // An NMOS resource ID: a UUID in its text form, lower case, e.g.
 // "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01".
@@ -82,8 +82,8 @@ typedef struct DtNmosId
 // namespace_id, so that a node, a device, a sender or a receiver keeps its ID across
 // restarts, e.g. from the serial number of a card, its port and the label of an
 // element. Fails with DTNMOS_E_INVALID_ARGUMENT when namespace_id is no UUID.
-DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* namespace_id, const char* name,
-                                          DtNmosId* id);
+DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* name,
+                                          DtNmosId* Id);
 
 // Where log messages go.
 typedef enum DtNmosLogLevel
@@ -94,7 +94,7 @@ typedef enum DtNmosLogLevel
     DTNMOS_LOG_ERROR = 3
 } DtNmosLogLevel;
 
-typedef void (*DtNmosLogFunc)(void* user, DtNmosLogLevel level, const char* message);
+typedef void (*DtNmosLogFunc)(void* User, DtNmosLogLevel Level, const char* Message);
 
 #ifdef __cplusplus
 }

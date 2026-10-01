@@ -57,22 +57,22 @@
 // A registry and a node that the test answers for, which records what it was asked.
 typedef struct NmosFakeNetwork
 {
-    char requests[16][256]; // "<method> <url>"
-    size_t count;
-    char content_type[64]; // of the last PATCH
-    char* body;            // of the last PATCH
-    int patch_status;      // what the node answers a PATCH
-    const char* patch_answer;
-    int node_unreachable;
+    char Requests[16][256]; // "<method> <url>"
+    size_t Count;
+    char ContentType[64]; // of the last PATCH
+    char* Body;           // of the last PATCH
+    int PatchStatus;      // what the node answers a PATCH
+    const char* PatchAnswer;
+    int NodeUnreachable;
 } NmosFakeNetwork;
 
 typedef struct NmosFakeRoute
 {
-    const char* url;
-    const char* body;
+    const char* Url;
+    const char* Body;
 } NmosFakeRoute;
 
-static const NmosFakeRoute fake_routes[] = {
+static const NmosFakeRoute FakeRoutes[] = {
     {BASE "receivers?paging.limit=100", "[" MONITOR ", " SPEAKER "]"},
     {BASE "receivers?label=monitor&paging.limit=100", "[" MONITOR "]"},
     {BASE "receivers?label=speaker&paging.limit=100", "[" SPEAKER "]"},
@@ -101,156 +101,156 @@ static const NmosFakeRoute fake_routes[] = {
     {"http://camera.test/video.sdp", CAMERA_SDP},
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_answer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeAnswer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fake_answer(void* user, const DtNmosHttpRequest* request,
-                                DtNmosHttpResponse* response)
+static DtNmosResult FakeAnswer(void* User, const DtNmosHttpRequest* Request,
+                               DtNmosHttpResponse* Response)
 {
-    NmosFakeNetwork* network = user;
-    CHECK_EQ(request->TimeoutMs, 2000);
-    if (network->count < 16)
+    NmosFakeNetwork* Network = User;
+    CHECK_EQ(Request->TimeoutMs, 2000);
+    if (Network->Count < 16)
     {
-        snprintf(network->requests[network->count++], sizeof(network->requests[0]),
-                 "%s %s", request->Method, request->Url);
+        snprintf(Network->Requests[Network->Count++], sizeof(Network->Requests[0]),
+                 "%s %s", Request->Method, Request->Url);
     }
-    if (strcmp(request->Method, "PATCH") == 0)
+    if (strcmp(Request->Method, "PATCH") == 0)
     {
-        if (network->node_unreachable)
+        if (Network->NodeUnreachable)
         {
             return DtNmos_SetLastError(DTNMOS_E_HTTP, "connection refused");
         }
-        snprintf(network->content_type, sizeof(network->content_type), "%s",
-                 request->ContentType == NULL ? "" : request->ContentType);
-        free(network->body);
-        network->body = malloc(request->BodyLength + 1);
-        memcpy(network->body, request->Body, request->BodyLength);
-        network->body[request->BodyLength] = '\0';
-        DtNmosHttpResponse_SetStatus(response, network->patch_status);
-        const char* answer = network->patch_answer;
-        DtNmosHttpResponse_SetBody(response, "application/json", answer, strlen(answer));
+        snprintf(Network->ContentType, sizeof(Network->ContentType), "%s",
+                 Request->ContentType == NULL ? "" : Request->ContentType);
+        free(Network->Body);
+        Network->Body = malloc(Request->BodyLength + 1);
+        memcpy(Network->Body, Request->Body, Request->BodyLength);
+        Network->Body[Request->BodyLength] = '\0';
+        DtNmosHttpResponse_SetStatus(Response, Network->PatchStatus);
+        const char* Answer = Network->PatchAnswer;
+        DtNmosHttpResponse_SetBody(Response, "application/json", Answer, strlen(Answer));
         return DTNMOS_OK;
     }
-    CHECK_STR(request->Method, "GET");
-    for (size_t i = 0; i < sizeof(fake_routes) / sizeof(fake_routes[0]); ++i)
+    CHECK_STR(Request->Method, "GET");
+    for (size_t i = 0; i < sizeof(FakeRoutes) / sizeof(FakeRoutes[0]); ++i)
     {
-        if (strcmp(fake_routes[i].url, request->Url) == 0)
+        if (strcmp(FakeRoutes[i].Url, Request->Url) == 0)
         {
-            DtNmosHttpResponse_SetStatus(response, 200);
-            DtNmosHttpResponse_SetBody(response, "application/json", fake_routes[i].body,
-                                       strlen(fake_routes[i].body));
+            DtNmosHttpResponse_SetStatus(Response, 200);
+            DtNmosHttpResponse_SetBody(Response, "application/json", FakeRoutes[i].Body,
+                                       strlen(FakeRoutes[i].Body));
             return DTNMOS_OK;
         }
     }
-    printf("  no route for %s\n", request->Url);
-    DtNmosHttpResponse_SetStatus(response, 404);
+    printf("  no route for %s\n", Request->Url);
+    DtNmosHttpResponse_SetStatus(Response, 404);
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_network -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MakeNetwork -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Sets up network, whose node accepts a PATCH, and returns a query of its registry.
 //
-static DtNmosQuery* make_network(NmosFakeNetwork* network)
+static DtNmosQuery* MakeNetwork(NmosFakeNetwork* Network)
 {
-    memset(network, 0, sizeof(*network));
-    network->patch_status = 200;
-    network->patch_answer = "{}";
-    DtNmosQueryConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.RegistryUrl = "http://registry.test";
-    config.Http = fake_answer;
-    config.HttpUser = network;
-    config.TimeoutMs = 2000;
-    DtNmosQuery* query = DtNmosQuery_Alloc();
-    if (query == NULL || DtNmosQuery_Open(query, &config) != DTNMOS_OK)
+    memset(Network, 0, sizeof(*Network));
+    Network->PatchStatus = 200;
+    Network->PatchAnswer = "{}";
+    DtNmosQueryConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.RegistryUrl = "http://registry.test";
+    Config.Http = FakeAnswer;
+    Config.HttpUser = Network;
+    Config.TimeoutMs = 2000;
+    DtNmosQuery* Query = DtNmosQuery_Alloc();
+    if (Query == NULL || DtNmosQuery_Open(Query, &Config) != DTNMOS_OK)
     {
-        DtNmosQuery_Freep(&query);
+        DtNmosQuery_Freep(&Query);
     }
-    return query;
+    return Query;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- count_patches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CountPatches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static size_t count_patches(const NmosFakeNetwork* network)
+static size_t CountPatches(const NmosFakeNetwork* Network)
 {
-    size_t patches = 0;
-    for (size_t i = 0; i < network->count; ++i)
+    size_t Patches = 0;
+    for (size_t i = 0; i < Network->Count; ++i)
     {
-        patches += strncmp(network->requests[i], "PATCH ", 6) == 0 ? 1 : 0;
+        Patches += strncmp(Network->Requests[i], "PATCH ", 6) == 0 ? 1 : 0;
     }
-    return patches;
+    return Patches;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- query_lists_and_finds_receivers -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void query_lists_and_finds_receivers(void)
 {
-    NmosFakeNetwork network;
-    DtNmosQuery* query = make_network(&network);
-    REQUIRE(query != NULL);
-    DtNmosReceiverList* list = NULL;
-    REQUIRE(DtNmosQuery_Receivers(query, &list) == DTNMOS_OK);
-    REQUIRE(DtNmosReceiverList_Count(list) == 2);
-    const DtNmosReceiverInfo* monitor = DtNmosReceiverList_At(list, 0);
-    CHECK_STR(monitor->Id.Text, MONITOR_ID);
-    CHECK_STR(monitor->DeviceId.Text, DEVICE_ID);
-    CHECK_STR(monitor->Label, "monitor");
-    CHECK_EQ(monitor->Media, DTNMOS_MEDIA_VIDEO);
-    CHECK_STR(monitor->Transport, "urn:x-nmos:transport:rtp");
-    CHECK_STR(monitor->SenderId.Text, "");
-    CHECK_EQ(monitor->Active, 0);
-    const DtNmosReceiverInfo* speaker = DtNmosReceiverList_At(list, 1);
-    CHECK_EQ(speaker->Media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(speaker->Description, "booth");
-    CHECK_STR(speaker->SenderId.Text, CAMERA_ID);
-    CHECK_EQ(speaker->Active, 1);
-    CHECK(DtNmosReceiverList_At(list, 2) == NULL);
+    NmosFakeNetwork Network;
+    DtNmosQuery* Query = MakeNetwork(&Network);
+    REQUIRE(Query != NULL);
+    DtNmosReceiverList* List = NULL;
+    REQUIRE(DtNmosQuery_Receivers(Query, &List) == DTNMOS_OK);
+    REQUIRE(DtNmosReceiverList_Count(List) == 2);
+    const DtNmosReceiverInfo* Monitor = DtNmosReceiverList_At(List, 0);
+    CHECK_STR(Monitor->Id.Text, MONITOR_ID);
+    CHECK_STR(Monitor->DeviceId.Text, DEVICE_ID);
+    CHECK_STR(Monitor->Label, "monitor");
+    CHECK_EQ(Monitor->Media, DTNMOS_MEDIA_VIDEO);
+    CHECK_STR(Monitor->Transport, "urn:x-nmos:transport:rtp");
+    CHECK_STR(Monitor->SenderId.Text, "");
+    CHECK_EQ(Monitor->Active, 0);
+    const DtNmosReceiverInfo* Speaker = DtNmosReceiverList_At(List, 1);
+    CHECK_EQ(Speaker->Media, DTNMOS_MEDIA_AUDIO);
+    CHECK_STR(Speaker->Description, "booth");
+    CHECK_STR(Speaker->SenderId.Text, CAMERA_ID);
+    CHECK_EQ(Speaker->Active, 1);
+    CHECK(DtNmosReceiverList_At(List, 2) == NULL);
 
     // By ID and by label, each in a list of one that owns its strings.
-    const char* const keys[] = {MONITOR_ID, "monitor"};
+    const char* const Keys[] = {MONITOR_ID, "monitor"};
     for (size_t k = 0; k < 2; ++k)
     {
-        DtNmosReceiverList* found = NULL;
-        REQUIRE(DtNmosQuery_FindReceiver(query, keys[k], &found) == DTNMOS_OK);
-        REQUIRE(DtNmosReceiverList_Count(found) == 1);
-        const DtNmosReceiverInfo* receiver = DtNmosReceiverList_At(found, 0);
-        CHECK_STR(receiver->Id.Text, MONITOR_ID);
-        CHECK_EQ(receiver->Media, DTNMOS_MEDIA_VIDEO);
-        CHECK_STR(receiver->Label, "monitor");
-        DtNmosReceiverList_Free(found);
+        DtNmosReceiverList* Found = NULL;
+        REQUIRE(DtNmosQuery_FindReceiver(Query, Keys[k], &Found) == DTNMOS_OK);
+        REQUIRE(DtNmosReceiverList_Count(Found) == 1);
+        const DtNmosReceiverInfo* Receiver = DtNmosReceiverList_At(Found, 0);
+        CHECK_STR(Receiver->Id.Text, MONITOR_ID);
+        CHECK_EQ(Receiver->Media, DTNMOS_MEDIA_VIDEO);
+        CHECK_STR(Receiver->Label, "monitor");
+        DtNmosReceiverList_Free(Found);
     }
-    DtNmosReceiverList* missing = NULL;
-    CHECK(DtNmosQuery_FindReceiver(query, "nobody", &missing) == DTNMOS_E_NOT_FOUND);
+    DtNmosReceiverList* Missing = NULL;
+    CHECK(DtNmosQuery_FindReceiver(Query, "nobody", &Missing) == DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "no receiver labelled 'nobody'") != NULL);
-    CHECK(missing == NULL);
-    DtNmosReceiverList_Free(list);
-    DtNmosQuery_Free(query);
+    CHECK(Missing == NULL);
+    DtNmosReceiverList_Free(List);
+    DtNmosQuery_Free(Query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_connects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void controller_connects_a_receiver(void)
 {
-    NmosFakeNetwork network;
-    DtNmosQuery* query = make_network(&network);
-    REQUIRE(query != NULL);
-    DtNmosConnection* connection = NULL;
-    const DtNmosResult result =
-        DtNmosQuery_Connect(query, "monitor", "camera 1", &connection);
-    if (result != DTNMOS_OK)
+    NmosFakeNetwork Network;
+    DtNmosQuery* Query = MakeNetwork(&Network);
+    REQUIRE(Query != NULL);
+    DtNmosConnection* Connection = NULL;
+    const DtNmosResult Result =
+        DtNmosQuery_Connect(Query, "monitor", "camera 1", &Connection);
+    if (Result != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
     }
-    REQUIRE(result == DTNMOS_OK);
-    CHECK_STR(DtNmosConnection_Receiver(connection)->Id.Text, MONITOR_ID);
-    CHECK_STR(DtNmosConnection_Receiver(connection)->Label, "monitor");
-    CHECK_STR(DtNmosConnection_Sender(connection)->Id.Text, CAMERA_ID);
-    CHECK_STR(DtNmosConnection_Sdp(connection), CAMERA_SDP);
+    REQUIRE(Result == DTNMOS_OK);
+    CHECK_STR(DtNmosConnection_Receiver(Connection)->Id.Text, MONITOR_ID);
+    CHECK_STR(DtNmosConnection_Receiver(Connection)->Label, "monitor");
+    CHECK_STR(DtNmosConnection_Sender(Connection)->Id.Text, CAMERA_ID);
+    CHECK_STR(DtNmosConnection_Sdp(Connection), CAMERA_SDP);
 
     // The receiver and the sender, the flow of the sender, its SDP, the device of the
     // receiver, and the PATCH to the Connection API of v1.1 of that device.
-    const char* const expected[] = {
+    const char* const Expected[] = {
         "GET " BASE "receivers?label=monitor&paging.limit=100",
         "GET " BASE "senders?label=camera%201&paging.limit=100",
         "GET " BASE "flows/" VIDEO_FLOW,
@@ -258,158 +258,157 @@ void controller_connects_a_receiver(void)
         "GET " BASE "devices/" DEVICE_ID,
         "PATCH " STAGED,
     };
-    REQUIRE(network.count == sizeof(expected) / sizeof(expected[0]));
-    for (size_t i = 0; i < network.count; ++i)
+    REQUIRE(Network.Count == sizeof(Expected) / sizeof(Expected[0]));
+    for (size_t i = 0; i < Network.Count; ++i)
     {
-        CHECK_STR(network.requests[i], expected[i]);
+        CHECK_STR(Network.Requests[i], Expected[i]);
     }
-    CHECK_STR(network.content_type, "application/json");
-    NmosJson* body = NULL;
-    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    CHECK_STR(NmosJson_MemberText(body, "sender_id"), CAMERA_ID);
-    CHECK_EQ(NmosJson_Member(body, "master_enable")->type, DTNMOS_JSON_TRUE);
-    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
+    CHECK_STR(Network.ContentType, "application/json");
+    NmosJson* Body = NULL;
+    REQUIRE(NmosJson_Parse(Network.Body, strlen(Network.Body), &Body) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(Body, "sender_id"), CAMERA_ID);
+    CHECK_EQ(NmosJson_Member(Body, "master_enable")->Type, DTNMOS_JSON_TRUE);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(Body, "activation"), "mode"),
               "activate_immediate");
-    const NmosJson* file = NmosJson_Member(body, "transport_file");
-    CHECK_STR(NmosJson_MemberText(file, "type"), "application/sdp");
-    CHECK_STR(NmosJson_MemberText(file, "data"), CAMERA_SDP);
-    NmosJson_Free(body);
-    free(network.body);
-    DtNmosConnection_Free(connection);
-    DtNmosQuery_Free(query);
+    const NmosJson* File = NmosJson_Member(Body, "transport_file");
+    CHECK_STR(NmosJson_MemberText(File, "type"), "application/sdp");
+    CHECK_STR(NmosJson_MemberText(File, "data"), CAMERA_SDP);
+    NmosJson_Free(Body);
+    free(Network.Body);
+    DtNmosConnection_Free(Connection);
+    DtNmosQuery_Free(Query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_disconnects_a_receiver -.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void controller_disconnects_a_receiver(void)
 {
-    NmosFakeNetwork network;
-    DtNmosQuery* query = make_network(&network);
-    REQUIRE(query != NULL);
-    DtNmosReceiverList* disconnected = NULL;
-    REQUIRE(DtNmosQuery_Disconnect(query, MONITOR_ID, &disconnected) == DTNMOS_OK);
-    REQUIRE(DtNmosReceiverList_Count(disconnected) == 1);
-    CHECK_STR(DtNmosReceiverList_At(disconnected, 0)->Label, "monitor");
-    REQUIRE(network.count == 3);
-    CHECK_STR(network.requests[0], "GET " BASE "receivers/" MONITOR_ID);
-    CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
-    CHECK_STR(network.requests[2], "PATCH " STAGED);
-    NmosJson* body = NULL;
-    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    CHECK_EQ(NmosJson_Member(body, "sender_id")->type, DTNMOS_JSON_NULL);
-    CHECK_EQ(NmosJson_Member(body, "master_enable")->type, DTNMOS_JSON_FALSE);
-    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
+    NmosFakeNetwork Network;
+    DtNmosQuery* Query = MakeNetwork(&Network);
+    REQUIRE(Query != NULL);
+    DtNmosReceiverList* Disconnected = NULL;
+    REQUIRE(DtNmosQuery_Disconnect(Query, MONITOR_ID, &Disconnected) == DTNMOS_OK);
+    REQUIRE(DtNmosReceiverList_Count(Disconnected) == 1);
+    CHECK_STR(DtNmosReceiverList_At(Disconnected, 0)->Label, "monitor");
+    REQUIRE(Network.Count == 3);
+    CHECK_STR(Network.Requests[0], "GET " BASE "receivers/" MONITOR_ID);
+    CHECK_STR(Network.Requests[1], "GET " BASE "devices/" DEVICE_ID);
+    CHECK_STR(Network.Requests[2], "PATCH " STAGED);
+    NmosJson* Body = NULL;
+    REQUIRE(NmosJson_Parse(Network.Body, strlen(Network.Body), &Body) == DTNMOS_OK);
+    CHECK_EQ(NmosJson_Member(Body, "sender_id")->Type, DTNMOS_JSON_NULL);
+    CHECK_EQ(NmosJson_Member(Body, "master_enable")->Type, DTNMOS_JSON_FALSE);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(Body, "activation"), "mode"),
               "activate_immediate");
-    CHECK(NmosJson_Member(body, "transport_file") == NULL);
-    NmosJson_Free(body);
-    free(network.body);
-    DtNmosReceiverList_Free(disconnected);
-    DtNmosQuery_Free(query);
+    CHECK(NmosJson_Member(Body, "transport_file") == NULL);
+    NmosJson_Free(Body);
+    free(Network.Body);
+    DtNmosReceiverList_Free(Disconnected);
+    DtNmosQuery_Free(Query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- controller_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void controller_names_what_went_wrong(void)
 {
-    NmosFakeNetwork network;
-    DtNmosQuery* query = make_network(&network);
-    REQUIRE(query != NULL);
-    DtNmosConnection* connection = NULL;
+    NmosFakeNetwork Network;
+    DtNmosQuery* Query = MakeNetwork(&Network);
+    REQUIRE(Query != NULL);
+    DtNmosConnection* Connection = NULL;
 
     // A receiver the registry does not have.
-    CHECK(DtNmosQuery_Connect(query, "nobody", "camera 1", &connection) ==
+    CHECK(DtNmosQuery_Connect(Query, "nobody", "camera 1", &Connection) ==
           DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "no receiver labelled 'nobody'") != NULL);
     // Video to a receiver of audio, refused before the node is asked.
-    CHECK(DtNmosQuery_Connect(query, "speaker", "camera 1", &connection) ==
+    CHECK(DtNmosQuery_Connect(Query, "speaker", "camera 1", &Connection) ==
           DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "sends video, but receiver " SPEAKER_ID
                                         " ('speaker') takes audio") != NULL);
     // A sender without SDP.
-    CHECK(DtNmosQuery_Connect(query, "monitor", "camera 2", &connection) ==
+    CHECK(DtNmosQuery_Connect(Query, "monitor", "camera 2", &Connection) ==
           DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "no manifest_href") != NULL);
     // A device without a Connection API.
-    CHECK(DtNmosQuery_Disconnect(query, "speaker", NULL) == DTNMOS_E_NOT_FOUND);
+    CHECK(DtNmosQuery_Disconnect(Query, "speaker", NULL) == DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(),
                  "has no control urn:x-nmos:control:sr-ctrl/v1.1") != NULL);
     CHECK(strstr(DtNmos_GetLastError(), BARE_DEVICE_ID) != NULL);
-    CHECK_EQ(count_patches(&network), 0);
+    CHECK_EQ(CountPatches(&Network), 0);
 
     // A node that refuses the PATCH, with the error of IS-05 and with a page of its own.
-    network.patch_status = 400;
-    network.patch_answer =
-        "{\"code\": 400, \"error\": \"no such flow\", \"debug\": null}";
-    CHECK(DtNmosQuery_Connect(query, "monitor", "camera 1", &connection) ==
+    Network.PatchStatus = 400;
+    Network.PatchAnswer = "{\"code\": 400, \"error\": \"no such flow\", \"debug\": null}";
+    CHECK(DtNmosQuery_Connect(Query, "monitor", "camera 1", &Connection) ==
           DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(),
                  "answered the PATCH of " STAGED " with 400: no such flow") != NULL);
-    network.patch_status = 500;
-    network.patch_answer = "<html>";
-    CHECK(DtNmosQuery_Disconnect(query, "monitor", NULL) == DTNMOS_E_HTTP);
+    Network.PatchStatus = 500;
+    Network.PatchAnswer = "<html>";
+    CHECK(DtNmosQuery_Disconnect(Query, "monitor", NULL) == DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(), "with 500: <html>") != NULL);
     // A node that cannot be reached.
-    network.node_unreachable = 1;
-    CHECK(DtNmosQuery_Disconnect(query, "monitor", NULL) == DTNMOS_E_HTTP);
+    Network.NodeUnreachable = 1;
+    CHECK(DtNmosQuery_Disconnect(Query, "monitor", NULL) == DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
-    CHECK(connection == NULL);
-    free(network.body);
-    DtNmosQuery_Free(query);
+    CHECK(Connection == NULL);
+    free(Network.Body);
+    DtNmosQuery_Free(Query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- controller_moves_a_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void controller_moves_a_sender(void)
 {
-    NmosFakeNetwork network;
-    DtNmosQuery* query = make_network(&network);
-    REQUIRE(query != NULL);
-    DtNmosSenderList* moved = NULL;
-    const DtNmosResult result =
-        DtNmosQuery_MoveSender(query, "encoder", "239.1.2.3", 5010, &moved);
-    if (result != DTNMOS_OK)
+    NmosFakeNetwork Network;
+    DtNmosQuery* Query = MakeNetwork(&Network);
+    REQUIRE(Query != NULL);
+    DtNmosSenderList* Moved = NULL;
+    const DtNmosResult Result =
+        DtNmosQuery_MoveSender(Query, "encoder", "239.1.2.3", 5010, &Moved);
+    if (Result != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
     }
-    REQUIRE(result == DTNMOS_OK);
-    REQUIRE(DtNmosSenderList_Count(moved) == 1);
-    CHECK_STR(DtNmosSenderList_At(moved, 0)->Id.Text, ENCODER_ID);
-    CHECK_STR(DtNmosSenderList_At(moved, 0)->Label, "encoder");
+    REQUIRE(Result == DTNMOS_OK);
+    REQUIRE(DtNmosSenderList_Count(Moved) == 1);
+    CHECK_STR(DtNmosSenderList_At(Moved, 0)->Id.Text, ENCODER_ID);
+    CHECK_STR(DtNmosSenderList_At(Moved, 0)->Label, "encoder");
     // The sender, the device of the sender, and the PATCH of its staged parameters.
-    REQUIRE(network.count == 3);
-    CHECK_STR(network.requests[0], "GET " BASE "senders?label=encoder&paging.limit=100");
-    CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
-    CHECK_STR(network.requests[2], "PATCH " MOVED);
-    NmosJson* body = NULL;
-    REQUIRE(NmosJson_Parse(network.body, strlen(network.body), &body) == DTNMOS_OK);
-    const NmosJson* legs = NmosJson_Member(body, "transport_params");
-    REQUIRE(legs != NULL && legs->type == DTNMOS_JSON_ARRAY && legs->count == 1);
-    CHECK_STR(NmosJson_MemberText(&legs->items[0], "destination_ip"), "239.1.2.3");
-    CHECK_EQ(NmosJson_Member(&legs->items[0], "destination_port")->number, 5010);
-    CHECK_STR(NmosJson_MemberText(NmosJson_Member(body, "activation"), "mode"),
+    REQUIRE(Network.Count == 3);
+    CHECK_STR(Network.Requests[0], "GET " BASE "senders?label=encoder&paging.limit=100");
+    CHECK_STR(Network.Requests[1], "GET " BASE "devices/" DEVICE_ID);
+    CHECK_STR(Network.Requests[2], "PATCH " MOVED);
+    NmosJson* Body = NULL;
+    REQUIRE(NmosJson_Parse(Network.Body, strlen(Network.Body), &Body) == DTNMOS_OK);
+    const NmosJson* Legs = NmosJson_Member(Body, "transport_params");
+    REQUIRE(Legs != NULL && Legs->Type == DTNMOS_JSON_ARRAY && Legs->Count == 1);
+    CHECK_STR(NmosJson_MemberText(&Legs->Items[0], "destination_ip"), "239.1.2.3");
+    CHECK_EQ(NmosJson_Member(&Legs->Items[0], "destination_port")->Number, 5010);
+    CHECK_STR(NmosJson_MemberText(NmosJson_Member(Body, "activation"), "mode"),
               "activate_immediate");
-    CHECK(NmosJson_Member(body, "master_enable") == NULL);
-    NmosJson_Free(body);
-    DtNmosSenderList_Free(moved);
+    CHECK(NmosJson_Member(Body, "master_enable") == NULL);
+    NmosJson_Free(Body);
+    DtNmosSenderList_Free(Moved);
 
     // A sender that does not send over RTP, one without a device, and no port.
-    CHECK(DtNmosQuery_MoveSender(query, "player", "239.1.2.3", 5010, NULL) ==
+    CHECK(DtNmosQuery_MoveSender(Query, "player", "239.1.2.3", 5010, NULL) ==
           DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "not RTP") != NULL);
-    CHECK(DtNmosQuery_MoveSender(query, "camera 1", "239.1.2.3", 5010, NULL) ==
+    CHECK(DtNmosQuery_MoveSender(Query, "camera 1", "239.1.2.3", 5010, NULL) ==
           DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "names no device") != NULL);
-    CHECK(DtNmosQuery_MoveSender(query, "encoder", "239.1.2.3", 0, NULL) ==
+    CHECK(DtNmosQuery_MoveSender(Query, "encoder", "239.1.2.3", 0, NULL) ==
           DTNMOS_E_INVALID_ARGUMENT);
     // A node that refuses the destination.
-    network.patch_status = 400;
-    network.patch_answer =
+    Network.PatchStatus = 400;
+    Network.PatchAnswer =
         "{\"code\": 400, \"error\": \"no such address\", \"debug\": null}";
-    CHECK(DtNmosQuery_MoveSender(query, "encoder", "10.0.0.1", 5010, NULL) ==
+    CHECK(DtNmosQuery_MoveSender(Query, "encoder", "10.0.0.1", 5010, NULL) ==
           DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(), "sender " ENCODER_ID " ('encoder') answered") !=
           NULL);
     CHECK(strstr(DtNmos_GetLastError(), "with 400: no such address") != NULL);
-    free(network.body);
-    DtNmosQuery_Free(query);
+    free(Network.Body);
+    DtNmosQuery_Free(Query);
 }

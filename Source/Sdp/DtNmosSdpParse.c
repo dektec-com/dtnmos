@@ -13,317 +13,316 @@
 
 struct DtNmosSdp
 {
-    DtNmosSession session;
-    DtNmosFlow* flows;
-    size_t count;
-    NmosStore store; // the strings and arrays of the session and the flows
+    DtNmosSession Session;
+    DtNmosFlow* Flows;
+    size_t Count;
+    NmosStore Store; // the strings and arrays of the session and the flows
 };
 
 // The attributes that the session level and a media section both may carry.
 typedef struct NmosSharedLines
 {
-    NmosSpan connection; // the address of c=, without TTL
-    size_t connection_line;
-    NmosSpan filter_source; // the first source of a=source-filter: incl
-    NmosSpan ts_refclk;
-    NmosSpan mediaclk; // the value of a=mediaclk
+    NmosSpan Connection; // the address of c=, without TTL
+    size_t ConnectionLine;
+    NmosSpan FilterSource; // the first source of a=source-filter: incl
+    NmosSpan TsRefclk;
+    NmosSpan Mediaclk; // the value of a=mediaclk
 } NmosSharedLines;
 
 // A media section as its lines give it.
 typedef struct NmosSection
 {
-    size_t line; // of its m=
-    uint16_t port;
-    uint8_t payload_type;
-    NmosSharedLines shared;
-    NmosSpan encoding; // of the a=rtpmap of payload_type
-    uint32_t clock_rate;
-    uint32_t channels; // the encoding parameters of a=rtpmap; 0 when absent
-    NmosSpan fmtp;
-    size_t fmtp_line;
-    NmosSpan ptime;
-    size_t ptime_line;
-    NmosSpan mid;
-    uint64_t bandwidth_kbps;
+    size_t Line; // of its m=
+    uint16_t Port;
+    uint8_t PayloadType;
+    NmosSharedLines Shared;
+    NmosSpan Encoding; // of the a=rtpmap of payload_type
+    uint32_t ClockRate;
+    uint32_t Channels; // the encoding parameters of a=rtpmap; 0 when absent
+    NmosSpan Fmtp;
+    size_t FmtpLine;
+    NmosSpan Ptime;
+    size_t PtimeLine;
+    NmosSpan Mid;
+    uint64_t BandwidthKbps;
 } NmosSection;
 
 typedef struct NmosParser
 {
-    const char* text;
-    size_t length;
-    size_t position;
-    size_t line; // number of the current line, from 1
-    DtNmosSession* session;
-    NmosStore* store; // of the DtNmosSdp being read
-    NmosSharedLines session_lines;
-    NmosSpan group_second[16]; // the second mid of each a=group:DUP
-    size_t group_count;
-    NmosSection* sections;
-    size_t count;
-    size_t capacity;
+    const char* Text;
+    size_t Length;
+    size_t Position;
+    size_t Line; // number of the current line, from 1
+    DtNmosSession* Session;
+    NmosStore* Store; // of the DtNmosSdp being read
+    NmosSharedLines SessionLines;
+    NmosSpan GroupSecond[16]; // the second mid of each a=group:DUP
+    size_t GroupCount;
+    NmosSection* Sections;
+    size_t Count;
+    size_t Capacity;
 } NmosParser;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail_line -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FailLine -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fail_line(NmosParser* p, const char* what, NmosSpan text)
+static DtNmosResult FailLine(NmosParser* p, const char* What, NmosSpan Text)
 {
-    return NmosError_Fail(DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", p->line, what,
-                          (int)(text.length > 120 ? 120 : text.length), text.data);
+    return NmosError_Fail(DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", p->Line, What,
+                          (int)(Text.Length > 120 ? 120 : Text.Length), Text.Data);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FailAt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fail_at(size_t line, const char* what, NmosSpan text)
+static DtNmosResult FailAt(size_t Line, const char* What, NmosSpan Text)
 {
-    return NmosError_Fail(DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", line, what,
-                          (int)(text.length > 120 ? 120 : text.length), text.data);
+    return NmosError_Fail(DTNMOS_E_PARSE, "SDP line %zu: %s: '%.*s'", Line, What,
+                          (int)(Text.Length > 120 ? 120 : Text.Length), Text.Data);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_line -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextLine -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Returns the next line without its end of line, or 0 at the end of the text.
 //
-static int next_line(NmosParser* p, NmosSpan* line)
+static int NextLine(NmosParser* p, NmosSpan* Line)
 {
-    if (p->position >= p->length)
+    if (p->Position >= p->Length)
     {
         return 0;
     }
-    const char* start = p->text + p->position;
-    const char* end = memchr(start, '\n', p->length - p->position);
-    size_t length = end == NULL ? p->length - p->position : (size_t)(end - start);
-    p->position += length + (end == NULL ? 0 : 1);
-    if (length > 0 && start[length - 1] == '\r')
+    const char* Start = p->Text + p->Position;
+    const char* End = memchr(Start, '\n', p->Length - p->Position);
+    size_t Length = End == NULL ? p->Length - p->Position : (size_t)(End - Start);
+    p->Position += Length + (End == NULL ? 0 : 1);
+    if (Length > 0 && Start[Length - 1] == '\r')
     {
-        --length;
+        --Length;
     }
-    line->data = start;
-    line->length = length;
-    ++p->line;
+    Line->Data = Start;
+    Line->Length = Length;
+    ++p->Line;
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_word -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextWord -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Splits span at its first space: word is what lies before it, and the rest follows,
 // trimmed.
 //
-static NmosSpan next_word(NmosSpan span, NmosSpan* word)
+static NmosSpan NextWord(NmosSpan Span, NmosSpan* Word)
 {
-    span = NmosSpan_Trim(span);
-    const NmosSpan rest = NmosSpan_Split(span, ' ', word);
-    return NmosSpan_Trim(rest);
+    Span = NmosSpan_Trim(Span);
+    const NmosSpan Rest = NmosSpan_Split(Span, ' ', Word);
+    return NmosSpan_Trim(Rest);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_connection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadConnection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_connection(NmosParser* p, NmosSpan value, NmosSharedLines* lines)
+static DtNmosResult ReadConnection(NmosParser* p, NmosSpan Value, NmosSharedLines* Lines)
 {
-    NmosSpan network;
-    NmosSpan type;
-    NmosSpan address;
-    NmosSpan rest = next_word(value, &network);
-    rest = next_word(rest, &type);
-    next_word(rest, &address);
-    if (!NmosSpan_Equals(network, "IN", 0) ||
-        (!NmosSpan_Equals(type, "IP4", 0) && !NmosSpan_Equals(type, "IP6", 0)) ||
-        address.length == 0)
+    NmosSpan Network;
+    NmosSpan Type;
+    NmosSpan Address;
+    NmosSpan Rest = NextWord(Value, &Network);
+    Rest = NextWord(Rest, &Type);
+    NextWord(Rest, &Address);
+    if (!NmosSpan_Equals(Network, "IN", 0) ||
+        (!NmosSpan_Equals(Type, "IP4", 0) && !NmosSpan_Equals(Type, "IP6", 0)) ||
+        Address.Length == 0)
     {
-        return fail_line(p, "c= needs IN IP4 or IN IP6 and an address", value);
+        return FailLine(p, "c= needs IN IP4 or IN IP6 and an address", Value);
     }
     // A multicast address of IPv4 carries its TTL, and either may carry a count, after
     // '/'.
-    NmosSpan host;
-    NmosSpan_Split(address, '/', &host);
-    lines->connection = host;
-    lines->connection_line = p->line;
+    NmosSpan Host;
+    NmosSpan_Split(Address, '/', &Host);
+    Lines->Connection = Host;
+    Lines->ConnectionLine = p->Line;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_origin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadOrigin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_origin(NmosParser* p, NmosSpan value)
+static DtNmosResult ReadOrigin(NmosParser* p, NmosSpan Value)
 {
-    NmosSpan user;
-    NmosSpan id;
-    NmosSpan version;
-    NmosSpan network;
-    NmosSpan type;
-    NmosSpan address;
-    NmosSpan rest = next_word(value, &user);
-    rest = next_word(rest, &id);
-    rest = next_word(rest, &version);
-    rest = next_word(rest, &network);
-    rest = next_word(rest, &type);
-    next_word(rest, &address);
-    if (!NmosText_ParseU64(id, UINT64_MAX, &p->session->SessionId) ||
-        !NmosText_ParseU64(version, UINT64_MAX, &p->session->SessionVersion) ||
-        address.length == 0)
+    NmosSpan User;
+    NmosSpan Id;
+    NmosSpan Version;
+    NmosSpan Network;
+    NmosSpan Type;
+    NmosSpan Address;
+    NmosSpan Rest = NextWord(Value, &User);
+    Rest = NextWord(Rest, &Id);
+    Rest = NextWord(Rest, &Version);
+    Rest = NextWord(Rest, &Network);
+    Rest = NextWord(Rest, &Type);
+    NextWord(Rest, &Address);
+    if (!NmosText_ParseU64(Id, UINT64_MAX, &p->Session->SessionId) ||
+        !NmosText_ParseU64(Version, UINT64_MAX, &p->Session->SessionVersion) ||
+        Address.Length == 0)
     {
-        return fail_line(p, "o= needs a user, a session ID, a version and an address",
-                         value);
+        return FailLine(p, "o= needs a user, a session ID, a version and an address",
+                        Value);
     }
-    if (!NmosText_CopySpan(p->session->OriginIp, sizeof(p->session->OriginIp), address))
+    if (!NmosText_CopySpan(p->Session->OriginIp, sizeof(p->Session->OriginIp), Address))
     {
-        return fail_line(p, "o= has an address longer than a domain name may be", value);
+        return FailLine(p, "o= has an address longer than a domain name may be", Value);
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_media -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadMedia -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_media(NmosParser* p, NmosSpan value)
+static DtNmosResult ReadMedia(NmosParser* p, NmosSpan Value)
 {
-    if (p->count == p->capacity)
+    if (p->Count == p->Capacity)
     {
-        const size_t capacity = p->capacity == 0 ? 4 : p->capacity * 2;
-        NmosSection* sections = realloc(p->sections, capacity * sizeof(*sections));
-        if (sections == NULL)
+        const size_t Capacity = p->Capacity == 0 ? 4 : p->Capacity * 2;
+        NmosSection* Sections = realloc(p->Sections, Capacity * sizeof(*Sections));
+        if (Sections == NULL)
         {
             return NmosError_FailMemory();
         }
-        p->sections = sections;
-        p->capacity = capacity;
+        p->Sections = Sections;
+        p->Capacity = Capacity;
     }
-    NmosSection* s = &p->sections[p->count];
+    NmosSection* s = &p->Sections[p->Count];
     memset(s, 0, sizeof(*s));
-    s->line = p->line;
-    NmosSpan media;
-    NmosSpan port;
-    NmosSpan protocol;
-    NmosSpan format;
-    NmosSpan rest = next_word(value, &media);
-    rest = next_word(rest, &port);
-    rest = next_word(rest, &protocol);
-    next_word(rest, &format);
-    NmosSpan port_number;
-    NmosSpan_Split(port, '/', &port_number);
-    uint32_t number = 0;
-    uint32_t payload_type = 0;
-    if (media.length == 0 || !NmosText_ParseU32(port_number, 65535, &number) ||
-        protocol.length == 0 || !NmosText_ParseU32(format, 127, &payload_type))
+    s->Line = p->Line;
+    NmosSpan Media;
+    NmosSpan Port;
+    NmosSpan Protocol;
+    NmosSpan Format;
+    NmosSpan Rest = NextWord(Value, &Media);
+    Rest = NextWord(Rest, &Port);
+    Rest = NextWord(Rest, &Protocol);
+    NextWord(Rest, &Format);
+    NmosSpan PortNumber;
+    NmosSpan_Split(Port, '/', &PortNumber);
+    uint32_t Number = 0;
+    uint32_t PayloadType = 0;
+    if (Media.Length == 0 || !NmosText_ParseU32(PortNumber, 65535, &Number) ||
+        Protocol.Length == 0 || !NmosText_ParseU32(Format, 127, &PayloadType))
     {
-        return fail_line(p, "m= needs a media, a port, a protocol and a payload type",
-                         value);
+        return FailLine(p, "m= needs a media, a port, a protocol and a payload type",
+                        Value);
     }
-    s->port = (uint16_t)number;
-    s->payload_type = (uint8_t)payload_type;
-    ++p->count;
+    s->Port = (uint16_t)Number;
+    s->PayloadType = (uint8_t)PayloadType;
+    ++p->Count;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_payload_type -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadPayloadType -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the payload type that starts value, as a=rtpmap and a=fmtp begin, into
 // payload_type, and returns what follows it.
 //
-static int read_payload_type(NmosSpan value, uint32_t* payload_type, NmosSpan* rest)
+static int ReadPayloadType(NmosSpan Value, uint32_t* PayloadType, NmosSpan* Rest)
 {
-    NmosSpan number;
-    *rest = next_word(value, &number);
-    return NmosText_ParseU32(number, 127, payload_type);
+    NmosSpan Number;
+    *Rest = NextWord(Value, &Number);
+    return NmosText_ParseU32(Number, 127, PayloadType);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_rtpmap -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadRtpmap -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_rtpmap(NmosParser* p, NmosSection* s, NmosSpan value)
+static DtNmosResult ReadRtpmap(NmosParser* p, NmosSection* s, NmosSpan Value)
 {
-    uint32_t payload_type = 0;
-    NmosSpan map;
-    if (!read_payload_type(value, &payload_type, &map))
+    uint32_t PayloadType = 0;
+    NmosSpan Map;
+    if (!ReadPayloadType(Value, &PayloadType, &Map))
     {
-        return fail_line(p, "a=rtpmap needs a payload type", value);
+        return FailLine(p, "a=rtpmap needs a payload type", Value);
     }
-    if (payload_type != s->payload_type)
+    if (PayloadType != s->PayloadType)
     {
         return DTNMOS_OK;
     }
-    NmosSpan encoding;
-    NmosSpan clock;
-    NmosSpan rest = NmosSpan_Split(map, '/', &encoding);
-    const NmosSpan parameters = NmosSpan_Split(rest, '/', &clock);
-    s->encoding = NmosSpan_Trim(encoding);
-    if (s->encoding.length == 0 ||
-        !NmosText_ParseU32(clock, UINT32_MAX, &s->clock_rate) ||
-        (parameters.data != NULL && !NmosText_ParseU32(parameters, 65535, &s->channels)))
+    NmosSpan Encoding;
+    NmosSpan Clock;
+    NmosSpan Rest = NmosSpan_Split(Map, '/', &Encoding);
+    const NmosSpan Parameters = NmosSpan_Split(Rest, '/', &Clock);
+    s->Encoding = NmosSpan_Trim(Encoding);
+    if (s->Encoding.Length == 0 || !NmosText_ParseU32(Clock, UINT32_MAX, &s->ClockRate) ||
+        (Parameters.Data != NULL && !NmosText_ParseU32(Parameters, 65535, &s->Channels)))
     {
-        return fail_line(
-            p, "a=rtpmap needs an encoding, a clock rate and optional channels", value);
+        return FailLine(
+            p, "a=rtpmap needs an encoding, a clock rate and optional channels", Value);
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_source_filter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadSourceFilter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult read_source_filter(NmosParser* p, NmosSpan value,
-                                       NmosSharedLines* lines)
+static DtNmosResult ReadSourceFilter(NmosParser* p, NmosSpan Value,
+                                     NmosSharedLines* Lines)
 {
     // a=source-filter: incl IN IP4 <destination> <source> ...
-    NmosSpan mode;
-    NmosSpan network;
-    NmosSpan type;
-    NmosSpan destination;
-    NmosSpan source;
-    NmosSpan rest = next_word(value, &mode);
-    rest = next_word(rest, &network);
-    rest = next_word(rest, &type);
-    rest = next_word(rest, &destination);
-    next_word(rest, &source);
-    if (mode.length == 0 || network.length == 0 || type.length == 0 ||
-        destination.length == 0 || source.length == 0)
+    NmosSpan Mode;
+    NmosSpan Network;
+    NmosSpan Type;
+    NmosSpan Destination;
+    NmosSpan Source;
+    NmosSpan Rest = NextWord(Value, &Mode);
+    Rest = NextWord(Rest, &Network);
+    Rest = NextWord(Rest, &Type);
+    Rest = NextWord(Rest, &Destination);
+    NextWord(Rest, &Source);
+    if (Mode.Length == 0 || Network.Length == 0 || Type.Length == 0 ||
+        Destination.Length == 0 || Source.Length == 0)
     {
-        return fail_line(
+        return FailLine(
             p,
             "a=source-filter needs a mode, IN, an address type, a destination "
             "and a source",
-            value);
+            Value);
     }
-    if (NmosSpan_Equals(mode, "incl", 1) && lines->filter_source.length == 0)
+    if (NmosSpan_Equals(Mode, "incl", 1) && Lines->FilterSource.Length == 0)
     {
-        lines->filter_source = source;
+        Lines->FilterSource = Source;
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_attribute -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadAttribute -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads an attribute into the lines of the session or of the current section.
 //
-static DtNmosResult read_attribute(NmosParser* p, NmosSpan line)
+static DtNmosResult ReadAttribute(NmosParser* p, NmosSpan Line)
 {
     NmosSpan name;
-    const NmosSpan value = NmosSpan_Split(line, ':', &name);
-    NmosSection* s = p->count == 0 ? NULL : &p->sections[p->count - 1];
-    NmosSharedLines* lines = s == NULL ? &p->session_lines : &s->shared;
+    const NmosSpan Value = NmosSpan_Split(Line, ':', &name);
+    NmosSection* s = p->Count == 0 ? NULL : &p->Sections[p->Count - 1];
+    NmosSharedLines* Lines = s == NULL ? &p->SessionLines : &s->Shared;
     if (NmosSpan_Equals(name, "source-filter", 0))
     {
-        return read_source_filter(p, value, lines);
+        return ReadSourceFilter(p, Value, Lines);
     }
     if (NmosSpan_Equals(name, "ts-refclk", 0))
     {
-        if (lines->ts_refclk.length == 0)
+        if (Lines->TsRefclk.Length == 0)
         {
-            lines->ts_refclk = NmosSpan_Trim(value);
+            Lines->TsRefclk = NmosSpan_Trim(Value);
         }
         return DTNMOS_OK;
     }
     if (NmosSpan_Equals(name, "mediaclk", 0))
     {
-        lines->mediaclk = NmosSpan_Trim(value);
+        Lines->Mediaclk = NmosSpan_Trim(Value);
         return DTNMOS_OK;
     }
     if (NmosSpan_Equals(name, "group", 0))
     {
-        NmosSpan semantics;
-        NmosSpan rest = next_word(value, &semantics);
-        NmosSpan first;
-        NmosSpan second;
-        rest = next_word(rest, &first);
-        next_word(rest, &second);
-        if (NmosSpan_Equals(semantics, "DUP", 0) && second.length > 0 &&
-            p->group_count < sizeof(p->group_second) / sizeof(p->group_second[0]))
+        NmosSpan Semantics;
+        NmosSpan Rest = NextWord(Value, &Semantics);
+        NmosSpan First;
+        NmosSpan Second;
+        Rest = NextWord(Rest, &First);
+        NextWord(Rest, &Second);
+        if (NmosSpan_Equals(Semantics, "DUP", 0) && Second.Length > 0 &&
+            p->GroupCount < sizeof(p->GroupSecond) / sizeof(p->GroupSecond[0]))
         {
-            p->group_second[p->group_count++] = second;
+            p->GroupSecond[p->GroupCount++] = Second;
         }
         return DTNMOS_OK;
     }
@@ -333,130 +332,130 @@ static DtNmosResult read_attribute(NmosParser* p, NmosSpan line)
     }
     if (NmosSpan_Equals(name, "rtpmap", 0))
     {
-        return read_rtpmap(p, s, value);
+        return ReadRtpmap(p, s, Value);
     }
     if (NmosSpan_Equals(name, "fmtp", 0))
     {
-        uint32_t payload_type = 0;
-        NmosSpan parameters;
-        if (!read_payload_type(value, &payload_type, &parameters))
+        uint32_t PayloadType = 0;
+        NmosSpan Parameters;
+        if (!ReadPayloadType(Value, &PayloadType, &Parameters))
         {
-            return fail_line(p, "a=fmtp needs a payload type", value);
+            return FailLine(p, "a=fmtp needs a payload type", Value);
         }
-        if (payload_type == s->payload_type)
+        if (PayloadType == s->PayloadType)
         {
-            s->fmtp = parameters;
-            s->fmtp_line = p->line;
+            s->Fmtp = Parameters;
+            s->FmtpLine = p->Line;
         }
         return DTNMOS_OK;
     }
     if (NmosSpan_Equals(name, "ptime", 0))
     {
-        s->ptime = NmosSpan_Trim(value);
-        s->ptime_line = p->line;
+        s->Ptime = NmosSpan_Trim(Value);
+        s->PtimeLine = p->Line;
         return DTNMOS_OK;
     }
     if (NmosSpan_Equals(name, "mid", 0))
     {
-        s->mid = NmosSpan_Trim(value);
+        s->Mid = NmosSpan_Trim(Value);
         return DTNMOS_OK;
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_bandwidth -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadBandwidth -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_bandwidth(NmosParser* p, NmosSpan value)
+static DtNmosResult ReadBandwidth(NmosParser* p, NmosSpan Value)
 {
-    if (p->count == 0)
+    if (p->Count == 0)
     {
         return DTNMOS_OK;
     }
-    NmosSpan type;
-    const NmosSpan amount = NmosSpan_Split(value, ':', &type);
-    if (NmosSpan_Equals(type, "AS", 0) &&
-        !NmosText_ParseU64(NmosSpan_Trim(amount), UINT64_MAX,
-                           &p->sections[p->count - 1].bandwidth_kbps))
+    NmosSpan Type;
+    const NmosSpan Amount = NmosSpan_Split(Value, ':', &Type);
+    if (NmosSpan_Equals(Type, "AS", 0) &&
+        !NmosText_ParseU64(NmosSpan_Trim(Amount), UINT64_MAX,
+                           &p->Sections[p->Count - 1].BandwidthKbps))
     {
-        return fail_line(p, "b=AS needs a bandwidth in kilobits per second", value);
+        return FailLine(p, "b=AS needs a bandwidth in kilobits per second", Value);
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_lines -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadLines -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult read_lines(NmosParser* p)
+static DtNmosResult ReadLines(NmosParser* p)
 {
-    NmosSpan line;
-    while (next_line(p, &line))
+    NmosSpan Line;
+    while (NextLine(p, &Line))
     {
-        if (line.length == 0)
+        if (Line.Length == 0)
         {
             continue;
         }
-        if (line.length < 2 || line.data[1] != '=')
+        if (Line.Length < 2 || Line.Data[1] != '=')
         {
-            return fail_line(p, "a line of an SDP is <type>=<value>", line);
+            return FailLine(p, "a line of an SDP is <type>=<value>", Line);
         }
-        const NmosSpan value = {line.data + 2, line.length - 2};
-        DtNmosResult result = DTNMOS_OK;
-        switch (line.data[0])
+        const NmosSpan Value = {Line.Data + 2, Line.Length - 2};
+        DtNmosResult Result = DTNMOS_OK;
+        switch (Line.Data[0])
         {
         case 'o':
-            result = read_origin(p, value);
+            Result = ReadOrigin(p, Value);
             break;
         case 's':
-            p->session->Name = NmosStore_Text(p->store, value.data, value.length);
-            if (p->session->Name == NULL)
+            p->Session->Name = NmosStore_Text(p->Store, Value.Data, Value.Length);
+            if (p->Session->Name == NULL)
             {
-                result = NmosError_FailMemory();
+                Result = NmosError_FailMemory();
             }
             break;
         case 'c':
-            result = read_connection(p, value,
-                                     p->count == 0 ? &p->session_lines
-                                                   : &p->sections[p->count - 1].shared);
+            Result = ReadConnection(p, Value,
+                                    p->Count == 0 ? &p->SessionLines
+                                                  : &p->Sections[p->Count - 1].Shared);
             break;
         case 'm':
-            result = read_media(p, value);
+            Result = ReadMedia(p, Value);
             break;
         case 'a':
-            result = read_attribute(p, value);
+            Result = ReadAttribute(p, Value);
             break;
         case 'b':
-            result = read_bandwidth(p, value);
+            Result = ReadBandwidth(p, Value);
             break;
         default:
             break;
         }
-        if (result != DTNMOS_OK)
+        if (Result != DTNMOS_OK)
         {
-            return result;
+            return Result;
         }
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- media_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MediaOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Returns the media of an encoding of a=rtpmap.
 //
-static DtNmosMedia media_of(NmosSpan encoding)
+static DtNmosMedia MediaOf(NmosSpan Encoding)
 {
-    if (NmosSpan_Equals(encoding, "raw", 1))
+    if (NmosSpan_Equals(Encoding, "raw", 1))
     {
         return DTNMOS_MEDIA_VIDEO;
     }
-    if (NmosSpan_Equals(encoding, "L24", 1) || NmosSpan_Equals(encoding, "L16", 1) ||
-        NmosSpan_Equals(encoding, "AM824", 1))
+    if (NmosSpan_Equals(Encoding, "L24", 1) || NmosSpan_Equals(Encoding, "L16", 1) ||
+        NmosSpan_Equals(Encoding, "AM824", 1))
     {
         return DTNMOS_MEDIA_AUDIO;
     }
-    if (NmosSpan_Equals(encoding, "jxsv", 1))
+    if (NmosSpan_Equals(Encoding, "jxsv", 1))
     {
         return DTNMOS_MEDIA_COMPRESSED_VIDEO;
     }
-    if (NmosSpan_Equals(encoding, "smpte291", 1))
+    if (NmosSpan_Equals(Encoding, "smpte291", 1))
     {
         return DTNMOS_MEDIA_ANC;
     }
@@ -466,288 +465,288 @@ static DtNmosMedia media_of(NmosSpan encoding)
 // The parameters of an a=fmtp: pairs of a name and a value, separated by ';'.
 typedef struct NmosFmtpReader
 {
-    NmosSpan rest;
+    NmosSpan Rest;
 } NmosFmtpReader;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- next_parameter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextParameter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the next parameter into name and value; value is empty for a flag such as
 // interlace.
 //
-static int next_parameter(NmosFmtpReader* reader, NmosSpan* name, NmosSpan* value)
+static int NextParameter(NmosFmtpReader* Reader, NmosSpan* name, NmosSpan* Value)
 {
-    while (reader->rest.data != NULL)
+    while (Reader->Rest.Data != NULL)
     {
-        NmosSpan parameter;
-        reader->rest = NmosSpan_Split(reader->rest, ';', &parameter);
-        parameter = NmosSpan_Trim(parameter);
-        if (parameter.length == 0)
+        NmosSpan Parameter;
+        Reader->Rest = NmosSpan_Split(Reader->Rest, ';', &Parameter);
+        Parameter = NmosSpan_Trim(Parameter);
+        if (Parameter.Length == 0)
         {
             continue;
         }
-        const NmosSpan after = NmosSpan_Split(parameter, '=', name);
+        const NmosSpan After = NmosSpan_Split(Parameter, '=', name);
         *name = NmosSpan_Trim(*name);
-        if (after.data == NULL)
+        if (After.Data == NULL)
         {
-            value->data = parameter.data + parameter.length;
-            value->length = 0;
+            Value->Data = Parameter.Data + Parameter.Length;
+            Value->Length = 0;
         }
         else
         {
-            *value = NmosSpan_Trim(after);
+            *Value = NmosSpan_Trim(After);
         }
         return 1;
     }
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- flag_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FlagValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Whether a flag such as interlace is set: present without a value, or with one other
 // than 0.
 //
-static int flag_value(NmosSpan value)
+static int FlagValue(NmosSpan Value)
 {
-    return value.length == 0 || !NmosSpan_Equals(value, "0", 0);
+    return Value.Length == 0 || !NmosSpan_Equals(Value, "0", 0);
 }
 
 // The raster, rate and colour that ST 2110-20 and -22 share.
 typedef struct NmosRaster
 {
-    uint32_t* width;
-    uint32_t* height;
-    uint32_t* rate_numerator;
-    uint32_t* rate_denominator;
-    int* interlaced;
-    int* segmented;
-    uint32_t* depth;
-    char* sampling;         // of DTNMOS_MAX_VALUE_SIZE
-    char* colorimetry;      // of DTNMOS_MAX_VALUE_SIZE
-    char* tcs;              // of DTNMOS_MAX_VALUE_SIZE
-    char* range;            // of DTNMOS_MAX_VALUE_SIZE
-    char* ssn;              // of DTNMOS_MAX_VALUE_SIZE
-    char* transmitter_type; // of DTNMOS_MAX_SHORT_SIZE
+    uint32_t* Width;
+    uint32_t* Height;
+    uint32_t* RateNumerator;
+    uint32_t* RateDenominator;
+    int* Interlaced;
+    int* Segmented;
+    uint32_t* Depth;
+    char* Sampling;        // of DTNMOS_MAX_VALUE_SIZE
+    char* Colorimetry;     // of DTNMOS_MAX_VALUE_SIZE
+    char* Tcs;             // of DTNMOS_MAX_VALUE_SIZE
+    char* Range;           // of DTNMOS_MAX_VALUE_SIZE
+    char* Ssn;             // of DTNMOS_MAX_VALUE_SIZE
+    char* TransmitterType; // of DTNMOS_MAX_SHORT_SIZE
 } NmosRaster;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Copies the value of the parameter name of a=fmtp into the array target of size bytes;
 // fails when it does not fit.
 //
-static DtNmosResult copy_value(size_t line, NmosSpan name, NmosSpan value, char* target,
-                               size_t size)
+static DtNmosResult CopyValue(size_t Line, NmosSpan name, NmosSpan Value, char* Target,
+                              size_t Size)
 {
-    if (!NmosText_CopySpan(target, size, value))
+    if (!NmosText_CopySpan(Target, Size, Value))
     {
-        return fail_at(line, "a=fmtp has a value longer than its standard allows", name);
+        return FailAt(Line, "a=fmtp has a value longer than its standard allows", name);
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_raster -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadRaster -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads the parameter name of the raster; sets handled when it is one of them.
 //
-static DtNmosResult read_raster(size_t line, const NmosRaster* r, NmosSpan name,
-                                NmosSpan value, int* handled)
+static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan name,
+                               NmosSpan Value, int* Handled)
 {
-    *handled = 1;
-    int valid = 1;
-    char* text = NULL;
-    size_t size = DTNMOS_MAX_VALUE_SIZE;
+    *Handled = 1;
+    int Valid = 1;
+    char* Text = NULL;
+    size_t Size = DTNMOS_MAX_VALUE_SIZE;
     if (NmosSpan_Equals(name, "width", 1))
     {
-        valid = NmosText_ParseU32(value, 65535, r->width);
+        Valid = NmosText_ParseU32(Value, 65535, r->Width);
     }
     else if (NmosSpan_Equals(name, "height", 1))
     {
-        valid = NmosText_ParseU32(value, 65535, r->height);
+        Valid = NmosText_ParseU32(Value, 65535, r->Height);
     }
     else if (NmosSpan_Equals(name, "exactframerate", 1))
     {
-        valid = NmosText_ParseRate(value, r->rate_numerator, r->rate_denominator);
+        Valid = NmosText_ParseRate(Value, r->RateNumerator, r->RateDenominator);
     }
     else if (NmosSpan_Equals(name, "depth", 1))
     {
-        valid = NmosText_ParseU32(value, 64, r->depth);
+        Valid = NmosText_ParseU32(Value, 64, r->Depth);
     }
     else if (NmosSpan_Equals(name, "interlace", 1))
     {
-        *r->interlaced = flag_value(value);
+        *r->Interlaced = FlagValue(Value);
     }
     else if (NmosSpan_Equals(name, "segmented", 1))
     {
-        *r->segmented = flag_value(value);
+        *r->Segmented = FlagValue(Value);
     }
     else if (NmosSpan_Equals(name, "sampling", 1))
     {
-        text = r->sampling;
+        Text = r->Sampling;
     }
     else if (NmosSpan_Equals(name, "colorimetry", 1))
     {
-        text = r->colorimetry;
+        Text = r->Colorimetry;
     }
     else if (NmosSpan_Equals(name, "TCS", 1))
     {
-        text = r->tcs;
+        Text = r->Tcs;
     }
     else if (NmosSpan_Equals(name, "RANGE", 1))
     {
-        text = r->range;
+        Text = r->Range;
     }
     else if (NmosSpan_Equals(name, "SSN", 1))
     {
-        text = r->ssn;
+        Text = r->Ssn;
     }
     else if (NmosSpan_Equals(name, "TP", 1))
     {
-        text = r->transmitter_type;
-        size = DTNMOS_MAX_SHORT_SIZE;
+        Text = r->TransmitterType;
+        Size = DTNMOS_MAX_SHORT_SIZE;
     }
     else
     {
-        *handled = 0;
+        *Handled = 0;
     }
-    if (!valid)
+    if (!Valid)
     {
-        return fail_at(line, "a=fmtp has a parameter whose value is no number or rate",
-                       name);
+        return FailAt(Line, "a=fmtp has a parameter whose value is no number or rate",
+                      name);
     }
-    return text == NULL ? DTNMOS_OK : copy_value(line, name, value, text, size);
+    return Text == NULL ? DTNMOS_OK : CopyValue(Line, name, Value, Text, Size);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult build_video(const NmosSection* s, DtNmosVideoFormat* video)
+static DtNmosResult BuildVideo(const NmosSection* s, DtNmosVideoFormat* Video)
 {
-    const NmosRaster r = {&video->Width,         &video->Height,
-                          &video->RateNumerator, &video->RateDenominator,
-                          &video->Interlaced,    &video->Segmented,
-                          &video->Depth,         video->Sampling,
-                          video->Colorimetry,    video->Tcs,
-                          video->Range,          video->Ssn,
-                          video->TransmitterType};
-    NmosFmtpReader reader = {s->fmtp};
+    const NmosRaster r = {&Video->Width,         &Video->Height,
+                          &Video->RateNumerator, &Video->RateDenominator,
+                          &Video->Interlaced,    &Video->Segmented,
+                          &Video->Depth,         Video->Sampling,
+                          Video->Colorimetry,    Video->Tcs,
+                          Video->Range,          Video->Ssn,
+                          Video->TransmitterType};
+    NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan name;
-    NmosSpan value;
-    while (next_parameter(&reader, &name, &value))
+    NmosSpan Value;
+    while (NextParameter(&Reader, &name, &Value))
     {
-        int handled = 0;
-        DtNmosResult result = read_raster(s->fmtp_line, &r, name, value, &handled);
-        if (result == DTNMOS_OK && !handled && NmosSpan_Equals(name, "PM", 1))
+        int Handled = 0;
+        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, name, Value, &Handled);
+        if (Result == DTNMOS_OK && !Handled && NmosSpan_Equals(name, "PM", 1))
         {
-            result = copy_value(s->fmtp_line, name, value, video->PackingMode,
-                                sizeof(video->PackingMode));
+            Result = CopyValue(s->FmtpLine, name, Value, Video->PackingMode,
+                               sizeof(Video->PackingMode));
         }
-        if (result != DTNMOS_OK)
+        if (Result != DTNMOS_OK)
         {
-            return result;
+            return Result;
         }
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildCompressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult build_compressed(const NmosSection* s,
-                                     DtNmosCompressedVideoFormat* video)
+static DtNmosResult BuildCompressed(const NmosSection* s,
+                                    DtNmosCompressedVideoFormat* Video)
 {
-    if (!NmosText_CopySpan(video->Encoding, sizeof(video->Encoding), s->encoding))
+    if (!NmosText_CopySpan(Video->Encoding, sizeof(Video->Encoding), s->Encoding))
     {
-        return fail_at(s->line, "a=rtpmap has an encoding longer than RFC 6838 allows",
-                       s->encoding);
+        return FailAt(s->Line, "a=rtpmap has an encoding longer than RFC 6838 allows",
+                      s->Encoding);
     }
-    video->TransmissionMode = 1;
-    video->BandwidthKbps = s->bandwidth_kbps;
-    const NmosRaster r = {&video->Width,         &video->Height,
-                          &video->RateNumerator, &video->RateDenominator,
-                          &video->Interlaced,    &video->Segmented,
-                          &video->Depth,         video->Sampling,
-                          video->Colorimetry,    video->Tcs,
-                          video->Range,          video->Ssn,
-                          video->TransmitterType};
-    NmosFmtpReader reader = {s->fmtp};
+    Video->TransmissionMode = 1;
+    Video->BandwidthKbps = s->BandwidthKbps;
+    const NmosRaster r = {&Video->Width,         &Video->Height,
+                          &Video->RateNumerator, &Video->RateDenominator,
+                          &Video->Interlaced,    &Video->Segmented,
+                          &Video->Depth,         Video->Sampling,
+                          Video->Colorimetry,    Video->Tcs,
+                          Video->Range,          Video->Ssn,
+                          Video->TransmitterType};
+    NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan name;
-    NmosSpan value;
-    while (next_parameter(&reader, &name, &value))
+    NmosSpan Value;
+    while (NextParameter(&Reader, &name, &Value))
     {
-        int handled = 0;
-        DtNmosResult result = read_raster(s->fmtp_line, &r, name, value, &handled);
-        if (result != DTNMOS_OK)
+        int Handled = 0;
+        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, name, Value, &Handled);
+        if (Result != DTNMOS_OK)
         {
-            return result;
+            return Result;
         }
-        if (handled)
+        if (Handled)
         {
             continue;
         }
-        char* text = NULL;
-        uint32_t* number = NULL;
+        char* Text = NULL;
+        uint32_t* Number = NULL;
         if (NmosSpan_Equals(name, "profile", 1))
         {
-            text = video->Profile;
+            Text = Video->Profile;
         }
         else if (NmosSpan_Equals(name, "level", 1))
         {
-            text = video->Level;
+            Text = Video->Level;
         }
         else if (NmosSpan_Equals(name, "sublevel", 1))
         {
-            text = video->Sublevel;
+            Text = Video->Sublevel;
         }
         else if (NmosSpan_Equals(name, "packetmode", 1))
         {
-            number = &video->PacketMode;
+            Number = &Video->PacketMode;
         }
         else if (NmosSpan_Equals(name, "transmode", 1))
         {
-            number = &video->TransmissionMode;
+            Number = &Video->TransmissionMode;
         }
-        if (text != NULL)
+        if (Text != NULL)
         {
-            result = copy_value(s->fmtp_line, name, value, text, DTNMOS_MAX_VALUE_SIZE);
-            if (result != DTNMOS_OK)
+            Result = CopyValue(s->FmtpLine, name, Value, Text, DTNMOS_MAX_VALUE_SIZE);
+            if (Result != DTNMOS_OK)
             {
-                return result;
+                return Result;
             }
         }
-        if (number != NULL && !NmosText_ParseU32(value, 255, number))
+        if (Number != NULL && !NmosText_ParseU32(Value, 255, Number))
         {
-            return fail_at(s->fmtp_line,
-                           "a=fmtp has a parameter whose value is no number", name);
+            return FailAt(s->FmtpLine, "a=fmtp has a parameter whose value is no number",
+                          name);
         }
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildAudio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult build_audio(const NmosSection* s, NmosStore* store,
-                                DtNmosAudioFormat* audio)
+static DtNmosResult BuildAudio(const NmosSection* s, NmosStore* Store,
+                               DtNmosAudioFormat* Audio)
 {
-    if (!NmosText_CopySpan(audio->Encoding, sizeof(audio->Encoding), s->encoding))
+    if (!NmosText_CopySpan(Audio->Encoding, sizeof(Audio->Encoding), s->Encoding))
     {
-        return fail_at(s->line, "a=rtpmap has an audio encoding longer than L24",
-                       s->encoding);
+        return FailAt(s->Line, "a=rtpmap has an audio encoding longer than L24",
+                      s->Encoding);
     }
-    audio->SampleRate = s->clock_rate;
+    Audio->SampleRate = s->ClockRate;
     // RFC 4566 leaves one channel when a=rtpmap names none.
-    audio->Channels = s->channels == 0 ? 1 : s->channels;
-    if (s->ptime.length > 0 &&
-        !NmosText_ParseMilliseconds(s->ptime, &audio->PacketTimeNs))
+    Audio->Channels = s->Channels == 0 ? 1 : s->Channels;
+    if (s->Ptime.Length > 0 &&
+        !NmosText_ParseMilliseconds(s->Ptime, &Audio->PacketTimeNs))
     {
-        return fail_at(s->ptime_line, "a=ptime needs milliseconds, such as 1 or 0.125",
-                       s->ptime);
+        return FailAt(s->PtimeLine, "a=ptime needs milliseconds, such as 1 or 0.125",
+                      s->Ptime);
     }
-    NmosFmtpReader reader = {s->fmtp};
+    NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan name;
-    NmosSpan value;
-    while (next_parameter(&reader, &name, &value))
+    NmosSpan Value;
+    while (NextParameter(&Reader, &name, &Value))
     {
         if (NmosSpan_Equals(name, "channel-order", 1))
         {
-            audio->ChannelOrder = NmosStore_Text(store, value.data, value.length);
-            if (audio->ChannelOrder == NULL)
+            Audio->ChannelOrder = NmosStore_Text(Store, Value.Data, Value.Length);
+            if (Audio->ChannelOrder == NULL)
             {
                 return NmosError_FailMemory();
             }
@@ -756,105 +755,105 @@ static DtNmosResult build_audio(const NmosSection* s, NmosStore* store,
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_did_sdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadDidSdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads DID_SDID={0x61,0x02} into pair.
 //
-static int read_did_sdid(NmosSpan value, DtNmosDidSdid* pair)
+static int ReadDidSdid(NmosSpan Value, DtNmosDidSdid* Pair)
 {
-    if (value.length < 2 || value.data[0] != '{' || value.data[value.length - 1] != '}')
+    if (Value.Length < 2 || Value.Data[0] != '{' || Value.Data[Value.Length - 1] != '}')
     {
         return 0;
     }
-    const NmosSpan inside = {value.data + 1, value.length - 2};
-    NmosSpan did;
-    const NmosSpan sdid = NmosSpan_Split(inside, ',', &did);
-    return sdid.data != NULL && NmosText_ParseByte(NmosSpan_Trim(did), &pair->Did) &&
-           NmosText_ParseByte(NmosSpan_Trim(sdid), &pair->Sdid);
+    const NmosSpan Inside = {Value.Data + 1, Value.Length - 2};
+    NmosSpan Did;
+    const NmosSpan Sdid = NmosSpan_Split(Inside, ',', &Did);
+    return Sdid.Data != NULL && NmosText_ParseByte(NmosSpan_Trim(Did), &Pair->Did) &&
+           NmosText_ParseByte(NmosSpan_Trim(Sdid), &Pair->Sdid);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildAnc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult build_anc(const NmosSection* s, NmosStore* store, DtNmosFlow* flow)
+static DtNmosResult BuildAnc(const NmosSection* s, NmosStore* Store, DtNmosFlow* Flow)
 {
-    DtNmosAncFormat* anc = &flow->Format.Anc;
-    DtNmosDidSdid pairs[64];
-    size_t count = 0;
-    NmosFmtpReader reader = {s->fmtp};
+    DtNmosAncFormat* Anc = &Flow->Format.Anc;
+    DtNmosDidSdid Pairs[64];
+    size_t Count = 0;
+    NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan name;
-    NmosSpan value;
-    while (next_parameter(&reader, &name, &value))
+    NmosSpan Value;
+    while (NextParameter(&Reader, &name, &Value))
     {
-        int valid = 1;
-        char* text = NULL;
-        size_t size = 0;
+        int Valid = 1;
+        char* Text = NULL;
+        size_t Size = 0;
         if (NmosSpan_Equals(name, "DID_SDID", 1))
         {
-            if (count == sizeof(pairs) / sizeof(pairs[0]))
+            if (Count == sizeof(Pairs) / sizeof(Pairs[0]))
             {
-                return fail_at(s->fmtp_line, "a=fmtp has more DID_SDID than 64", name);
+                return FailAt(s->FmtpLine, "a=fmtp has more DID_SDID than 64", name);
             }
-            valid = read_did_sdid(value, &pairs[count++]);
+            Valid = ReadDidSdid(Value, &Pairs[Count++]);
         }
         else if (NmosSpan_Equals(name, "VPID_Code", 1))
         {
-            valid = NmosText_ParseU32(value, 255, &anc->VpidCode);
+            Valid = NmosText_ParseU32(Value, 255, &Anc->VpidCode);
         }
         else if (NmosSpan_Equals(name, "exactframerate", 1))
         {
-            valid = NmosText_ParseRate(value, &anc->RateNumerator, &anc->RateDenominator);
+            Valid = NmosText_ParseRate(Value, &Anc->RateNumerator, &Anc->RateDenominator);
         }
         else if (NmosSpan_Equals(name, "TM", 1))
         {
-            text = anc->TransmissionModel;
-            size = sizeof(anc->TransmissionModel);
+            Text = Anc->TransmissionModel;
+            Size = sizeof(Anc->TransmissionModel);
         }
         else if (NmosSpan_Equals(name, "SSN", 1))
         {
-            text = anc->Ssn;
-            size = sizeof(anc->Ssn);
+            Text = Anc->Ssn;
+            Size = sizeof(Anc->Ssn);
         }
-        if (!valid)
+        if (!Valid)
         {
-            return fail_at(s->fmtp_line,
-                           "a=fmtp has a parameter whose value is not valid", value);
+            return FailAt(s->FmtpLine, "a=fmtp has a parameter whose value is not valid",
+                          Value);
         }
-        if (text != NULL)
+        if (Text != NULL)
         {
-            const DtNmosResult result = copy_value(s->fmtp_line, name, value, text, size);
-            if (result != DTNMOS_OK)
+            const DtNmosResult Result = CopyValue(s->FmtpLine, name, Value, Text, Size);
+            if (Result != DTNMOS_OK)
             {
-                return result;
+                return Result;
             }
         }
     }
-    if (count > 0)
+    if (Count > 0)
     {
-        anc->DidSdid = NmosStore_Copy(store, pairs, count * sizeof(pairs[0]));
-        if (anc->DidSdid == NULL)
+        Anc->DidSdid = NmosStore_Copy(Store, Pairs, Count * sizeof(Pairs[0]));
+        if (Anc->DidSdid == NULL)
         {
             return NmosError_FailMemory();
         }
-        anc->DidSdidCount = count;
+        Anc->DidSdidCount = Count;
     }
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_second_leg -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsSecondLeg -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Whether the mid of s is the second of a group of DUP.
 //
-static int is_second_leg(const NmosParser* p, const NmosSection* s)
+static int IsSecondLeg(const NmosParser* p, const NmosSection* s)
 {
-    if (s->mid.length == 0)
+    if (s->Mid.Length == 0)
     {
         return 0;
     }
-    for (size_t i = 0; i < p->group_count; ++i)
+    for (size_t i = 0; i < p->GroupCount; ++i)
     {
-        const NmosSpan second = p->group_second[i];
-        if (second.length == s->mid.length &&
-            memcmp(second.data, s->mid.data, second.length) == 0)
+        const NmosSpan Second = p->GroupSecond[i];
+        if (Second.Length == s->Mid.Length &&
+            memcmp(Second.Data, s->Mid.Data, Second.Length) == 0)
         {
             return 1;
         }
@@ -862,180 +861,178 @@ static int is_second_leg(const NmosParser* p, const NmosSection* s)
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_media_clock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadMediaClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads a=mediaclk:direct=<offset> into the flow.
 //
-static DtNmosResult read_media_clock(const NmosSection* s, NmosSpan mediaclk,
-                                     DtNmosFlow* flow)
+static DtNmosResult ReadMediaClock(const NmosSection* s, NmosSpan Mediaclk,
+                                   DtNmosFlow* Flow)
 {
-    if (!NmosSpan_StartsWith(mediaclk, "direct="))
+    if (!NmosSpan_StartsWith(Mediaclk, "direct="))
     {
         return DTNMOS_OK;
     }
-    NmosSpan offset = {mediaclk.data + 7, mediaclk.length - 7};
-    NmosSpan number;
-    next_word(offset, &number);
-    if (!NmosText_ParseU32(number, UINT32_MAX, &flow->MediaClockOffset))
+    NmosSpan Offset = {Mediaclk.Data + 7, Mediaclk.Length - 7};
+    NmosSpan Number;
+    NextWord(Offset, &Number);
+    if (!NmosText_ParseU32(Number, UINT32_MAX, &Flow->MediaClockOffset))
     {
-        return fail_at(s->line, "a=mediaclk:direct= needs an offset", mediaclk);
+        return FailAt(s->Line, "a=mediaclk:direct= needs an offset", Mediaclk);
     }
-    flow->MediaClockDirect = 1;
+    Flow->MediaClockDirect = 1;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ptp_domain -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadPtpDomain -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the domain after the grandmaster of ptp=, ":127" as ST 2110-10 §8.2 writes it or
-// ":domain-nmbr=127" as RFC 7273 §4.8 does, into *domain; returns 0 for anything else,
+// ":domain-nmbr=127" as RFC 7273 §4.8 does, into *Domain; returns 0 for anything else,
 // such as a domain-name, which the clock then keeps as text.
 //
-static int read_ptp_domain(NmosSpan text, int* domain)
+static int ReadPtpDomain(NmosSpan Text, int* Domain)
 {
-    if (NmosSpan_StartsWith(text, "domain-nmbr="))
+    if (NmosSpan_StartsWith(Text, "domain-nmbr="))
     {
-        text.data += 12;
-        text.length -= 12;
+        Text.Data += 12;
+        Text.Length -= 12;
     }
-    uint32_t number = 0;
-    if (!NmosText_ParseU32(text, 127, &number))
+    uint32_t Number = 0;
+    if (!NmosText_ParseU32(Text, 127, &Number))
     {
         return 0;
     }
-    *domain = (int)number;
+    *Domain = (int)Number;
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ptp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadPtp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the value of ptp=, <version>:<grandmaster>[:<domain>] or <version>:traceable,
 // into clock; returns 0 when it is neither.
 //
-static int read_ptp(NmosSpan text, DtNmosRefClock* clock)
+static int ReadPtp(NmosSpan Text, DtNmosRefClock* Clock)
 {
-    NmosSpan version;
-    const NmosSpan rest = NmosSpan_Split(text, ':', &version);
-    NmosSpan grandmaster;
-    const NmosSpan domain = NmosSpan_Split(rest, ':', &grandmaster);
-    if (rest.data == NULL || version.length == 0 || grandmaster.length == 0 ||
-        !NmosText_CopySpan(clock->PtpVersion, sizeof(clock->PtpVersion), version))
+    NmosSpan Version;
+    const NmosSpan Rest = NmosSpan_Split(Text, ':', &Version);
+    NmosSpan Grandmaster;
+    const NmosSpan Domain = NmosSpan_Split(Rest, ':', &Grandmaster);
+    if (Rest.Data == NULL || Version.Length == 0 || Grandmaster.Length == 0 ||
+        !NmosText_CopySpan(Clock->PtpVersion, sizeof(Clock->PtpVersion), Version))
     {
         return 0;
     }
-    if (NmosSpan_Equals(grandmaster, "traceable", 0))
+    if (NmosSpan_Equals(Grandmaster, "traceable", 0))
     {
-        clock->Traceable = 1;
-        return domain.data == NULL;
+        Clock->Traceable = 1;
+        return Domain.Data == NULL;
     }
-    return NmosText_CopySpan(clock->Grandmaster, sizeof(clock->Grandmaster),
-                             grandmaster) &&
-           (domain.data == NULL || read_ptp_domain(domain, &clock->Domain));
+    return NmosText_CopySpan(Clock->Grandmaster, sizeof(Clock->Grandmaster),
+                             Grandmaster) &&
+           (Domain.Data == NULL || ReadPtpDomain(Domain, &Clock->Domain));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ref_clock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadRefClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads the value of a=ts-refclk into clock: a PTP clock or the MAC of ST 2110-10 §8.2
 // into its fields, any other kind as its text, owned by store.
 //
-static DtNmosResult read_ref_clock(NmosSpan text, NmosStore* store, DtNmosRefClock* clock)
+static DtNmosResult ReadRefClock(NmosSpan Text, NmosStore* Store, DtNmosRefClock* Clock)
 {
-    memset(clock, 0, sizeof(*clock));
-    clock->Domain = -1;
-    if (text.length == 0)
+    memset(Clock, 0, sizeof(*Clock));
+    Clock->Domain = -1;
+    if (Text.Length == 0)
     {
         return DTNMOS_OK;
     }
-    if (NmosSpan_StartsWith(text, "ptp="))
+    if (NmosSpan_StartsWith(Text, "ptp="))
     {
-        const NmosSpan value = {text.data + 4, text.length - 4};
-        if (read_ptp(value, clock))
+        const NmosSpan Value = {Text.Data + 4, Text.Length - 4};
+        if (ReadPtp(Value, Clock))
         {
-            clock->Kind = DTNMOS_REFCLOCK_PTP;
+            Clock->Kind = DTNMOS_REFCLOCK_PTP;
             return DTNMOS_OK;
         }
     }
-    else if (NmosSpan_StartsWith(text, "localmac="))
+    else if (NmosSpan_StartsWith(Text, "localmac="))
     {
-        const NmosSpan mac = {text.data + 9, text.length - 9};
-        if (mac.length > 0 &&
-            NmosText_CopySpan(clock->LocalMac, sizeof(clock->LocalMac), mac))
+        const NmosSpan Mac = {Text.Data + 9, Text.Length - 9};
+        if (Mac.Length > 0 &&
+            NmosText_CopySpan(Clock->LocalMac, sizeof(Clock->LocalMac), Mac))
         {
-            clock->Kind = DTNMOS_REFCLOCK_LOCALMAC;
+            Clock->Kind = DTNMOS_REFCLOCK_LOCALMAC;
             return DTNMOS_OK;
         }
     }
-    memset(clock, 0, sizeof(*clock));
-    clock->Domain = -1;
-    clock->Kind = DTNMOS_REFCLOCK_OTHER;
-    clock->Text = NmosStore_Text(store, text.data, text.length);
-    return clock->Text == NULL ? NmosError_FailMemory() : DTNMOS_OK;
+    memset(Clock, 0, sizeof(*Clock));
+    Clock->Domain = -1;
+    Clock->Kind = DTNMOS_REFCLOCK_OTHER;
+    Clock->Text = NmosStore_Text(Store, Text.Data, Text.Length);
+    return Clock->Text == NULL ? NmosError_FailMemory() : DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult build_flow(NmosParser* p, const NmosSection* s, DtNmosFlow* flow)
+static DtNmosResult BuildFlow(NmosParser* p, const NmosSection* s, DtNmosFlow* Flow)
 {
-    flow->Size = sizeof(*flow);
-    flow->Media = media_of(s->encoding);
-    flow->DestinationPort = s->port;
-    flow->PayloadType = s->payload_type;
-    flow->ClockRate = s->clock_rate;
-    flow->Leg = is_second_leg(p, s) ? 1u : 0u;
-    const NmosSharedLines* own = &s->shared;
-    const NmosSharedLines* session = &p->session_lines;
-    const NmosSpan connection =
-        own->connection.length > 0 ? own->connection : session->connection;
-    if (connection.length == 0)
+    Flow->Size = sizeof(*Flow);
+    Flow->Media = MediaOf(s->Encoding);
+    Flow->DestinationPort = s->Port;
+    Flow->PayloadType = s->PayloadType;
+    Flow->ClockRate = s->ClockRate;
+    Flow->Leg = IsSecondLeg(p, s) ? 1u : 0u;
+    const NmosSharedLines* Own = &s->Shared;
+    const NmosSharedLines* Session = &p->SessionLines;
+    const NmosSpan Connection =
+        Own->Connection.Length > 0 ? Own->Connection : Session->Connection;
+    if (Connection.Length == 0)
     {
-        return fail_at(s->line, "the media section has no c= and neither has the session",
-                       (NmosSpan){"m=", 2});
+        return FailAt(s->Line, "the media section has no c= and neither has the session",
+                      (NmosSpan){"m=", 2});
     }
-    const NmosSpan source =
-        own->filter_source.length > 0 ? own->filter_source : session->filter_source;
-    const NmosSpan refclk =
-        own->ts_refclk.length > 0 ? own->ts_refclk : session->ts_refclk;
-    const NmosSpan mediaclk =
-        own->mediaclk.length > 0 ? own->mediaclk : session->mediaclk;
-    if (!NmosText_CopySpan(flow->DestinationIp, sizeof(flow->DestinationIp),
-                           connection) ||
-        !NmosText_CopySpan(flow->SourceIp, sizeof(flow->SourceIp), source))
+    const NmosSpan Source =
+        Own->FilterSource.Length > 0 ? Own->FilterSource : Session->FilterSource;
+    const NmosSpan Refclk = Own->TsRefclk.Length > 0 ? Own->TsRefclk : Session->TsRefclk;
+    const NmosSpan Mediaclk =
+        Own->Mediaclk.Length > 0 ? Own->Mediaclk : Session->Mediaclk;
+    if (!NmosText_CopySpan(Flow->DestinationIp, sizeof(Flow->DestinationIp),
+                           Connection) ||
+        !NmosText_CopySpan(Flow->SourceIp, sizeof(Flow->SourceIp), Source))
     {
-        return fail_at(s->line, "an address is longer than a domain name may be",
-                       connection);
+        return FailAt(s->Line, "an address is longer than a domain name may be",
+                      Connection);
     }
-    DtNmosResult result = read_ref_clock(refclk, p->store, &flow->RefClock);
-    if (result == DTNMOS_OK)
+    DtNmosResult Result = ReadRefClock(Refclk, p->Store, &Flow->RefClock);
+    if (Result == DTNMOS_OK)
     {
-        result = read_media_clock(s, mediaclk, flow);
+        Result = ReadMediaClock(s, Mediaclk, Flow);
     }
-    if (result != DTNMOS_OK)
+    if (Result != DTNMOS_OK)
     {
-        return result;
+        return Result;
     }
-    switch (flow->Media)
+    switch (Flow->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
-        return build_video(s, &flow->Format.Video);
+        return BuildVideo(s, &Flow->Format.Video);
     case DTNMOS_MEDIA_AUDIO:
-        return build_audio(s, p->store, &flow->Format.Audio);
+        return BuildAudio(s, p->Store, &Flow->Format.Audio);
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
-        return build_compressed(s, &flow->Format.CompressedVideo);
+        return BuildCompressed(s, &Flow->Format.CompressedVideo);
     case DTNMOS_MEDIA_ANC:
-        return build_anc(s, p->store, flow);
+        return BuildAnc(s, p->Store, Flow);
     case DTNMOS_MEDIA_OTHER:
     {
-        DtNmosOtherFormat* other = &flow->Format.Other;
-        const NmosSpan fmtp = NmosSpan_Trim(s->fmtp);
-        if (!NmosText_CopySpan(other->Encoding, sizeof(other->Encoding), s->encoding))
+        DtNmosOtherFormat* Other = &Flow->Format.Other;
+        const NmosSpan Fmtp = NmosSpan_Trim(s->Fmtp);
+        if (!NmosText_CopySpan(Other->Encoding, sizeof(Other->Encoding), s->Encoding))
         {
-            return fail_at(s->line,
-                           "a=rtpmap has an encoding longer than RFC 6838 allows",
-                           s->encoding);
+            return FailAt(s->Line, "a=rtpmap has an encoding longer than RFC 6838 allows",
+                          s->Encoding);
         }
-        if (fmtp.length > 0)
+        if (Fmtp.Length > 0)
         {
-            other->Fmtp = NmosStore_Text(p->store, fmtp.data, fmtp.length);
-            if (other->Fmtp == NULL)
+            Other->Fmtp = NmosStore_Text(p->Store, Fmtp.Data, Fmtp.Length);
+            if (Other->Fmtp == NULL)
             {
                 return NmosError_FailMemory();
             }
@@ -1048,85 +1045,85 @@ static DtNmosResult build_flow(NmosParser* p, const NmosSection* s, DtNmosFlow* 
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosSdp_Parse(const char* text, size_t length, DtNmosSdp** sdp)
+DtNmosResult DtNmosSdp_Parse(const char* Text, size_t Length, DtNmosSdp** Sdp)
 {
-    if (sdp == NULL || (text == NULL && length > 0))
+    if (Sdp == NULL || (Text == NULL && Length > 0))
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmosSdp_Parse() needs a text and a place for the SDP.");
     }
-    *sdp = NULL;
-    DtNmosSdp* result = calloc(1, sizeof(*result));
-    if (result == NULL)
+    *Sdp = NULL;
+    DtNmosSdp* Result = calloc(1, sizeof(*Result));
+    if (Result == NULL)
     {
         return NmosError_FailMemory();
     }
-    result->session.Size = sizeof(result->session);
+    Result->Session.Size = sizeof(Result->Session);
     NmosParser p;
     memset(&p, 0, sizeof(p));
-    p.text = text;
-    p.length = length;
-    p.session = &result->session;
-    p.store = &result->store;
-    DtNmosResult status = read_lines(&p);
-    if (status == DTNMOS_OK && p.count == 0)
+    p.Text = Text;
+    p.Length = Length;
+    p.Session = &Result->Session;
+    p.Store = &Result->Store;
+    DtNmosResult Status = ReadLines(&p);
+    if (Status == DTNMOS_OK && p.Count == 0)
     {
-        status =
+        Status =
             NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "The SDP has no media section.");
     }
-    if (status == DTNMOS_OK)
+    if (Status == DTNMOS_OK)
     {
-        result->flows = calloc(p.count, sizeof(*result->flows));
-        if (result->flows == NULL)
+        Result->Flows = calloc(p.Count, sizeof(*Result->Flows));
+        if (Result->Flows == NULL)
         {
-            status = NmosError_FailMemory();
+            Status = NmosError_FailMemory();
         }
     }
-    for (size_t i = 0; status == DTNMOS_OK && i < p.count; ++i)
+    for (size_t i = 0; Status == DTNMOS_OK && i < p.Count; ++i)
     {
-        status = build_flow(&p, &p.sections[i], &result->flows[i]);
-        result->count = i + 1;
+        Status = BuildFlow(&p, &p.Sections[i], &Result->Flows[i]);
+        Result->Count = i + 1;
     }
-    free(p.sections);
-    if (status != DTNMOS_OK)
+    free(p.Sections);
+    if (Status != DTNMOS_OK)
     {
-        DtNmosSdp_Free(result);
-        return status;
+        DtNmosSdp_Free(Result);
+        return Status;
     }
-    *sdp = result;
+    *Sdp = Result;
     return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Session -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* sdp)
+const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* Sdp)
 {
-    return sdp == NULL ? NULL : &sdp->session;
+    return Sdp == NULL ? NULL : &Sdp->Session;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_FlowCount -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-size_t DtNmosSdp_FlowCount(const DtNmosSdp* sdp)
+size_t DtNmosSdp_FlowCount(const DtNmosSdp* Sdp)
 {
-    return sdp == NULL ? 0 : sdp->count;
+    return Sdp == NULL ? 0 : Sdp->Count;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* sdp, size_t index)
+const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* Sdp, size_t Index)
 {
-    return sdp == NULL || index >= sdp->count ? NULL : &sdp->flows[index];
+    return Sdp == NULL || Index >= Sdp->Count ? NULL : &Sdp->Flows[Index];
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosSdp_Free(DtNmosSdp* sdp)
+void DtNmosSdp_Free(DtNmosSdp* Sdp)
 {
-    if (sdp == NULL)
+    if (Sdp == NULL)
     {
         return;
     }
-    free(sdp->flows);
-    NmosStore_Free(&sdp->store);
-    free(sdp);
+    free(Sdp->Flows);
+    NmosStore_Free(&Sdp->Store);
+    free(Sdp);
 }

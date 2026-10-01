@@ -25,145 +25,145 @@ int DtNmos_HasCurl(void)
 // What the callbacks of libcurl fill.
 typedef struct NmosTransfer
 {
-    DtNmosHttpResponse* response;
-    int failed;
+    DtNmosHttpResponse* Response;
+    int Failed;
 } NmosTransfer;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receive_body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReceiveBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static size_t receive_body(char* data, size_t size, size_t count, void* user)
+static size_t ReceiveBody(char* Data, size_t Size, size_t Count, void* User)
 {
-    NmosTransfer* t = user;
-    const size_t length = size * count;
-    if (DtNmosHttpResponse_AppendBody(t->response, data, length) != DTNMOS_OK)
+    NmosTransfer* t = User;
+    const size_t Length = Size * Count;
+    if (DtNmosHttpResponse_AppendBody(t->Response, Data, Length) != DTNMOS_OK)
     {
-        t->failed = 1;
+        t->Failed = 1;
         return 0;
     }
-    return length;
+    return Length;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receive_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReceiveHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static size_t receive_header(char* data, size_t size, size_t count, void* user)
+static size_t ReceiveHeader(char* Data, size_t Size, size_t Count, void* User)
 {
-    NmosTransfer* t = user;
-    const size_t length = size * count;
-    NmosSpan line = {data, length};
-    while (line.length > 0 &&
-           (line.data[line.length - 1] == '\n' || line.data[line.length - 1] == '\r'))
+    NmosTransfer* t = User;
+    const size_t Length = Size * Count;
+    NmosSpan Line = {Data, Length};
+    while (Line.Length > 0 &&
+           (Line.Data[Line.Length - 1] == '\n' || Line.Data[Line.Length - 1] == '\r'))
     {
-        --line.length;
+        --Line.Length;
     }
     // A new status line starts the headers of the next response, after a redirect.
-    if (NmosSpan_StartsWith(line, "HTTP/"))
+    if (NmosSpan_StartsWith(Line, "HTTP/"))
     {
-        return length;
+        return Length;
     }
     NmosSpan name;
-    const NmosSpan value = NmosSpan_Split(line, ':', &name);
-    if (value.data == NULL || name.length == 0 || name.length > 255 ||
-        value.length > 8191)
+    const NmosSpan Value = NmosSpan_Split(Line, ':', &name);
+    if (Value.Data == NULL || name.Length == 0 || name.Length > 255 ||
+        Value.Length > 8191)
     {
-        return length;
+        return Length;
     }
-    char name_text[256];
-    char value_text[8192];
-    const NmosSpan trimmed = NmosSpan_Trim(value);
-    memcpy(name_text, name.data, name.length);
-    name_text[name.length] = '\0';
-    memcpy(value_text, trimmed.data, trimmed.length);
-    value_text[trimmed.length] = '\0';
-    if (DtNmosHttpResponse_AddHeader(t->response, name_text, value_text) != DTNMOS_OK)
+    char NameText[256];
+    char ValueText[8192];
+    const NmosSpan Trimmed = NmosSpan_Trim(Value);
+    memcpy(NameText, name.Data, name.Length);
+    NameText[name.Length] = '\0';
+    memcpy(ValueText, Trimmed.Data, Trimmed.Length);
+    ValueText[Trimmed.Length] = '\0';
+    if (DtNmosHttpResponse_AddHeader(t->Response, NameText, ValueText) != DTNMOS_OK)
     {
-        t->failed = 1;
+        t->Failed = 1;
         return 0;
     }
-    return length;
+    return Length;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
-                             DtNmosHttpResponse* response)
+DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
+                             DtNmosHttpResponse* Response)
 {
-    (void)user;
-    if (request == NULL || request->Url == NULL || request->Method == NULL ||
-        response == NULL)
+    (void)User;
+    if (Request == NULL || Request->Url == NULL || Request->Method == NULL ||
+        Response == NULL)
     {
         return NmosError_Fail(
             DTNMOS_E_INVALID_ARGUMENT,
             "DtNmos_CurlHttp() needs a request with a method and a URL.");
     }
-    const DtNmosResult sized =
-        DTNMOS_CHECK_SIZE(request, DtNmosHttpRequest, sizeof(DtNmosHttpRequest));
-    if (sized != DTNMOS_OK)
+    const DtNmosResult Sized =
+        DTNMOS_CHECK_SIZE(Request, DtNmosHttpRequest, sizeof(DtNmosHttpRequest));
+    if (Sized != DTNMOS_OK)
     {
-        return sized;
+        return Sized;
     }
-    CURL* curl = curl_easy_init();
-    if (curl == NULL)
+    CURL* Curl = curl_easy_init();
+    if (Curl == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INTERNAL, "libcurl could not create a handle.");
     }
-    NmosTransfer t = {response, 0};
-    struct curl_slist* headers = NULL;
-    char content_type[256];
-    if (request->ContentType != NULL)
+    NmosTransfer t = {Response, 0};
+    struct curl_slist* Headers = NULL;
+    char ContentType[256];
+    if (Request->ContentType != NULL)
     {
-        snprintf(content_type, sizeof(content_type), "Content-Type: %s",
-                 request->ContentType);
-        headers = curl_slist_append(headers, content_type);
+        snprintf(ContentType, sizeof(ContentType), "Content-Type: %s",
+                 Request->ContentType);
+        Headers = curl_slist_append(Headers, ContentType);
     }
-    headers =
-        curl_slist_append(headers, "Accept: application/json, application/sdp, */*");
-    curl_easy_setopt(curl, CURLOPT_URL, request->Url);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->Method);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS,
-                     (long)(request->TimeoutMs == 0 ? 5000 : request->TimeoutMs));
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, receive_body);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &t);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, receive_header);
-    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &t);
-    if (request->Body != NULL)
+    Headers =
+        curl_slist_append(Headers, "Accept: application/json, application/sdp, */*");
+    curl_easy_setopt(Curl, CURLOPT_URL, Request->Url);
+    curl_easy_setopt(Curl, CURLOPT_CUSTOMREQUEST, Request->Method);
+    curl_easy_setopt(Curl, CURLOPT_HTTPHEADER, Headers);
+    curl_easy_setopt(Curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(Curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(Curl, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(Curl, CURLOPT_TIMEOUT_MS,
+                     (long)(Request->TimeoutMs == 0 ? 5000 : Request->TimeoutMs));
+    curl_easy_setopt(Curl, CURLOPT_WRITEFUNCTION, ReceiveBody);
+    curl_easy_setopt(Curl, CURLOPT_WRITEDATA, &t);
+    curl_easy_setopt(Curl, CURLOPT_HEADERFUNCTION, ReceiveHeader);
+    curl_easy_setopt(Curl, CURLOPT_HEADERDATA, &t);
+    if (Request->Body != NULL)
     {
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->Body);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE,
-                         (curl_off_t)request->BodyLength);
+        curl_easy_setopt(Curl, CURLOPT_POSTFIELDS, Request->Body);
+        curl_easy_setopt(Curl, CURLOPT_POSTFIELDSIZE_LARGE,
+                         (curl_off_t)Request->BodyLength);
     }
-    else if (strcmp(request->Method, "GET") != 0 &&
-             strcmp(request->Method, "DELETE") != 0)
+    else if (strcmp(Request->Method, "GET") != 0 &&
+             strcmp(Request->Method, "DELETE") != 0)
     {
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "");
+        curl_easy_setopt(Curl, CURLOPT_POSTFIELDS, "");
     }
-    const CURLcode code = curl_easy_perform(curl);
-    long status = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-    if (t.failed)
+    const CURLcode Code = curl_easy_perform(Curl);
+    long Status = 0;
+    curl_easy_getinfo(Curl, CURLINFO_RESPONSE_CODE, &Status);
+    curl_slist_free_all(Headers);
+    curl_easy_cleanup(Curl);
+    if (t.Failed)
     {
         return NmosError_FailMemory();
     }
-    if (code == CURLE_OPERATION_TIMEDOUT)
+    if (Code == CURLE_OPERATION_TIMEDOUT)
     {
         return NmosError_Fail(
-            DTNMOS_E_TIMEOUT, "%s %s got no answer within %u ms.", request->Method,
-            request->Url,
-            (unsigned)(request->TimeoutMs == 0 ? 5000 : request->TimeoutMs));
+            DTNMOS_E_TIMEOUT, "%s %s got no answer within %u ms.", Request->Method,
+            Request->Url,
+            (unsigned)(Request->TimeoutMs == 0 ? 5000 : Request->TimeoutMs));
     }
-    if (code != CURLE_OK)
+    if (Code != CURLE_OK)
     {
-        return NmosError_Fail(DTNMOS_E_HTTP, "%s %s failed: %s.", request->Method,
-                              request->Url, curl_easy_strerror(code));
+        return NmosError_Fail(DTNMOS_E_HTTP, "%s %s failed: %s.", Request->Method,
+                              Request->Url, curl_easy_strerror(Code));
     }
-    DtNmosHttpResponse_SetStatus(response, (int)status);
+    DtNmosHttpResponse_SetStatus(Response, (int)Status);
     // An answer without body still has one, so that its text ends in a null character.
-    DtNmosHttpResponse_AppendBody(response, "", 0);
+    DtNmosHttpResponse_AppendBody(Response, "", 0);
     return DTNMOS_OK;
 }
 
@@ -178,12 +178,12 @@ int DtNmos_HasCurl(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
-                             DtNmosHttpResponse* response)
+DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
+                             DtNmosHttpResponse* Response)
 {
-    (void)user;
-    (void)request;
-    (void)response;
+    (void)User;
+    (void)Request;
+    (void)Response;
     return NmosError_Fail(
         DTNMOS_E_STATE,
         "dtnmos was built without libcurl, so it has no HTTP transport of its "

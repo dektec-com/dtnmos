@@ -15,19 +15,19 @@ typedef struct NmosMutex NmosMutex;
 
 // Returns a new mutex, or null when out of memory.
 NmosMutex* NmosOs_MutexCreate(void);
-void NmosOs_MutexFree(NmosMutex* mutex);
-void NmosOs_MutexLock(NmosMutex* mutex);
-void NmosOs_MutexUnlock(NmosMutex* mutex);
+void NmosOs_MutexFree(NmosMutex* Mutex);
+void NmosOs_MutexLock(NmosMutex* Mutex);
+void NmosOs_MutexUnlock(NmosMutex* Mutex);
 
 typedef struct NmosThread NmosThread;
 
 // Starts a thread that runs function(argument); returns null when it cannot.
-NmosThread* NmosOs_ThreadStart(void (*function)(void*), void* argument);
+NmosThread* NmosOs_ThreadStart(void (*Function)(void*), void* Argument);
 
 // Waits for the thread to end and frees it.
-void NmosOs_ThreadJoin(NmosThread* thread);
+void NmosOs_ThreadJoin(NmosThread* Thread);
 
-void NmosOs_SleepMs(uint32_t milliseconds);
+void NmosOs_SleepMs(uint32_t Milliseconds);
 
 // Milliseconds of a clock that only runs forward.
 uint64_t NmosOs_MonotonicMs(void);
@@ -35,14 +35,14 @@ uint64_t NmosOs_MonotonicMs(void);
 // Writes the time now as an IS-04 version, "<seconds>:<nanoseconds>" of TAI, into text,
 // which holds at least 32 characters. last holds the previous version in nanoseconds,
 // which the new one exceeds even within one tick of the clock; its owner guards it.
-void NmosOs_VersionNow(uint64_t* last, char* text, size_t size);
+void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size);
 
 // Writes the address of this host that reaches host into address, as text; returns 0 when
 // host cannot be resolved or reached.
-int NmosOs_AddressToward(const char* host, char* address, size_t size);
+int NmosOs_AddressToward(const char* Host, char* Address, size_t Size);
 
 // Returns a TCP port that is free on the address host now, or 0 when there is none.
-uint16_t NmosOs_FreePort(const char* host);
+uint16_t NmosOs_FreePort(const char* Host);
 
 // An IPv4 datagram socket, for the queries of multicast DNS.
 typedef struct NmosUdp NmosUdp;
@@ -50,25 +50,25 @@ typedef struct NmosUdp NmosUdp;
 // Opens a socket on a free port of bind_address, or of every address when it is null,
 // whose multicast leaves through the interface of interface_address, or of the default
 // route when it is null, with a hop limit of 255 and loopback. Returns null on failure.
-NmosUdp* NmosOs_UdpOpen(const char* bind_address, const char* interface_address);
+NmosUdp* NmosOs_UdpOpen(const char* BindAddress, const char* InterfaceAddress);
 
 // Returns the port the socket is bound to.
-uint16_t NmosOs_UdpPort(const NmosUdp* udp);
+uint16_t NmosOs_UdpPort(const NmosUdp* Udp);
 
 // Sends length bytes of data to address and port; returns 0 on failure.
-int NmosOs_UdpSend(NmosUdp* udp, const char* address, uint16_t port, const void* data,
-                   size_t length);
+int NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
+                   size_t Length);
 
 // Waits up to timeout_ms for a datagram and receives it into buffer; returns its length,
 // 0 when none came in time, or -1 on failure. from_address, when not null, receives the
 // address of the sender as text, and from_port its port.
-int NmosOs_UdpReceive(NmosUdp* udp, void* buffer, size_t size, uint32_t timeout_ms,
-                      char* from_address, size_t from_size, uint16_t* from_port);
+int NmosOs_UdpReceive(NmosUdp* Udp, void* Buffer, size_t Size, uint32_t TimeoutMs,
+                      char* FromAddress, size_t FromSize, uint16_t* FromPort);
 
-void NmosOs_UdpClose(NmosUdp* udp);
+void NmosOs_UdpClose(NmosUdp* Udp);
 
 // Writes the first IPv4 DNS server of the host into server, and the domain it searches
 // into domain, as DHCP or the administrator gave them: of /etc/resolv.conf on POSIX, and
 // of the first adapter with a gateway on Windows. Each is left empty when the host has
 // none.
-void NmosOs_SystemDns(char* server, size_t server_size, char* domain, size_t domain_size);
+void NmosOs_SystemDns(char* Server, size_t ServerSize, char* Domain, size_t DomainSize);

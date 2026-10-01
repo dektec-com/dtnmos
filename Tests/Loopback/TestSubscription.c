@@ -22,7 +22,7 @@
     #include <ws2tcpip.h>
 typedef SOCKET NmosTestSocket;
     #define TEST_NO_SOCKET INVALID_SOCKET
-    #define test_close_socket closesocket
+    #define TestCloseSocket closesocket
     // The length that send() and recv() take.
     #define TEST_LENGTH(n) ((int)(n))
 #else
@@ -32,7 +32,7 @@ typedef SOCKET NmosTestSocket;
     #include <unistd.h>
 typedef int NmosTestSocket;
     #define TEST_NO_SOCKET (-1)
-    #define test_close_socket close
+    #define TestCloseSocket close
     #define TEST_LENGTH(n) ((size_t)(n))
 #endif
 
@@ -55,168 +55,168 @@ typedef int NmosTestSocket;
 // A registry and a WebSocket that the test answers for.
 typedef struct NmosFakeSubscription
 {
-    int status;          // what the registry answers the POST
-    const char* answer;  // and with what
-    char body[512];      // of the POST
-    char url[256];       // of the POST
-    char connected[256]; // the URL the WebSocket connected to
-    int connect_fails;
-    const char* const* messages; // what the WebSocket gives, then it closes
-    size_t count;
-    size_t next;
-    int closed;
+    int Status;          // what the registry answers the POST
+    const char* Answer;  // and with what
+    char Body[512];      // of the POST
+    char Url[256];       // of the POST
+    char Connected[256]; // the URL the WebSocket connected to
+    int ConnectFails;
+    const char* const* Messages; // what the WebSocket gives, then it closes
+    size_t Count;
+    size_t Next;
+    int Closed;
 } NmosFakeSubscription;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
-                              DtNmosHttpResponse* response)
+static DtNmosResult FakeHttp(void* User, const DtNmosHttpRequest* Request,
+                             DtNmosHttpResponse* Response)
 {
-    NmosFakeSubscription* fake = user;
-    CHECK_STR(request->Method, "POST");
-    CHECK_STR(request->ContentType, "application/json");
-    snprintf(fake->url, sizeof(fake->url), "%s", request->Url);
-    snprintf(fake->body, sizeof(fake->body), "%.*s", (int)request->BodyLength,
-             request->Body);
-    DtNmosHttpResponse_SetStatus(response, fake->status);
-    DtNmosHttpResponse_SetBody(response, "application/json", fake->answer,
-                               strlen(fake->answer));
+    NmosFakeSubscription* Fake = User;
+    CHECK_STR(Request->Method, "POST");
+    CHECK_STR(Request->ContentType, "application/json");
+    snprintf(Fake->Url, sizeof(Fake->Url), "%s", Request->Url);
+    snprintf(Fake->Body, sizeof(Fake->Body), "%.*s", (int)Request->BodyLength,
+             Request->Body);
+    DtNmosHttpResponse_SetStatus(Response, Fake->Status);
+    DtNmosHttpResponse_SetBody(Response, "application/json", Fake->Answer,
+                               strlen(Fake->Answer));
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeConnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult fake_connect(void* user, const char* url, uint32_t timeout_ms,
-                                 void** connection)
+static DtNmosResult FakeConnect(void* User, const char* Url, uint32_t TimeoutMs,
+                                void** Connection)
 {
-    NmosFakeSubscription* fake = user;
-    CHECK_EQ(timeout_ms, 2000);
-    snprintf(fake->connected, sizeof(fake->connected), "%s", url);
-    if (fake->connect_fails)
+    NmosFakeSubscription* Fake = User;
+    CHECK_EQ(TimeoutMs, 2000);
+    snprintf(Fake->Connected, sizeof(Fake->Connected), "%s", Url);
+    if (Fake->ConnectFails)
     {
         return NmosError_Fail(DTNMOS_E_NETWORK, "connection refused");
     }
-    *connection = fake;
+    *Connection = Fake;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_ms,
-                                 const char** message, size_t* length)
+static DtNmosResult FakeReceive(void* User, void* Connection, uint32_t TimeoutMs,
+                                const char** Message, size_t* Length)
 {
-    (void)connection;
-    NmosFakeSubscription* fake = user;
-    if (fake->next < fake->count)
+    (void)Connection;
+    NmosFakeSubscription* Fake = User;
+    if (Fake->Next < Fake->Count)
     {
-        const char* text = fake->messages[fake->next++];
-        if (text == NULL)
+        const char* Text = Fake->Messages[Fake->Next++];
+        if (Text == NULL)
         {
             return NmosError_Fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
-                                  (unsigned)timeout_ms);
+                                  (unsigned)TimeoutMs);
         }
         // The messages of the fake outlive its connection.
-        *message = text;
-        *length = strlen(text);
+        *Message = Text;
+        *Length = strlen(Text);
         return DTNMOS_OK;
     }
     return NmosError_Fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeClose -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void fake_close(void* user, void* connection)
+static void FakeClose(void* User, void* Connection)
 {
-    (void)connection;
-    ((NmosFakeSubscription*)user)->closed = 1;
+    (void)Connection;
+    ((NmosFakeSubscription*)User)->Closed = 1;
 }
 
 // What the changes were, as "<kind> <id> <label before> <label after>".
 typedef struct NmosRecordedChanges
 {
-    char lines[8][160];
-    size_t count;
+    char Lines[8][160];
+    size_t Count;
 } NmosRecordedChanges;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_change -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RecordChange -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void record_change(void* user, const DtNmosChange* change)
+static void RecordChange(void* User, const DtNmosChange* Change)
 {
-    NmosRecordedChanges* recorded = user;
-    DtNmosSenderList* before = NULL;
-    DtNmosSenderList* after = NULL;
-    if (change->Pre != NULL)
+    NmosRecordedChanges* Recorded = User;
+    DtNmosSenderList* Before = NULL;
+    DtNmosSenderList* After = NULL;
+    if (Change->Pre != NULL)
     {
-        CHECK(DtNmosSenderInfo_Parse(change->Pre, change->PreLength, &before) ==
+        CHECK(DtNmosSenderInfo_Parse(Change->Pre, Change->PreLength, &Before) ==
               DTNMOS_OK);
     }
-    if (change->Post != NULL)
+    if (Change->Post != NULL)
     {
-        CHECK(DtNmosSenderInfo_Parse(change->Post, change->PostLength, &after) ==
+        CHECK(DtNmosSenderInfo_Parse(Change->Post, Change->PostLength, &After) ==
               DTNMOS_OK);
-        CHECK(DtNmosSenderList_Count(after) == 1);
-        CHECK_STR(DtNmosSenderList_At(after, 0)->Id.Text, change->Id);
+        CHECK(DtNmosSenderList_Count(After) == 1);
+        CHECK_STR(DtNmosSenderList_At(After, 0)->Id.Text, Change->Id);
     }
-    if (recorded->count < 8)
+    if (Recorded->Count < 8)
     {
-        snprintf(recorded->lines[recorded->count++], sizeof(recorded->lines[0]),
-                 "%s %s %s %s", DtNmosChangeKind_Name(change->Kind), change->Id,
-                 before != NULL ? DtNmosSenderList_At(before, 0)->Label : "-",
-                 after != NULL ? DtNmosSenderList_At(after, 0)->Label : "-");
+        snprintf(Recorded->Lines[Recorded->Count++], sizeof(Recorded->Lines[0]),
+                 "%s %s %s %s", DtNmosChangeKind_Name(Change->Kind), Change->Id,
+                 Before != NULL ? DtNmosSenderList_At(Before, 0)->Label : "-",
+                 After != NULL ? DtNmosSenderList_At(After, 0)->Label : "-");
     }
-    DtNmosSenderList_Free(before);
-    DtNmosSenderList_Free(after);
+    DtNmosSenderList_Free(Before);
+    DtNmosSenderList_Free(After);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- subscribe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Subscribe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Creates a query of the registry of fake and a subscription to its senders through
 // the WebSocket of fake; returns the result of creating it.
 //
-static DtNmosResult subscribe(NmosFakeSubscription* fake, NmosRecordedChanges* recorded,
-                              DtNmosQuery** query, DtNmosSubscription** subscription)
+static DtNmosResult Subscribe(NmosFakeSubscription* Fake, NmosRecordedChanges* Recorded,
+                              DtNmosQuery** Query, DtNmosSubscription** Subscription)
 {
-    static DtNmosWebSocketTransport websocket;
-    websocket.Size = sizeof(websocket);
-    websocket.User = fake;
-    websocket.Connect = fake_connect;
-    websocket.Receive = fake_receive;
-    websocket.Close = fake_close;
-    DtNmosQueryConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.RegistryUrl = "http://registry.test";
-    config.Http = fake_http;
-    config.HttpUser = fake;
-    config.TimeoutMs = 2000;
-    *query = DtNmosQuery_Alloc();
-    *subscription = DtNmosSubscription_Alloc();
-    if (*query == NULL || *subscription == NULL ||
-        DtNmosQuery_Open(*query, &config) != DTNMOS_OK)
+    static DtNmosWebSocketTransport Websocket;
+    Websocket.Size = sizeof(Websocket);
+    Websocket.User = Fake;
+    Websocket.Connect = FakeConnect;
+    Websocket.Receive = FakeReceive;
+    Websocket.Close = FakeClose;
+    DtNmosQueryConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.RegistryUrl = "http://registry.test";
+    Config.Http = FakeHttp;
+    Config.HttpUser = Fake;
+    Config.TimeoutMs = 2000;
+    *Query = DtNmosQuery_Alloc();
+    *Subscription = DtNmosSubscription_Alloc();
+    if (*Query == NULL || *Subscription == NULL ||
+        DtNmosQuery_Open(*Query, &Config) != DTNMOS_OK)
     {
-        DtNmosSubscription_Freep(subscription);
+        DtNmosSubscription_Freep(Subscription);
         return DTNMOS_E_INTERNAL;
     }
-    DtNmosSubscriptionConfig wanted;
-    memset(&wanted, 0, sizeof(wanted));
-    wanted.Size = sizeof(wanted);
-    wanted.ResourcePath = "/senders";
-    wanted.WebSocket = &websocket;
-    wanted.OnChange = record_change;
-    wanted.OnChangeUser = recorded;
-    const DtNmosResult result = DtNmosSubscription_Open(*subscription, *query, &wanted);
-    if (result != DTNMOS_OK)
+    DtNmosSubscriptionConfig Wanted;
+    memset(&Wanted, 0, sizeof(Wanted));
+    Wanted.Size = sizeof(Wanted);
+    Wanted.ResourcePath = "/senders";
+    Wanted.WebSocket = &Websocket;
+    Wanted.OnChange = RecordChange;
+    Wanted.OnChangeUser = Recorded;
+    const DtNmosResult Result = DtNmosSubscription_Open(*Subscription, *Query, &Wanted);
+    if (Result != DTNMOS_OK)
     {
-        DtNmosSubscription_Freep(subscription);
+        DtNmosSubscription_Freep(Subscription);
     }
-    return result;
+    return Result;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- subscription_reports_what_changes -.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void subscription_reports_what_changes(void)
 {
-    static const char* const messages[] = {
+    static const char* const Messages[] = {
         // The first message: every sender as it is.
         GRAIN("{\"path\": \"" CAMERA_ID "\", \"pre\": " CAMERA ", \"post\": " CAMERA "}, "
               "{\"path\": \"" MIC_ID "\", \"pre\": " MIC ", \"post\": " MIC "}"),
@@ -226,279 +226,279 @@ void subscription_reports_what_changes(void)
         GRAIN("{\"path\": \"" MIC_ID "\", \"pre\": " MIC "}, {\"path\": \"" MIC_ID
               "\", \"post\": " MIC "}"),
     };
-    NmosFakeSubscription fake;
-    memset(&fake, 0, sizeof(fake));
-    fake.status = 201;
-    fake.answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
-    fake.messages = messages;
-    fake.count = sizeof(messages) / sizeof(messages[0]);
-    NmosRecordedChanges recorded;
-    memset(&recorded, 0, sizeof(recorded));
-    DtNmosQuery* query = NULL;
-    DtNmosSubscription* subscription = NULL;
-    const DtNmosResult created = subscribe(&fake, &recorded, &query, &subscription);
-    if (created != DTNMOS_OK)
+    NmosFakeSubscription Fake;
+    memset(&Fake, 0, sizeof(Fake));
+    Fake.Status = 201;
+    Fake.Answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
+    Fake.Messages = Messages;
+    Fake.Count = sizeof(Messages) / sizeof(Messages[0]);
+    NmosRecordedChanges Recorded;
+    memset(&Recorded, 0, sizeof(Recorded));
+    DtNmosQuery* Query = NULL;
+    DtNmosSubscription* Subscription = NULL;
+    const DtNmosResult Created = Subscribe(&Fake, &Recorded, &Query, &Subscription);
+    if (Created != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
     }
-    REQUIRE(created == DTNMOS_OK);
-    CHECK_STR(fake.url, BASE "subscriptions");
-    CHECK_STR(fake.connected, WS_HREF);
-    CHECK_STR(DtNmosSubscription_Url(subscription), WS_HREF);
-    NmosJson* body = NULL;
-    REQUIRE(NmosJson_Parse(fake.body, strlen(fake.body), &body) == DTNMOS_OK);
-    CHECK_STR(NmosJson_MemberText(body, "resource_path"), "/senders");
-    CHECK_EQ(NmosJson_Member(body, "max_update_rate_ms")->number, 100);
-    CHECK_EQ(NmosJson_Member(body, "persist")->type, DTNMOS_JSON_FALSE);
-    CHECK_EQ(NmosJson_Member(body, "secure")->type, DTNMOS_JSON_FALSE);
-    CHECK_EQ(NmosJson_Member(body, "params")->type, DTNMOS_JSON_OBJECT);
-    NmosJson_Free(body);
+    REQUIRE(Created == DTNMOS_OK);
+    CHECK_STR(Fake.Url, BASE "subscriptions");
+    CHECK_STR(Fake.Connected, WS_HREF);
+    CHECK_STR(DtNmosSubscription_Url(Subscription), WS_HREF);
+    NmosJson* Body = NULL;
+    REQUIRE(NmosJson_Parse(Fake.Body, strlen(Fake.Body), &Body) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(Body, "resource_path"), "/senders");
+    CHECK_EQ(NmosJson_Member(Body, "max_update_rate_ms")->Number, 100);
+    CHECK_EQ(NmosJson_Member(Body, "persist")->Type, DTNMOS_JSON_FALSE);
+    CHECK_EQ(NmosJson_Member(Body, "secure")->Type, DTNMOS_JSON_FALSE);
+    CHECK_EQ(NmosJson_Member(Body, "params")->Type, DTNMOS_JSON_OBJECT);
+    NmosJson_Free(Body);
 
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_TIMEOUT);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_NETWORK);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_E_TIMEOUT);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_E_NETWORK);
     CHECK(strstr(DtNmos_GetLastError(), "closed") != NULL);
-    const char* const expected[] = {
+    const char* const Expected[] = {
         "present " CAMERA_ID " camera 1 camera 1",
         "present " MIC_ID " mic mic",
         "modified " CAMERA_ID " camera 1 camera 1",
         "removed " MIC_ID " mic -",
         "added " MIC_ID " - mic",
     };
-    REQUIRE(recorded.count == sizeof(expected) / sizeof(expected[0]));
-    for (size_t i = 0; i < recorded.count; ++i)
+    REQUIRE(Recorded.Count == sizeof(Expected) / sizeof(Expected[0]));
+    for (size_t i = 0; i < Recorded.Count; ++i)
     {
-        CHECK_STR(recorded.lines[i], expected[i]);
+        CHECK_STR(Recorded.Lines[i], Expected[i]);
     }
-    DtNmosSubscription_Free(subscription);
-    CHECK_EQ(fake.closed, 1);
-    DtNmosQuery_Free(query);
+    DtNmosSubscription_Free(Subscription);
+    CHECK_EQ(Fake.Closed, 1);
+    DtNmosQuery_Free(Query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- subscription_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void subscription_names_what_went_wrong(void)
 {
-    static const char* const messages[] = {"not json", "{\"grain\": {}}",
+    static const char* const Messages[] = {"not json", "{\"grain\": {}}",
                                            GRAIN("{\"path\": \"" MIC_ID "\"}")};
-    NmosFakeSubscription fake;
-    memset(&fake, 0, sizeof(fake));
-    NmosRecordedChanges recorded;
-    memset(&recorded, 0, sizeof(recorded));
-    DtNmosQuery* query = NULL;
-    DtNmosSubscription* subscription = NULL;
+    NmosFakeSubscription Fake;
+    memset(&Fake, 0, sizeof(Fake));
+    NmosRecordedChanges Recorded;
+    memset(&Recorded, 0, sizeof(Recorded));
+    DtNmosQuery* Query = NULL;
+    DtNmosSubscription* Subscription = NULL;
 
     // A registry that refuses, and one that names no WebSocket.
-    fake.status = 400;
-    fake.answer = "{\"code\": 400, \"error\": \"bad path\"}";
-    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_HTTP);
+    Fake.Status = 400;
+    Fake.Answer = "{\"code\": 400, \"error\": \"bad path\"}";
+    CHECK(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(),
                  "answered the subscription to /senders with 400") != NULL);
-    CHECK(subscription == NULL);
-    DtNmosQuery_Free(query);
-    fake.status = 200;
-    fake.answer = "{\"id\": \"1\"}";
-    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_PARSE);
+    CHECK(Subscription == NULL);
+    DtNmosQuery_Free(Query);
+    Fake.Status = 200;
+    Fake.Answer = "{\"id\": \"1\"}";
+    CHECK(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_E_PARSE);
     CHECK(strstr(DtNmos_GetLastError(), "without the ws_href") != NULL);
-    DtNmosQuery_Free(query);
+    DtNmosQuery_Free(Query);
     // A WebSocket that cannot be opened.
-    fake.answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
-    fake.connect_fails = 1;
-    CHECK(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_E_NETWORK);
+    Fake.Answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
+    Fake.ConnectFails = 1;
+    CHECK(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_E_NETWORK);
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
-    DtNmosQuery_Free(query);
+    DtNmosQuery_Free(Query);
 
     // Messages that are no grain fail the poll and not the subscription, and an item
     // with neither pre nor post is no change.
-    fake.connect_fails = 0;
-    fake.messages = messages;
-    fake.count = sizeof(messages) / sizeof(messages[0]);
-    REQUIRE(subscribe(&fake, &recorded, &query, &subscription) == DTNMOS_OK);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_PARSE);
+    Fake.ConnectFails = 0;
+    Fake.Messages = Messages;
+    Fake.Count = sizeof(Messages) / sizeof(Messages[0]);
+    REQUIRE(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_OK);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_E_PARSE);
     CHECK(strstr(DtNmos_GetLastError(), "is no grain with data") != NULL);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_E_PARSE);
-    CHECK(DtNmosSubscription_Poll(subscription, 50) == DTNMOS_OK);
-    CHECK_EQ(recorded.count, 0);
-    DtNmosSubscription_Free(subscription);
-    DtNmosQuery_Free(query);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_E_PARSE);
+    CHECK(DtNmosSubscription_Poll(Subscription, 50) == DTNMOS_OK);
+    CHECK_EQ(Recorded.Count, 0);
+    DtNmosSubscription_Free(Subscription);
+    DtNmosQuery_Free(Query);
 
     // A subscription needs a path and a function.
-    DtNmosSubscriptionConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.ResourcePath = "senders";
-    subscription = DtNmosSubscription_Alloc();
-    REQUIRE(subscription != NULL);
-    CHECK(DtNmosSubscription_Open(subscription, NULL, &config) ==
+    DtNmosSubscriptionConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.ResourcePath = "senders";
+    Subscription = DtNmosSubscription_Alloc();
+    REQUIRE(Subscription != NULL);
+    CHECK(DtNmosSubscription_Open(Subscription, NULL, &Config) ==
           DTNMOS_E_INVALID_ARGUMENT);
     // One that is not open neither polls nor closes.
-    CHECK(DtNmosSubscription_Poll(subscription, 0) == DTNMOS_E_STATE);
-    CHECK(DtNmosSubscription_Close(subscription) == DTNMOS_E_STATE);
-    CHECK_STR(DtNmosSubscription_Url(subscription), "");
-    DtNmosSubscription_Freep(&subscription);
-    CHECK(subscription == NULL);
+    CHECK(DtNmosSubscription_Poll(Subscription, 0) == DTNMOS_E_STATE);
+    CHECK(DtNmosSubscription_Close(Subscription) == DTNMOS_E_STATE);
+    CHECK_STR(DtNmosSubscription_Url(Subscription), "");
+    DtNmosSubscription_Freep(&Subscription);
+    CHECK(Subscription == NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- json_writes_what_it_reads_back -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void json_writes_what_it_reads_back(void)
 {
-    const char* text = "{\"a\": [1, -2.5, 1e3, true, false, null, \"x\\\"y\\n\"], "
+    const char* Text = "{\"a\": [1, -2.5, 1e3, true, false, null, \"x\\\"y\\n\"], "
                        "\"b\": {}, \"c\": []}";
-    NmosJson* json = NULL;
-    REQUIRE(NmosJson_Parse(text, strlen(text), &json) == DTNMOS_OK);
-    NmosBuffer written;
-    memset(&written, 0, sizeof(written));
-    NmosJson_Write(&written, json);
-    REQUIRE(!written.failed);
-    CHECK_STR(written.data,
+    NmosJson* Json = NULL;
+    REQUIRE(NmosJson_Parse(Text, strlen(Text), &Json) == DTNMOS_OK);
+    NmosBuffer Written;
+    memset(&Written, 0, sizeof(Written));
+    NmosJson_Write(&Written, Json);
+    REQUIRE(!Written.Failed);
+    CHECK_STR(Written.Data,
               "{\"a\":[1,-2.5,1000,true,false,null,\"x\\\"y\\n\"],\"b\":{},\"c\":[]}");
-    NmosJson_Free(json);
-    NmosBuffer_Free(&written);
+    NmosJson_Free(Json);
+    NmosBuffer_Free(&Written);
 }
 
 // A server of one WebSocket that the test runs on a thread: it accepts one client,
 // answers its handshake, and sends what the test of the WebSocket on libcurl reads.
 typedef struct NmosTestServer
 {
-    NmosTestSocket listener;
-    uint16_t port;
-    int handshake_ok;
+    NmosTestSocket Listener;
+    uint16_t Port;
+    int HandshakeOk;
 } NmosTestServer;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- base64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Base64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void base64(const uint8_t* data, size_t length, char* text)
+static void Base64(const uint8_t* Data, size_t Length, char* Text)
 {
-    static const char digits[] =
+    static const char Digits[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t out = 0;
-    for (size_t i = 0; i < length; i += 3)
+    size_t Out = 0;
+    for (size_t i = 0; i < Length; i += 3)
     {
-        const uint32_t group = (uint32_t)data[i] << 16 |
-                               (i + 1 < length ? (uint32_t)data[i + 1] << 8 : 0) |
-                               (i + 2 < length ? (uint32_t)data[i + 2] : 0);
-        text[out++] = digits[group >> 18 & 63];
-        text[out++] = digits[group >> 12 & 63];
-        text[out++] = i + 1 < length ? digits[group >> 6 & 63] : '=';
-        text[out++] = i + 2 < length ? digits[group & 63] : '=';
+        const uint32_t Group = (uint32_t)Data[i] << 16 |
+                               (i + 1 < Length ? (uint32_t)Data[i + 1] << 8 : 0) |
+                               (i + 2 < Length ? (uint32_t)Data[i + 2] : 0);
+        Text[Out++] = Digits[Group >> 18 & 63];
+        Text[Out++] = Digits[Group >> 12 & 63];
+        Text[Out++] = i + 1 < Length ? Digits[Group >> 6 & 63] : '=';
+        Text[Out++] = i + 2 < Length ? Digits[Group & 63] : '=';
     }
-    text[out] = '\0';
+    Text[Out] = '\0';
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- send_frame -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SendFrame -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Sends a frame of a server, unmasked: opcode, whether it is the last of its message,
 // and its payload.
 //
-static void send_frame(NmosTestSocket client, int opcode, int last, const char* payload,
-                       size_t length)
+static void SendFrame(NmosTestSocket Client, int Opcode, int Last, const char* Payload,
+                      size_t Length)
 {
-    uint8_t header[10];
-    size_t size = 2;
-    header[0] = (uint8_t)((last ? 0x80 : 0) | opcode);
-    if (length < 126)
+    uint8_t Header[10];
+    size_t Size = 2;
+    Header[0] = (uint8_t)((Last ? 0x80 : 0) | Opcode);
+    if (Length < 126)
     {
-        header[1] = (uint8_t)length;
+        Header[1] = (uint8_t)Length;
     }
-    else if (length < 65536)
+    else if (Length < 65536)
     {
-        header[1] = 126;
-        header[2] = (uint8_t)(length >> 8);
-        header[3] = (uint8_t)length;
-        size = 4;
+        Header[1] = 126;
+        Header[2] = (uint8_t)(Length >> 8);
+        Header[3] = (uint8_t)Length;
+        Size = 4;
     }
     else
     {
-        header[1] = 127;
+        Header[1] = 127;
         for (int i = 0; i < 8; ++i)
         {
-            header[2 + i] = (uint8_t)((uint64_t)length >> (56 - 8 * i));
+            Header[2 + i] = (uint8_t)((uint64_t)Length >> (56 - 8 * i));
         }
-        size = 10;
+        Size = 10;
     }
-    send(client, (const char*)header, TEST_LENGTH(size), 0);
-    size_t sent = 0;
-    while (sent < length)
+    send(Client, (const char*)Header, TEST_LENGTH(Size), 0);
+    size_t Sent = 0;
+    while (Sent < Length)
     {
-        const int now = (int)send(client, payload + sent, TEST_LENGTH(length - sent), 0);
-        if (now <= 0)
+        const int Now = (int)send(Client, Payload + Sent, TEST_LENGTH(Length - Sent), 0);
+        if (Now <= 0)
         {
             return;
         }
-        sent += (size_t)now;
+        Sent += (size_t)Now;
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- serve_client -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ServeClient -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void serve_client(void* argument)
+static void ServeClient(void* Argument)
 {
-    NmosTestServer* server = argument;
-    const NmosTestSocket client = accept(server->listener, NULL, NULL);
-    if (client == TEST_NO_SOCKET)
+    NmosTestServer* Server = Argument;
+    const NmosTestSocket Client = accept(Server->Listener, NULL, NULL);
+    if (Client == TEST_NO_SOCKET)
     {
         return;
     }
-    char request[4096];
-    size_t length = 0;
-    request[0] = '\0';
-    while (length < sizeof(request) - 1 && strstr(request, "\r\n\r\n") == NULL)
+    char Request[4096];
+    size_t Length = 0;
+    Request[0] = '\0';
+    while (Length < sizeof(Request) - 1 && strstr(Request, "\r\n\r\n") == NULL)
     {
-        const int now = (int)recv(client, request + length,
-                                  TEST_LENGTH(sizeof(request) - 1 - length), 0);
-        if (now <= 0)
+        const int Now = (int)recv(Client, Request + Length,
+                                  TEST_LENGTH(sizeof(Request) - 1 - Length), 0);
+        if (Now <= 0)
         {
             break;
         }
-        length += (size_t)now;
-        request[length] = '\0';
+        Length += (size_t)Now;
+        Request[Length] = '\0';
     }
-    request[length] = '\0';
-    const char* key = strstr(request, "Sec-WebSocket-Key: ");
-    if (key != NULL)
+    Request[Length] = '\0';
+    const char* Key = strstr(Request, "Sec-WebSocket-Key: ");
+    if (Key != NULL)
     {
-        key += strlen("Sec-WebSocket-Key: ");
-        const size_t key_length = strcspn(key, "\r");
-        NmosSha1 sha1;
-        NmosSha1_Init(&sha1);
-        NmosSha1_Update(&sha1, key, key_length);
-        NmosSha1_Update(&sha1, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", 36);
-        uint8_t digest[20];
-        NmosSha1_Final(&sha1, digest);
-        char accept_key[32];
-        base64(digest, sizeof(digest), accept_key);
-        char answer[256];
-        const int answer_length =
-            snprintf(answer, sizeof(answer),
+        Key += strlen("Sec-WebSocket-Key: ");
+        const size_t KeyLength = strcspn(Key, "\r");
+        NmosSha1 Sha1;
+        NmosSha1_Init(&Sha1);
+        NmosSha1_Update(&Sha1, Key, KeyLength);
+        NmosSha1_Update(&Sha1, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", 36);
+        uint8_t Digest[20];
+        NmosSha1_Final(&Sha1, Digest);
+        char AcceptKey[32];
+        Base64(Digest, sizeof(Digest), AcceptKey);
+        char Answer[256];
+        const int AnswerLength =
+            snprintf(Answer, sizeof(Answer),
                      "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
                      "Connection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
-                     accept_key);
-        send(client, answer, TEST_LENGTH(answer_length), 0);
-        server->handshake_ok = 1;
+                     AcceptKey);
+        send(Client, Answer, TEST_LENGTH(AnswerLength), 0);
+        Server->HandshakeOk = 1;
 
         // A message in two fragments with a ping between them, one of 70000 bytes, and
         // the close.
-        send_frame(client, 0x1, 0, "hello ", 6);
-        send_frame(client, 0x9, 1, "", 0);
-        send_frame(client, 0x0, 1, "world", 5);
-        char* large = malloc(70000);
-        if (large != NULL)
+        SendFrame(Client, 0x1, 0, "hello ", 6);
+        SendFrame(Client, 0x9, 1, "", 0);
+        SendFrame(Client, 0x0, 1, "world", 5);
+        char* Large = malloc(70000);
+        if (Large != NULL)
         {
-            memset(large, 'x', 70000);
-            send_frame(client, 0x1, 1, large, 70000);
-            free(large);
+            memset(Large, 'x', 70000);
+            SendFrame(Client, 0x1, 1, Large, 70000);
+            free(Large);
         }
-        send_frame(client, 0x8, 1, "\x03\xe8", 2);
+        SendFrame(Client, 0x8, 1, "\x03\xe8", 2);
         // Wait for the client to close, so that nothing is lost in a reset.
-        char rest[256];
-        while (recv(client, rest, TEST_LENGTH(sizeof(rest)), 0) > 0)
+        char Rest[256];
+        while (recv(Client, Rest, TEST_LENGTH(sizeof(Rest)), 0) > 0)
         {
         }
     }
-    test_close_socket(client);
+    TestCloseSocket(Client);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- websocket_on_curl_reads_messages -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -511,61 +511,61 @@ void websocket_on_curl_reads_messages(void)
         return;
     }
 #ifdef _WIN32
-    WSADATA data;
-    WSAStartup(MAKEWORD(2, 2), &data);
+    WSADATA Data;
+    WSAStartup(MAKEWORD(2, 2), &Data);
 #endif
-    NmosTestServer server;
-    memset(&server, 0, sizeof(server));
-    server.listener = socket(AF_INET, SOCK_STREAM, 0);
-    REQUIRE(server.listener != TEST_NO_SOCKET);
-    struct sockaddr_in address;
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    REQUIRE(bind(server.listener, (struct sockaddr*)&address, sizeof(address)) == 0);
-    REQUIRE(listen(server.listener, 1) == 0);
-    socklen_t address_length = sizeof(address);
-    REQUIRE(getsockname(server.listener, (struct sockaddr*)&address, &address_length) ==
+    NmosTestServer Server;
+    memset(&Server, 0, sizeof(Server));
+    Server.Listener = socket(AF_INET, SOCK_STREAM, 0);
+    REQUIRE(Server.Listener != TEST_NO_SOCKET);
+    struct sockaddr_in Address;
+    memset(&Address, 0, sizeof(Address));
+    Address.sin_family = AF_INET;
+    Address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    REQUIRE(bind(Server.Listener, (struct sockaddr*)&Address, sizeof(Address)) == 0);
+    REQUIRE(listen(Server.Listener, 1) == 0);
+    socklen_t AddressLength = sizeof(Address);
+    REQUIRE(getsockname(Server.Listener, (struct sockaddr*)&Address, &AddressLength) ==
             0);
-    server.port = ntohs(address.sin_port);
-    NmosThread* thread = NmosOs_ThreadStart(serve_client, &server);
-    REQUIRE(thread != NULL);
+    Server.Port = ntohs(Address.sin_port);
+    NmosThread* Thread = NmosOs_ThreadStart(ServeClient, &Server);
+    REQUIRE(Thread != NULL);
 
-    char url[64];
-    snprintf(url, sizeof(url), "ws://127.0.0.1:%u/ws", (unsigned)server.port);
-    const DtNmosWebSocketTransport* websocket = DtNmos_CurlWebSocket();
-    void* connection = NULL;
-    const DtNmosResult connected =
-        websocket->Connect(websocket->User, url, 2000, &connection);
-    if (connected != DTNMOS_OK)
+    char Url[64];
+    snprintf(Url, sizeof(Url), "ws://127.0.0.1:%u/ws", (unsigned)Server.Port);
+    const DtNmosWebSocketTransport* Websocket = DtNmos_CurlWebSocket();
+    void* Connection = NULL;
+    const DtNmosResult Connected =
+        Websocket->Connect(Websocket->User, Url, 2000, &Connection);
+    if (Connected != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
     }
-    if (connected == DTNMOS_OK)
+    if (Connected == DTNMOS_OK)
     {
-        const char* message = NULL;
-        size_t length = 0;
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
+        const char* Message = NULL;
+        size_t Length = 0;
+        CHECK(Websocket->Receive(Websocket->User, Connection, 2000, &Message, &Length) ==
               DTNMOS_OK);
-        CHECK_STR(message, "hello world");
-        CHECK_EQ(length, 11);
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
+        CHECK_STR(Message, "hello world");
+        CHECK_EQ(Length, 11);
+        CHECK(Websocket->Receive(Websocket->User, Connection, 2000, &Message, &Length) ==
               DTNMOS_OK);
-        CHECK_EQ(length, 70000);
-        CHECK_EQ(strlen(message), 70000);
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
+        CHECK_EQ(Length, 70000);
+        CHECK_EQ(strlen(Message), 70000);
+        CHECK(Websocket->Receive(Websocket->User, Connection, 2000, &Message, &Length) ==
               DTNMOS_E_NETWORK);
-        websocket->Close(websocket->User, connection);
+        Websocket->Close(Websocket->User, Connection);
     }
-    CHECK(connected == DTNMOS_OK);
-    NmosOs_ThreadJoin(thread);
-    CHECK_EQ(server.handshake_ok, 1);
-    test_close_socket(server.listener);
+    CHECK(Connected == DTNMOS_OK);
+    NmosOs_ThreadJoin(Thread);
+    CHECK_EQ(Server.HandshakeOk, 1);
+    TestCloseSocket(Server.Listener);
 
     // Nobody listens any more: the WebSocket cannot be opened. Windows tries a refused
     // connection again for about two seconds, so it may run out of time instead.
-    const DtNmosResult refused =
-        websocket->Connect(websocket->User, url, 500, &connection);
-    CHECK(refused == DTNMOS_E_NETWORK || refused == DTNMOS_E_TIMEOUT);
-    CHECK(connection == NULL);
+    const DtNmosResult Refused =
+        Websocket->Connect(Websocket->User, Url, 500, &Connection);
+    CHECK(Refused == DTNMOS_E_NETWORK || Refused == DTNMOS_E_TIMEOUT);
+    CHECK(Connection == NULL);
 }

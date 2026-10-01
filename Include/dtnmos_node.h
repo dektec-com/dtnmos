@@ -29,8 +29,8 @@ typedef struct DtNmosNode DtNmosNode;
 // next_url, of size bytes, DTNMOS_MAX_URL_SIZE, the base URL of another registry and its
 // null character, which the node then registers with from the start, or 0 to stay with
 // the one it has. A URL without its null character within size bytes is ignored.
-typedef int (*DtNmosRegistryFailedFunc)(void* user, uint32_t failures, char* next_url,
-                                        size_t size);
+typedef int (*DtNmosRegistryFailedFunc)(void* User, uint32_t Failures, char* NextUrl,
+                                        size_t Size);
 
 typedef struct DtNmosNodeConfig
 {
@@ -115,9 +115,9 @@ typedef struct DtNmosSenderActivation
 // the controller with. It is called on the thread that handles the request, without the
 // lock of the node, and may block for as long as applying takes.
 typedef DtNmosResult (*DtNmosReceiverActivateFunc)(
-    void* user, const DtNmosId* receiver, const DtNmosReceiverActivation* activation);
+    void* User, const DtNmosId* Receiver, const DtNmosReceiverActivation* Activation);
 typedef DtNmosResult (*DtNmosSenderActivateFunc)(
-    void* user, const DtNmosId* sender, const DtNmosSenderActivation* activation);
+    void* User, const DtNmosId* Sender, const DtNmosSenderActivation* Activation);
 
 // Allocates a node, closed. Returns null when the memory ran out.
 DTNMOS_API DtNmosNode* DtNmosNode_Alloc(void);
@@ -126,17 +126,17 @@ DTNMOS_API DtNmosNode* DtNmosNode_Alloc(void);
 // polled. Fails with DTNMOS_E_INVALID_ARGUMENT without an ID, a registration URL or an
 // HTTP function, and with DTNMOS_E_STATE when the node is open. A node closed can be
 // opened again, with another config, keeping its handle.
-DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* node, const DtNmosNodeConfig* config);
+DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config);
 
 // Stops serving, deletes what the node registered from the registry, and forgets it all,
 // leaving the node closed. Fails with DTNMOS_E_STATE when the node is not open.
-DTNMOS_API DtNmosResult DtNmosNode_Close(DtNmosNode* node);
+DTNMOS_API DtNmosResult DtNmosNode_Close(DtNmosNode* Node);
 
 // Closes the node when it is open, and frees it. Null is allowed.
-DTNMOS_API void DtNmosNode_Free(DtNmosNode* node);
+DTNMOS_API void DtNmosNode_Free(DtNmosNode* Node);
 
-// Frees *node as DtNmosNode_Free() does and sets *node to null. Null is allowed.
-DTNMOS_API void DtNmosNode_Freep(DtNmosNode** node);
+// Frees *Node as DtNmosNode_Free() does and sets *Node to null. Null is allowed.
+DTNMOS_API void DtNmosNode_Freep(DtNmosNode** Node);
 
 // The functions below need an open node, and fail with DTNMOS_E_STATE on another; those
 // that return no result return 0.
@@ -144,61 +144,61 @@ DTNMOS_API void DtNmosNode_Freep(DtNmosNode** node);
 // Adds a device, sender or receiver; the next poll registers it. Fails with
 // DTNMOS_E_INVALID_ARGUMENT for an ID the node has, an unknown device, or a sender of
 // neither video nor audio.
-DTNMOS_API DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node,
-                                             const DtNmosDeviceConfig* device);
-DTNMOS_API DtNmosResult DtNmosNode_AddSender(DtNmosNode* node,
-                                             const DtNmosSenderConfig* sender,
-                                             DtNmosSenderActivateFunc activate,
-                                             void* user);
-DTNMOS_API DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
-                                               const DtNmosReceiverConfig* receiver,
-                                               DtNmosReceiverActivateFunc activate,
-                                               void* user);
+DTNMOS_API DtNmosResult DtNmosNode_AddDevice(DtNmosNode* Node,
+                                             const DtNmosDeviceConfig* Device);
+DTNMOS_API DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node,
+                                             const DtNmosSenderConfig* Sender,
+                                             DtNmosSenderActivateFunc Activate,
+                                             void* User);
+DTNMOS_API DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
+                                               const DtNmosReceiverConfig* Receiver,
+                                               DtNmosReceiverActivateFunc Activate,
+                                               void* User);
 
 // Removes a device, sender or receiver, and the senders and receivers of a device; the
 // next poll deletes them from the registry. Fails with DTNMOS_E_NOT_FOUND for an unknown
 // ID.
-DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id);
+DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);
 
 // Changes the flow a sender sends, e.g. after its format changed, and its SDP with it;
 // the next poll registers the new version.
-DTNMOS_API DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
-                                                const DtNmosFlow* flow);
+DTNMOS_API DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* Node, const DtNmosId* Id,
+                                                const DtNmosFlow* Flow);
 
 // Registers what is not registered yet, deletes what was removed, and sends a heartbeat
 // when one is due, registering everything again when the registry has lost the node. Sets
 // next_ms, when it is not null, to when it wants to be called again. Fails with the first
 // request that failed; the next poll tries again.
-DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms);
+DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 
 // Whether the registry holds the node and everything it has.
-DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* node);
+DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
 
 // Answers a request to the Node API or the Connection API, for a caller with an HTTP
-// server of its own; request->url is the path and query of the request. Fills response,
+// server of its own; Request->Url is the path and query of the request. Fills response,
 // which is empty, with the answer, an error status included.
-DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* node,
-                                          const DtNmosHttpRequest* request,
-                                          DtNmosHttpResponse* response);
+DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* Node,
+                                          const DtNmosHttpRequest* Request,
+                                          DtNmosHttpResponse* Response);
 
 // Serves the Node API and the Connection API on api_host and api_port on a civetweb
 // server, and polls the node on a thread of its own, until DtNmosNode_Close(). Fails
 // with DTNMOS_E_STATE when the library is built without DTNMOS_WITH_SERVER, and with
 // DTNMOS_E_HTTP when the server cannot listen.
-DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* node);
+DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* Node);
 
 // Whether the library was built with the server, DTNMOS_WITH_SERVER.
 DTNMOS_API int DtNmos_HasServer(void);
 
 // Returns the port the node is reached at: api_port, or the one DtNmosNode_Serve() took.
-DTNMOS_API uint16_t DtNmosNode_ApiPort(const DtNmosNode* node);
+DTNMOS_API uint16_t DtNmosNode_ApiPort(const DtNmosNode* Node);
 
 // Writes the base URL of the APIs of the node, e.g. "http://192.168.1.5:8080", into the
-// caller's buffer of *size bytes, with a terminating null; *size is then its length. A
-// buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *size then giving the bytes
+// caller's buffer of *Size bytes, with a terminating null; *Size is then its length. A
+// buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *Size then giving the bytes
 // needed.
-DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, char* buffer,
-                                          size_t* size);
+DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* Node, char* Buffer,
+                                          size_t* Size);
 
 #ifdef __cplusplus
 }

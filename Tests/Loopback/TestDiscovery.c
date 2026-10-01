@@ -19,201 +19,201 @@
 // A DNS message the test builds.
 typedef struct NmosMessage
 {
-    uint8_t bytes[1500];
-    size_t length;
+    uint8_t Bytes[1500];
+    size_t Length;
 } NmosMessage;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Put8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void put8(NmosMessage* m, unsigned value)
+static void Put8(NmosMessage* m, unsigned Value)
 {
-    m->bytes[m->length++] = (uint8_t)value;
+    m->Bytes[m->Length++] = (uint8_t)Value;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Put16 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void put16(NmosMessage* m, unsigned value)
+static void Put16(NmosMessage* m, unsigned Value)
 {
-    put8(m, value >> 8);
-    put8(m, value);
+    Put8(m, Value >> 8);
+    Put8(m, Value);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Put32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void put32(NmosMessage* m, uint32_t value)
+static void Put32(NmosMessage* m, uint32_t Value)
 {
-    put16(m, (unsigned)(value >> 16));
-    put16(m, (unsigned)value);
+    Put16(m, (unsigned)(Value >> 16));
+    Put16(m, (unsigned)Value);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PutName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Writes the labels of name, split at every dot; returns where the name starts.
 //
-static size_t put_name(NmosMessage* m, const char* name)
+static size_t PutName(NmosMessage* m, const char* name)
 {
-    const size_t start = m->length;
+    const size_t Start = m->Length;
     while (*name != '\0')
     {
-        const char* end = strchr(name, '.');
-        const size_t length = end != NULL ? (size_t)(end - name) : strlen(name);
-        put8(m, (unsigned)length);
-        memcpy(m->bytes + m->length, name, length);
-        m->length += length;
-        name += length + (end != NULL ? 1 : 0);
+        const char* End = strchr(name, '.');
+        const size_t Length = End != NULL ? (size_t)(End - name) : strlen(name);
+        Put8(m, (unsigned)Length);
+        memcpy(m->Bytes + m->Length, name, Length);
+        m->Length += Length;
+        name += Length + (End != NULL ? 1 : 0);
     }
-    put8(m, 0);
-    return start;
+    Put8(m, 0);
+    return Start;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_pointer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PutPointer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void put_pointer(NmosMessage* m, size_t offset)
+static void PutPointer(NmosMessage* m, size_t Offset)
 {
-    put16(m, 0xC000u | (unsigned)offset);
+    Put16(m, 0xC000u | (unsigned)Offset);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- begin_response -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BeginResponse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void begin_response(NmosMessage* m, unsigned id, unsigned answers,
-                           unsigned additional)
+static void BeginResponse(NmosMessage* m, unsigned Id, unsigned Answers,
+                          unsigned Additional)
 {
-    m->length = 0;
-    put16(m, id);
-    put16(m, 0x8400); // a response, authoritative
-    put16(m, 0);
-    put16(m, answers);
-    put16(m, 0);
-    put16(m, additional);
+    m->Length = 0;
+    Put16(m, Id);
+    Put16(m, 0x8400); // a response, authoritative
+    Put16(m, 0);
+    Put16(m, Answers);
+    Put16(m, 0);
+    Put16(m, Additional);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_record_head -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PutRecordHead -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Writes the type, class, TTL and a placeholder for the length of the data of a record
 // whose name is written; returns where the length goes.
 //
-static size_t put_record_head(NmosMessage* m, unsigned type)
+static size_t PutRecordHead(NmosMessage* m, unsigned Type)
 {
-    put16(m, type);
-    put16(m, 1);
-    put32(m, 120);
-    const size_t at = m->length;
-    put16(m, 0);
-    return at;
+    Put16(m, Type);
+    Put16(m, 1);
+    Put32(m, 120);
+    const size_t At = m->Length;
+    Put16(m, 0);
+    return At;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- end_record -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- EndRecord -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void end_record(NmosMessage* m, size_t length_at)
+static void EndRecord(NmosMessage* m, size_t LengthAt)
 {
-    const size_t length = m->length - length_at - 2;
-    m->bytes[length_at] = (uint8_t)(length >> 8);
-    m->bytes[length_at + 1] = (uint8_t)length;
+    const size_t Length = m->Length - LengthAt - 2;
+    m->Bytes[LengthAt] = (uint8_t)(Length >> 8);
+    m->Bytes[LengthAt + 1] = (uint8_t)Length;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put_txt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PutTxt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // The strings of a TXT record, in the data of the record.
 //
-static void put_txt(NmosMessage* m, const char* const* strings, size_t count)
+static void PutTxt(NmosMessage* m, const char* const* Strings, size_t Count)
 {
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < Count; ++i)
     {
-        put8(m, (unsigned)strlen(strings[i]));
-        memcpy(m->bytes + m->length, strings[i], strlen(strings[i]));
-        m->length += strlen(strings[i]);
+        Put8(m, (unsigned)strlen(Strings[i]));
+        memcpy(m->Bytes + m->Length, Strings[i], strlen(Strings[i]));
+        m->Length += strlen(Strings[i]);
     }
 }
 
 // An instance the responder announces.
 typedef struct NmosAnnounced
 {
-    const char* label; // e.g. "Registry B"
-    const char* host;  // e.g. "registry-b.local"
-    unsigned port;
-    const char* txt[4];
-    size_t txt_count;
-    unsigned char address[4];
+    const char* Label; // e.g. "Registry B"
+    const char* Host;  // e.g. "registry-b.local"
+    unsigned Port;
+    const char* Txt[4];
+    size_t TxtCount;
+    unsigned char Address[4];
 } NmosAnnounced;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_with -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AnswerWith -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Writes the PTR, SRV, TXT and A records of the instances into an answer to id; with
 // ptr_only, only the PTR records.
 //
-static void answer_with(NmosMessage* m, unsigned id, const char* service,
-                        const NmosAnnounced* instances, size_t count, int ptr_only)
+static void AnswerWith(NmosMessage* m, unsigned Id, const char* Service,
+                       const NmosAnnounced* Instances, size_t Count, int PtrOnly)
 {
-    begin_response(m, id, (unsigned)count, ptr_only ? 0 : (unsigned)(3 * count));
-    size_t service_at = 0;
-    size_t instance_at[8];
-    for (size_t i = 0; i < count; ++i)
+    BeginResponse(m, Id, (unsigned)Count, PtrOnly ? 0 : (unsigned)(3 * Count));
+    size_t ServiceAt = 0;
+    size_t InstanceAt[8];
+    for (size_t i = 0; i < Count; ++i)
     {
         // The first PTR writes the service in full; the others point to it.
         if (i == 0)
         {
-            service_at = put_name(m, service);
+            ServiceAt = PutName(m, Service);
         }
         else
         {
-            put_pointer(m, service_at);
+            PutPointer(m, ServiceAt);
         }
-        const size_t length_at = put_record_head(m, DTNMOS_DNS_TYPE_PTR);
-        instance_at[i] = m->length;
-        put8(m, (unsigned)strlen(instances[i].label));
-        memcpy(m->bytes + m->length, instances[i].label, strlen(instances[i].label));
-        m->length += strlen(instances[i].label);
-        put_pointer(m, service_at);
-        end_record(m, length_at);
+        const size_t LengthAt = PutRecordHead(m, DTNMOS_DNS_TYPE_PTR);
+        InstanceAt[i] = m->Length;
+        Put8(m, (unsigned)strlen(Instances[i].Label));
+        memcpy(m->Bytes + m->Length, Instances[i].Label, strlen(Instances[i].Label));
+        m->Length += strlen(Instances[i].Label);
+        PutPointer(m, ServiceAt);
+        EndRecord(m, LengthAt);
     }
-    if (ptr_only)
+    if (PtrOnly)
     {
         return;
     }
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < Count; ++i)
     {
-        put_pointer(m, instance_at[i]);
-        size_t length_at = put_record_head(m, DTNMOS_DNS_TYPE_SRV);
-        put16(m, 0);
-        put16(m, 0);
-        put16(m, instances[i].port);
-        const size_t host_at = put_name(m, instances[i].host);
-        end_record(m, length_at);
+        PutPointer(m, InstanceAt[i]);
+        size_t LengthAt = PutRecordHead(m, DTNMOS_DNS_TYPE_SRV);
+        Put16(m, 0);
+        Put16(m, 0);
+        Put16(m, Instances[i].Port);
+        const size_t HostAt = PutName(m, Instances[i].Host);
+        EndRecord(m, LengthAt);
 
-        put_pointer(m, instance_at[i]);
-        length_at = put_record_head(m, DTNMOS_DNS_TYPE_TXT);
-        put_txt(m, instances[i].txt, instances[i].txt_count);
-        end_record(m, length_at);
+        PutPointer(m, InstanceAt[i]);
+        LengthAt = PutRecordHead(m, DTNMOS_DNS_TYPE_TXT);
+        PutTxt(m, Instances[i].Txt, Instances[i].TxtCount);
+        EndRecord(m, LengthAt);
 
-        put_pointer(m, host_at);
-        length_at = put_record_head(m, DTNMOS_DNS_TYPE_A);
+        PutPointer(m, HostAt);
+        LengthAt = PutRecordHead(m, DTNMOS_DNS_TYPE_A);
         for (int b = 0; b < 4; ++b)
         {
-            put8(m, instances[i].address[b]);
+            Put8(m, Instances[i].Address[b]);
         }
-        end_record(m, length_at);
+        EndRecord(m, LengthAt);
     }
 }
 
 // The records a read found.
 typedef struct NmosRecords
 {
-    NmosDnsRecord found[32];
-    size_t count;
+    NmosDnsRecord Found[32];
+    size_t Count;
 } NmosRecords;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- keep_record -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- KeepRecord -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void keep_record(void* user, const NmosDnsRecord* record)
+static void KeepRecord(void* User, const NmosDnsRecord* Record)
 {
-    NmosRecords* kept = user;
-    if (kept->count < 32)
+    NmosRecords* Kept = User;
+    if (Kept->Count < 32)
     {
-        kept->found[kept->count++] = *record;
+        Kept->Found[Kept->Count++] = *Record;
     }
 }
 
-static const NmosAnnounced registry_b = {
+static const NmosAnnounced RegistryB = {
     "Registry B",
     "registry-b.local",
     8080,
@@ -225,20 +225,20 @@ static const NmosAnnounced registry_b = {
 //
 void dns_writes_a_query(void)
 {
-    uint8_t buffer[512];
-    const NmosDnsQuestion question = {"_nmos-query._tcp.local", DTNMOS_DNS_TYPE_PTR};
-    const size_t length =
-        NmosDns_WriteQuery(buffer, sizeof(buffer), 0x1234, 0, &question, 1);
-    static const uint8_t expected[] = {
+    uint8_t Buffer[512];
+    const NmosDnsQuestion Question = {"_nmos-query._tcp.local", DTNMOS_DNS_TYPE_PTR};
+    const size_t Length =
+        NmosDns_WriteQuery(Buffer, sizeof(Buffer), 0x1234, 0, &Question, 1);
+    static const uint8_t Expected[] = {
         0x12, 0x34, 0,   0,   0,   1,   0,   0,   0,   0,   0,   0,   // header
         11,   '_',  'n', 'm', 'o', 's', '-', 'q', 'u', 'e', 'r', 'y', // _nmos-query
         4,    '_',  't', 'c', 'p', 5,   'l', 'o', 'c', 'a', 'l', 0,
         0,    12,   0,   1}; // PTR IN
-    REQUIRE(length == sizeof(expected));
-    CHECK(memcmp(buffer, expected, length) == 0);
-    CHECK_EQ(NmosDns_WriteQuery(buffer, 20, 1, 0, &question, 1), 0);
-    const NmosDnsQuestion empty_label = {"a..local", DTNMOS_DNS_TYPE_A};
-    CHECK_EQ(NmosDns_WriteQuery(buffer, sizeof(buffer), 1, 0, &empty_label, 1), 0);
+    REQUIRE(Length == sizeof(Expected));
+    CHECK(memcmp(Buffer, Expected, Length) == 0);
+    CHECK_EQ(NmosDns_WriteQuery(Buffer, 20, 1, 0, &Question, 1), 0);
+    const NmosDnsQuestion EmptyLabel = {"a..local", DTNMOS_DNS_TYPE_A};
+    CHECK_EQ(NmosDns_WriteQuery(Buffer, sizeof(Buffer), 1, 0, &EmptyLabel, 1), 0);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_records_and_compression -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -246,39 +246,38 @@ void dns_writes_a_query(void)
 void dns_reads_records_and_compression(void)
 {
     NmosMessage m;
-    answer_with(&m, 7, "_nmos-query._tcp.local", &registry_b, 1, 0);
-    NmosRecords kept;
-    memset(&kept, 0, sizeof(kept));
-    REQUIRE(NmosDns_ReadResponse(m.bytes, m.length, keep_record, &kept));
-    REQUIRE(kept.count == 4);
-    CHECK_EQ(kept.found[0].type, DTNMOS_DNS_TYPE_PTR);
-    CHECK_STR(kept.found[0].name, "_nmos-query._tcp.local");
-    CHECK_STR(kept.found[0].target, "Registry B._nmos-query._tcp.local");
-    CHECK_EQ(kept.found[1].type, DTNMOS_DNS_TYPE_SRV);
-    CHECK_STR(kept.found[1].name, "Registry B._nmos-query._tcp.local");
-    CHECK_STR(kept.found[1].target, "registry-b.local");
-    CHECK_EQ(kept.found[1].port, 8080);
-    CHECK_EQ(kept.found[1].ttl, 120);
-    CHECK_EQ(kept.found[2].type, DTNMOS_DNS_TYPE_TXT);
-    char value[32];
-    REQUIRE(NmosDns_TxtValue(kept.found[2].txt, kept.found[2].txt_length, "API_VER",
-                             value, sizeof(value)));
-    CHECK_STR(value, "v1.2,v1.3");
-    REQUIRE(NmosDns_TxtValue(kept.found[2].txt, kept.found[2].txt_length, "pri", value,
-                             sizeof(value)));
-    CHECK_STR(value, "10");
-    CHECK(!NmosDns_TxtValue(kept.found[2].txt, kept.found[2].txt_length, "api", value,
-                            sizeof(value)));
-    CHECK(
-        !NmosDns_TxtValue(kept.found[2].txt, kept.found[2].txt_length, "pri", value, 2));
-    CHECK_EQ(kept.found[3].type, DTNMOS_DNS_TYPE_A);
-    CHECK_STR(kept.found[3].name, "registry-b.local");
-    CHECK_EQ(kept.found[3].address[3], 2);
+    AnswerWith(&m, 7, "_nmos-query._tcp.local", &RegistryB, 1, 0);
+    NmosRecords Kept;
+    memset(&Kept, 0, sizeof(Kept));
+    REQUIRE(NmosDns_ReadResponse(m.Bytes, m.Length, KeepRecord, &Kept));
+    REQUIRE(Kept.Count == 4);
+    CHECK_EQ(Kept.Found[0].Type, DTNMOS_DNS_TYPE_PTR);
+    CHECK_STR(Kept.Found[0].name, "_nmos-query._tcp.local");
+    CHECK_STR(Kept.Found[0].Target, "Registry B._nmos-query._tcp.local");
+    CHECK_EQ(Kept.Found[1].Type, DTNMOS_DNS_TYPE_SRV);
+    CHECK_STR(Kept.Found[1].name, "Registry B._nmos-query._tcp.local");
+    CHECK_STR(Kept.Found[1].Target, "registry-b.local");
+    CHECK_EQ(Kept.Found[1].Port, 8080);
+    CHECK_EQ(Kept.Found[1].Ttl, 120);
+    CHECK_EQ(Kept.Found[2].Type, DTNMOS_DNS_TYPE_TXT);
+    char Value[32];
+    REQUIRE(NmosDns_TxtValue(Kept.Found[2].Txt, Kept.Found[2].TxtLength, "API_VER", Value,
+                             sizeof(Value)));
+    CHECK_STR(Value, "v1.2,v1.3");
+    REQUIRE(NmosDns_TxtValue(Kept.Found[2].Txt, Kept.Found[2].TxtLength, "pri", Value,
+                             sizeof(Value)));
+    CHECK_STR(Value, "10");
+    CHECK(!NmosDns_TxtValue(Kept.Found[2].Txt, Kept.Found[2].TxtLength, "api", Value,
+                            sizeof(Value)));
+    CHECK(!NmosDns_TxtValue(Kept.Found[2].Txt, Kept.Found[2].TxtLength, "pri", Value, 2));
+    CHECK_EQ(Kept.Found[3].Type, DTNMOS_DNS_TYPE_A);
+    CHECK_STR(Kept.Found[3].name, "registry-b.local");
+    CHECK_EQ(Kept.Found[3].Address[3], 2);
 
     // A key without "=" has an empty value.
-    static const uint8_t flag[] = {4, 'f', 'l', 'a', 'g'};
-    REQUIRE(NmosDns_TxtValue(flag, sizeof(flag), "flag", value, sizeof(value)));
-    CHECK_STR(value, "");
+    static const uint8_t Flag[] = {4, 'f', 'l', 'a', 'g'};
+    REQUIRE(NmosDns_TxtValue(Flag, sizeof(Flag), "flag", Value, sizeof(Value)));
+    CHECK_STR(Value, "");
     CHECK(NmosDns_SameName("Registry-B.LOCAL", "registry-b.local"));
     CHECK(!NmosDns_SameName("registry-b.local", "registry-b.local.x"));
 }
@@ -289,27 +288,27 @@ void dns_escapes_dots_within_labels(void)
 {
     // An instance whose label holds a dot, "Registry v1.3".
     NmosMessage m;
-    begin_response(&m, 1, 1, 0);
-    const size_t service_at = put_name(&m, "_nmos-query._tcp.local");
-    const size_t length_at = put_record_head(&m, DTNMOS_DNS_TYPE_PTR);
-    put8(&m, 13);
-    memcpy(m.bytes + m.length, "Registry v1.3", 13);
-    m.length += 13;
-    put_pointer(&m, service_at);
-    end_record(&m, length_at);
-    NmosRecords kept;
-    memset(&kept, 0, sizeof(kept));
-    REQUIRE(NmosDns_ReadResponse(m.bytes, m.length, keep_record, &kept));
-    REQUIRE(kept.count == 1);
-    CHECK_STR(kept.found[0].target, "Registry v1\\.3._nmos-query._tcp.local");
+    BeginResponse(&m, 1, 1, 0);
+    const size_t ServiceAt = PutName(&m, "_nmos-query._tcp.local");
+    const size_t LengthAt = PutRecordHead(&m, DTNMOS_DNS_TYPE_PTR);
+    Put8(&m, 13);
+    memcpy(m.Bytes + m.Length, "Registry v1.3", 13);
+    m.Length += 13;
+    PutPointer(&m, ServiceAt);
+    EndRecord(&m, LengthAt);
+    NmosRecords Kept;
+    memset(&Kept, 0, sizeof(Kept));
+    REQUIRE(NmosDns_ReadResponse(m.Bytes, m.Length, KeepRecord, &Kept));
+    REQUIRE(Kept.Count == 1);
+    CHECK_STR(Kept.Found[0].Target, "Registry v1\\.3._nmos-query._tcp.local");
 
     // Written back, the escaped dot stays within its label.
-    uint8_t buffer[128];
-    const NmosDnsQuestion question = {kept.found[0].target, DTNMOS_DNS_TYPE_SRV};
-    const size_t length = NmosDns_WriteQuery(buffer, sizeof(buffer), 1, 0, &question, 1);
-    REQUIRE(length > 12 + 14);
-    CHECK_EQ(buffer[12], 13);
-    CHECK(memcmp(buffer + 13, "Registry v1.3", 13) == 0);
+    uint8_t Buffer[128];
+    const NmosDnsQuestion Question = {Kept.Found[0].Target, DTNMOS_DNS_TYPE_SRV};
+    const size_t Length = NmosDns_WriteQuery(Buffer, sizeof(Buffer), 1, 0, &Question, 1);
+    REQUIRE(Length > 12 + 14);
+    CHECK_EQ(Buffer[12], 13);
+    CHECK(memcmp(Buffer + 13, "Registry v1.3", 13) == 0);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- dns_refuses_malformed_messages -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -317,205 +316,205 @@ void dns_escapes_dots_within_labels(void)
 void dns_refuses_malformed_messages(void)
 {
     NmosMessage m;
-    answer_with(&m, 7, "_nmos-query._tcp.local", &registry_b, 1, 0);
-    NmosRecords kept;
+    AnswerWith(&m, 7, "_nmos-query._tcp.local", &RegistryB, 1, 0);
+    NmosRecords Kept;
     // Every message cut short is refused, whatever it read before.
-    for (size_t length = 0; length < m.length; ++length)
+    for (size_t Length = 0; Length < m.Length; ++Length)
     {
-        memset(&kept, 0, sizeof(kept));
-        CHECK(!NmosDns_ReadResponse(m.bytes, length, keep_record, &kept));
+        memset(&Kept, 0, sizeof(Kept));
+        CHECK(!NmosDns_ReadResponse(m.Bytes, Length, KeepRecord, &Kept));
     }
     // A query is no response.
-    NmosMessage query = m;
-    query.bytes[2] = 0;
-    CHECK(!NmosDns_ReadResponse(query.bytes, query.length, keep_record, &kept));
+    NmosMessage Query = m;
+    Query.Bytes[2] = 0;
+    CHECK(!NmosDns_ReadResponse(Query.Bytes, Query.Length, KeepRecord, &Kept));
     // A name that points to itself.
-    NmosMessage loop;
-    begin_response(&loop, 1, 1, 0);
-    put_pointer(&loop, 12);
-    put_record_head(&loop, DTNMOS_DNS_TYPE_A);
-    CHECK(!NmosDns_ReadResponse(loop.bytes, loop.length, keep_record, &kept));
+    NmosMessage Loop;
+    BeginResponse(&Loop, 1, 1, 0);
+    PutPointer(&Loop, 12);
+    PutRecordHead(&Loop, DTNMOS_DNS_TYPE_A);
+    CHECK(!NmosDns_ReadResponse(Loop.Bytes, Loop.Length, KeepRecord, &Kept));
     // An A record of the wrong length.
-    NmosMessage wrong;
-    begin_response(&wrong, 1, 1, 0);
-    put_name(&wrong, "host.local");
-    const size_t length_at = put_record_head(&wrong, DTNMOS_DNS_TYPE_A);
-    put8(&wrong, 1);
-    end_record(&wrong, length_at);
-    CHECK(!NmosDns_ReadResponse(wrong.bytes, wrong.length, keep_record, &kept));
+    NmosMessage Wrong;
+    BeginResponse(&Wrong, 1, 1, 0);
+    PutName(&Wrong, "host.local");
+    const size_t LengthAt = PutRecordHead(&Wrong, DTNMOS_DNS_TYPE_A);
+    Put8(&Wrong, 1);
+    EndRecord(&Wrong, LengthAt);
+    CHECK(!NmosDns_ReadResponse(Wrong.Bytes, Wrong.Length, KeepRecord, &Kept));
 }
 
 // A responder on 127.0.0.1 that answers queries on a thread of its own.
 typedef struct NmosResponder
 {
-    NmosUdp* socket;
-    NmosThread* thread;
-    NmosMutex* mutex;
-    int stop;          // guarded by mutex
-    int queries;       // queries received, guarded by mutex
-    int asked_srv_txt; // a query asked for SRV and TXT records, guarded by mutex
-    int faults;        // queries a DNS server counts as faults, guarded by mutex
+    NmosUdp* Socket;
+    NmosThread* Thread;
+    NmosMutex* Mutex;
+    int Stop;        // guarded by mutex
+    int Queries;     // queries received, guarded by mutex
+    int AskedSrvTxt; // a query asked for SRV and TXT records, guarded by mutex
+    int Faults;      // queries a DNS server counts as faults, guarded by mutex
     // Set before the thread starts and only read by it afterwards.
-    const NmosAnnounced* instances;
-    size_t count;
-    int answer; // 0: none, 1: everything, 2: PTR first, the rest when asked
-    char destination[32];
-    const char* service; // that it announces
+    const NmosAnnounced* Instances;
+    size_t Count;
+    int Answer; // 0: none, 1: everything, 2: PTR first, the rest when asked
+    char Destination[32];
+    const char* Service; // that it announces
     // A DNS server, which counts a query without recursion desired or of more than one
     // question as a fault, and answers it with FORMERR.
-    int dns;
+    int Dns;
 } NmosResponder;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadQuery -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the type of the first question of a query and whether any asks for SRV or TXT.
 //
-static int read_query(const uint8_t* bytes, size_t length, int* asks_srv_txt)
+static int ReadQuery(const uint8_t* Bytes, size_t Length, int* AsksSrvTxt)
 {
-    if (length < 12 || (bytes[2] & 0x80) != 0)
+    if (Length < 12 || (Bytes[2] & 0x80) != 0)
     {
         return 0;
     }
-    const unsigned questions = ((unsigned)bytes[4] << 8) | bytes[5];
-    size_t at = 12;
-    *asks_srv_txt = 0;
-    for (unsigned q = 0; q < questions; ++q)
+    const unsigned Questions = ((unsigned)Bytes[4] << 8) | Bytes[5];
+    size_t At = 12;
+    *AsksSrvTxt = 0;
+    for (unsigned q = 0; q < Questions; ++q)
     {
-        while (at < length && bytes[at] != 0)
+        while (At < Length && Bytes[At] != 0)
         {
-            at += 1u + bytes[at];
+            At += 1u + Bytes[At];
         }
-        if (at + 5 > length)
+        if (At + 5 > Length)
         {
             return 0;
         }
-        const unsigned type = ((unsigned)bytes[at + 1] << 8) | bytes[at + 2];
-        *asks_srv_txt |= type == DTNMOS_DNS_TYPE_SRV || type == DTNMOS_DNS_TYPE_TXT;
-        at += 5;
+        const unsigned Type = ((unsigned)Bytes[At + 1] << 8) | Bytes[At + 2];
+        *AsksSrvTxt |= Type == DTNMOS_DNS_TYPE_SRV || Type == DTNMOS_DNS_TYPE_TXT;
+        At += 5;
     }
     return 1;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- respond -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Respond -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void respond(void* argument)
+static void Respond(void* Argument)
 {
-    NmosResponder* r = argument;
+    NmosResponder* r = Argument;
     for (;;)
     {
-        NmosOs_MutexLock(r->mutex);
-        const int stop = r->stop;
-        NmosOs_MutexUnlock(r->mutex);
-        if (stop)
+        NmosOs_MutexLock(r->Mutex);
+        const int Stop = r->Stop;
+        NmosOs_MutexUnlock(r->Mutex);
+        if (Stop)
         {
             return;
         }
-        uint8_t bytes[1500];
-        char from[64];
-        uint16_t from_port = 0;
-        const int received = NmosOs_UdpReceive(r->socket, bytes, sizeof(bytes), 50, from,
-                                               sizeof(from), &from_port);
-        int asks_srv_txt = 0;
-        if (received <= 0 || !read_query(bytes, (size_t)received, &asks_srv_txt))
+        uint8_t Bytes[1500];
+        char From[64];
+        uint16_t FromPort = 0;
+        const int Received = NmosOs_UdpReceive(r->Socket, Bytes, sizeof(Bytes), 50, From,
+                                               sizeof(From), &FromPort);
+        int AsksSrvTxt = 0;
+        if (Received <= 0 || !ReadQuery(Bytes, (size_t)Received, &AsksSrvTxt))
         {
             continue;
         }
-        const int fault =
-            r->dns && ((bytes[2] & 0x01) == 0 || bytes[4] != 0 || bytes[5] != 1);
-        NmosOs_MutexLock(r->mutex);
-        ++r->queries;
-        r->asked_srv_txt |= asks_srv_txt;
-        r->faults += fault;
-        NmosOs_MutexUnlock(r->mutex);
-        if (fault)
+        const int Fault =
+            r->Dns && ((Bytes[2] & 0x01) == 0 || Bytes[4] != 0 || Bytes[5] != 1);
+        NmosOs_MutexLock(r->Mutex);
+        ++r->Queries;
+        r->AskedSrvTxt |= AsksSrvTxt;
+        r->Faults += Fault;
+        NmosOs_MutexUnlock(r->Mutex);
+        if (Fault)
         {
-            const uint8_t formerr[12] = {bytes[0], bytes[1], 0x81, 0x01};
-            NmosOs_UdpSend(r->socket, from, from_port, formerr, sizeof(formerr));
+            const uint8_t Formerr[12] = {Bytes[0], Bytes[1], 0x81, 0x01};
+            NmosOs_UdpSend(r->Socket, From, FromPort, Formerr, sizeof(Formerr));
             continue;
         }
-        if (r->answer == 0)
+        if (r->Answer == 0)
         {
             continue;
         }
         // A one-shot query is answered with its ID, to the port it came from.
         NmosMessage m;
-        const unsigned id = ((unsigned)bytes[0] << 8) | bytes[1];
-        answer_with(&m, id, r->service, r->instances, r->count,
-                    r->answer == 2 && !asks_srv_txt);
-        NmosOs_UdpSend(r->socket, from, from_port, m.bytes, m.length);
+        const unsigned Id = ((unsigned)Bytes[0] << 8) | Bytes[1];
+        AnswerWith(&m, Id, r->Service, r->Instances, r->Count,
+                   r->Answer == 2 && !AsksSrvTxt);
+        NmosOs_UdpSend(r->Socket, From, FromPort, m.Bytes, m.Length);
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder_as -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartResponderAs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Starts a responder that announces service, as a DNS server when dns is set. Everything
 // the thread reads without the mutex is set before it starts.
 //
-static int start_responder_as(NmosResponder* r, const NmosAnnounced* instances,
-                              size_t count, int answer, const char* service, int dns)
+static int StartResponderAs(NmosResponder* r, const NmosAnnounced* Instances,
+                            size_t Count, int Answer, const char* Service, int Dns)
 {
     memset(r, 0, sizeof(*r));
-    r->instances = instances;
-    r->count = count;
-    r->answer = answer;
-    r->service = service;
-    r->dns = dns;
-    r->socket = NmosOs_UdpOpen("127.0.0.1", NULL);
-    r->mutex = NmosOs_MutexCreate();
-    if (r->socket == NULL || r->mutex == NULL)
+    r->Instances = Instances;
+    r->Count = Count;
+    r->Answer = Answer;
+    r->Service = Service;
+    r->Dns = Dns;
+    r->Socket = NmosOs_UdpOpen("127.0.0.1", NULL);
+    r->Mutex = NmosOs_MutexCreate();
+    if (r->Socket == NULL || r->Mutex == NULL)
     {
         return 0;
     }
-    snprintf(r->destination, sizeof(r->destination), "127.0.0.1:%u",
-             NmosOs_UdpPort(r->socket));
-    r->thread = NmosOs_ThreadStart(respond, r);
-    return r->thread != NULL;
+    snprintf(r->Destination, sizeof(r->Destination), "127.0.0.1:%u",
+             NmosOs_UdpPort(r->Socket));
+    r->Thread = NmosOs_ThreadStart(Respond, r);
+    return r->Thread != NULL;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartResponder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Starts a responder that announces "_nmos-query._tcp.local" over multicast DNS.
 //
-static int start_responder(NmosResponder* r, const NmosAnnounced* instances, size_t count,
-                           int answer)
+static int StartResponder(NmosResponder* r, const NmosAnnounced* Instances, size_t Count,
+                          int Answer)
 {
-    return start_responder_as(r, instances, count, answer, "_nmos-query._tcp.local", 0);
+    return StartResponderAs(r, Instances, Count, Answer, "_nmos-query._tcp.local", 0);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- stop_responder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StopResponder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void stop_responder(NmosResponder* r)
+static void StopResponder(NmosResponder* r)
 {
-    if (r->thread != NULL)
+    if (r->Thread != NULL)
     {
-        NmosOs_MutexLock(r->mutex);
-        r->stop = 1;
-        NmosOs_MutexUnlock(r->mutex);
-        NmosOs_ThreadJoin(r->thread);
+        NmosOs_MutexLock(r->Mutex);
+        r->Stop = 1;
+        NmosOs_MutexUnlock(r->Mutex);
+        NmosOs_ThreadJoin(r->Thread);
     }
-    NmosOs_UdpClose(r->socket);
-    NmosOs_MutexFree(r->mutex);
+    NmosOs_UdpClose(r->Socket);
+    NmosOs_MutexFree(r->Mutex);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- config_for -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConfigFor -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosDiscoveryConfig config_for(const NmosResponder* r, uint32_t timeout_ms)
+static DtNmosDiscoveryConfig ConfigFor(const NmosResponder* r, uint32_t TimeoutMs)
 {
-    DtNmosDiscoveryConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.Service = DTNMOS_SERVICE_QUERY;
-    config.Destination = r->destination;
-    config.Searches = DTNMOS_SEARCH_MULTICAST;
-    config.TimeoutMs = timeout_ms;
-    return config;
+    DtNmosDiscoveryConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Service = DTNMOS_SERVICE_QUERY;
+    Config.Destination = r->Destination;
+    Config.Searches = DTNMOS_SEARCH_MULTICAST;
+    Config.TimeoutMs = TimeoutMs;
+    return Config;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- discovery_finds_registries_by_priority -.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void discovery_finds_registries_by_priority(void)
 {
-    static const NmosAnnounced instances[] = {
+    static const NmosAnnounced Instances[] = {
         {"Registry B",
          "registry-b.local",
          8080,
@@ -537,40 +536,40 @@ void discovery_finds_registries_by_priority(void)
         {"No priority", "nopri.local", 8235, {"api_ver=v1.3"}, 1, {127, 0, 0, 5}},
     };
     NmosResponder r;
-    REQUIRE(start_responder(&r, instances, 4, 1));
-    const DtNmosDiscoveryConfig config = config_for(&r, 300);
-    DtNmosRegistryList* list = NULL;
-    const DtNmosResult result = DtNmos_Discover(&config, &list);
-    stop_responder(&r);
-    REQUIRE(result == DTNMOS_OK);
-    REQUIRE(DtNmosRegistryList_Count(list) == 4);
-    const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
-    CHECK_STR(first->Instance, "Registry A");
+    REQUIRE(StartResponder(&r, Instances, 4, 1));
+    const DtNmosDiscoveryConfig Config = ConfigFor(&r, 300);
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    StopResponder(&r);
+    REQUIRE(Result == DTNMOS_OK);
+    REQUIRE(DtNmosRegistryList_Count(List) == 4);
+    const DtNmosRegistryInfo* First = DtNmosRegistryList_At(List, 0);
+    CHECK_STR(First->Instance, "Registry A");
     // https keeps the host name, for its certificate.
-    CHECK_STR(first->Url, "https://registry-a.local:443");
-    CHECK_STR(first->Address, "127.0.0.3");
-    CHECK_EQ(first->Priority, 0);
-    CHECK(first->Usable);
-    const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
-    CHECK_STR(second->Instance, "Registry B");
-    CHECK_STR(second->Url, "http://127.0.0.2:8080");
-    CHECK_STR(second->ApiVersions, "v1.2,v1.3");
-    CHECK_EQ(second->Service, DTNMOS_SERVICE_QUERY);
-    const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
-    CHECK_STR(third->Instance, "No priority");
-    CHECK_EQ(third->Priority, -1);
-    CHECK_STR(third->ApiProto, "http");
-    CHECK(third->Usable);
-    const DtNmosRegistryInfo* last = DtNmosRegistryList_At(list, 3);
-    CHECK_STR(last->Instance, "Old");
-    CHECK(!last->Usable);
-    CHECK(DtNmosRegistryList_At(list, 4) == NULL);
+    CHECK_STR(First->Url, "https://registry-a.local:443");
+    CHECK_STR(First->Address, "127.0.0.3");
+    CHECK_EQ(First->Priority, 0);
+    CHECK(First->Usable);
+    const DtNmosRegistryInfo* Second = DtNmosRegistryList_At(List, 1);
+    CHECK_STR(Second->Instance, "Registry B");
+    CHECK_STR(Second->Url, "http://127.0.0.2:8080");
+    CHECK_STR(Second->ApiVersions, "v1.2,v1.3");
+    CHECK_EQ(Second->Service, DTNMOS_SERVICE_QUERY);
+    const DtNmosRegistryInfo* Third = DtNmosRegistryList_At(List, 2);
+    CHECK_STR(Third->Instance, "No priority");
+    CHECK_EQ(Third->Priority, -1);
+    CHECK_STR(Third->ApiProto, "http");
+    CHECK(Third->Usable);
+    const DtNmosRegistryInfo* Last = DtNmosRegistryList_At(List, 3);
+    CHECK_STR(Last->Instance, "Old");
+    CHECK(!Last->Usable);
+    CHECK(DtNmosRegistryList_At(List, 4) == NULL);
 
     // The arrays of an info are copied with it, and outlive the list.
-    const DtNmosRegistryInfo copy = *second;
-    DtNmosRegistryList_Free(list);
-    CHECK_STR(copy.Host, "registry-b.local");
-    CHECK_STR(copy.Address, "127.0.0.2");
+    const DtNmosRegistryInfo Copy = *Second;
+    DtNmosRegistryList_Free(List);
+    CHECK_STR(Copy.Host, "registry-b.local");
+    CHECK_STR(Copy.Address, "127.0.0.2");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- discovery_asks_again_for_what_is_missing -.-.-.-.-.-.-.-.-.-.-.-
@@ -578,21 +577,21 @@ void discovery_finds_registries_by_priority(void)
 void discovery_asks_again_for_what_is_missing(void)
 {
     NmosResponder r;
-    REQUIRE(start_responder(&r, &registry_b, 1, 2));
-    const DtNmosDiscoveryConfig config = config_for(&r, 300);
-    DtNmosRegistryList* list = NULL;
-    const DtNmosResult result = DtNmos_Discover(&config, &list);
-    NmosOs_MutexLock(r.mutex);
-    const int queries = r.queries;
-    const int asked = r.asked_srv_txt;
-    NmosOs_MutexUnlock(r.mutex);
-    stop_responder(&r);
-    REQUIRE(result == DTNMOS_OK);
-    CHECK_EQ(queries, 4); // three sends of the first query, and the one that asks again
-    CHECK(asked);
-    REQUIRE(DtNmosRegistryList_Count(list) == 1);
-    CHECK_STR(DtNmosRegistryList_At(list, 0)->Url, "http://127.0.0.2:8080");
-    DtNmosRegistryList_Free(list);
+    REQUIRE(StartResponder(&r, &RegistryB, 1, 2));
+    const DtNmosDiscoveryConfig Config = ConfigFor(&r, 300);
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    NmosOs_MutexLock(r.Mutex);
+    const int Queries = r.Queries;
+    const int Asked = r.AskedSrvTxt;
+    NmosOs_MutexUnlock(r.Mutex);
+    StopResponder(&r);
+    REQUIRE(Result == DTNMOS_OK);
+    CHECK_EQ(Queries, 4); // three sends of the first query, and the one that asks again
+    CHECK(Asked);
+    REQUIRE(DtNmosRegistryList_Count(List) == 1);
+    CHECK_STR(DtNmosRegistryList_At(List, 0)->Url, "http://127.0.0.2:8080");
+    DtNmosRegistryList_Free(List);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- discovery_finds_nothing_in_silence -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -600,42 +599,42 @@ void discovery_asks_again_for_what_is_missing(void)
 void discovery_finds_nothing_in_silence(void)
 {
     NmosResponder r;
-    REQUIRE(start_responder(&r, NULL, 0, 0));
-    const DtNmosDiscoveryConfig config = config_for(&r, 200);
-    DtNmosRegistryList* list = NULL;
-    const uint64_t start = NmosOs_MonotonicMs();
-    const DtNmosResult result = DtNmos_Discover(&config, &list);
-    const uint64_t took = NmosOs_MonotonicMs() - start;
-    stop_responder(&r);
-    REQUIRE(result == DTNMOS_OK);
-    CHECK_EQ(DtNmosRegistryList_Count(list), 0);
-    CHECK(took >= 190 && took < 2000);
-    DtNmosRegistryList_Free(list);
+    REQUIRE(StartResponder(&r, NULL, 0, 0));
+    const DtNmosDiscoveryConfig Config = ConfigFor(&r, 200);
+    DtNmosRegistryList* List = NULL;
+    const uint64_t Start = NmosOs_MonotonicMs();
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    const uint64_t Took = NmosOs_MonotonicMs() - Start;
+    StopResponder(&r);
+    REQUIRE(Result == DTNMOS_OK);
+    CHECK_EQ(DtNmosRegistryList_Count(List), 0);
+    CHECK(Took >= 190 && Took < 2000);
+    DtNmosRegistryList_Free(List);
 
     // What it refuses.
-    DtNmosDiscoveryConfig wrong = config;
-    wrong.Destination = "224.0.0.251";
-    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(list == NULL);
-    wrong.Destination = "no-address:5353";
-    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
-    wrong.Destination = "127.0.0.1:0";
-    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
-    wrong = config;
-    wrong.InterfaceAddress = "10.0.0";
-    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosDiscoveryConfig Wrong = Config;
+    Wrong.Destination = "224.0.0.251";
+    CHECK(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(List == NULL);
+    Wrong.Destination = "no-address:5353";
+    CHECK(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    Wrong.Destination = "127.0.0.1:0";
+    CHECK(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    Wrong = Config;
+    Wrong.InterfaceAddress = "10.0.0";
+    CHECK(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
     // An address that is no interface of this host cannot send.
-    wrong.InterfaceAddress = "192.0.2.1";
-    CHECK(DtNmos_Discover(&wrong, &list) == DTNMOS_E_NETWORK);
-    CHECK(DtNmos_Discover(&config, NULL) == DTNMOS_E_INVALID_ARGUMENT);
+    Wrong.InterfaceAddress = "192.0.2.1";
+    CHECK(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_NETWORK);
+    CHECK(DtNmos_Discover(&Config, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void dns_reads_resolv_conf(void)
 {
-    char server[64];
-    char domain[256];
+    char Server[64];
+    char Domain[256];
     // The first IPv4 nameserver, and the first domain of the last search or domain line.
     NmosDns_ReadResolvConf("# written by DHCP\n"
                            "nameserver 2001:db8::1\n"
@@ -644,35 +643,35 @@ void dns_reads_resolv_conf(void)
                            "domain first.example\n"
                            "search\tstudio.example. other.example\n"
                            "options edns0\n",
-                           server, sizeof(server), domain, sizeof(domain));
-    CHECK_STR(server, "192.0.2.53");
-    CHECK_STR(domain, "studio.example");
+                           Server, sizeof(Server), Domain, sizeof(Domain));
+    CHECK_STR(Server, "192.0.2.53");
+    CHECK_STR(Domain, "studio.example");
     // No server, and the root, which is no domain.
-    NmosDns_ReadResolvConf("search .\r\n", server, sizeof(server), domain,
-                           sizeof(domain));
-    CHECK_STR(server, "");
-    CHECK_STR(domain, "");
+    NmosDns_ReadResolvConf("search .\r\n", Server, sizeof(Server), Domain,
+                           sizeof(Domain));
+    CHECK_STR(Server, "");
+    CHECK_STR(Domain, "");
     // Nothing that fits, and nothing at all.
-    NmosDns_ReadResolvConf("nameserver 192.0.2.53\ndomain studio.example", server, 8,
-                           domain, 8);
-    CHECK_STR(server, "");
-    CHECK_STR(domain, "");
-    NmosDns_ReadResolvConf("", server, sizeof(server), domain, sizeof(domain));
-    CHECK_STR(server, "");
+    NmosDns_ReadResolvConf("nameserver 192.0.2.53\ndomain studio.example", Server, 8,
+                           Domain, 8);
+    CHECK_STR(Server, "");
+    CHECK_STR(Domain, "");
+    NmosDns_ReadResolvConf("", Server, sizeof(Server), Domain, sizeof(Domain));
+    CHECK_STR(Server, "");
     // The query to a DNS server asks it to recurse.
-    uint8_t buffer[64];
-    const NmosDnsQuestion question = {"_nmos-query._tcp.studio.example",
+    uint8_t Buffer[64];
+    const NmosDnsQuestion Question = {"_nmos-query._tcp.studio.example",
                                       DTNMOS_DNS_TYPE_PTR};
-    REQUIRE(NmosDns_WriteQuery(buffer, sizeof(buffer), 7, DTNMOS_DNS_RECURSION_DESIRED,
-                               &question, 1) > 0);
-    CHECK_EQ(buffer[2], 0x01);
-    uint16_t id = 0;
-    unsigned rcode = 9;
-    const uint8_t refused[12] = {0x12, 0x34, 0x81, 0x85};
-    REQUIRE(NmosDns_ReadHeader(refused, sizeof(refused), &id, &rcode));
-    CHECK_EQ(id, 0x1234);
-    CHECK_EQ(rcode, 5);
-    CHECK(!NmosDns_ReadHeader(refused, 11, &id, &rcode));
+    REQUIRE(NmosDns_WriteQuery(Buffer, sizeof(Buffer), 7, DTNMOS_DNS_RECURSION_DESIRED,
+                               &Question, 1) > 0);
+    CHECK_EQ(Buffer[2], 0x01);
+    uint16_t Id = 0;
+    unsigned Rcode = 9;
+    const uint8_t Refused[12] = {0x12, 0x34, 0x81, 0x85};
+    REQUIRE(NmosDns_ReadHeader(Refused, sizeof(Refused), &Id, &Rcode));
+    CHECK_EQ(Id, 0x1234);
+    CHECK_EQ(Rcode, 5);
+    CHECK(!NmosDns_ReadHeader(Refused, 11, &Id, &Rcode));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- discovery_asks_a_dns_server_too -.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -683,10 +682,10 @@ void dns_reads_resolv_conf(void)
 //
 void discovery_asks_a_dns_server_too(void)
 {
-    static const NmosAnnounced on_link = {
+    static const NmosAnnounced OnLink = {
         "On link", "on-link.local", 8080, {"api_proto=http", "api_ver=v1.3", "pri=10"},
         3,         {127, 0, 0, 2}};
-    static const NmosAnnounced in_dns[] = {
+    static const NmosAnnounced InDns[] = {
         {"Studio",
          "registry.studio.example",
          8081,
@@ -700,46 +699,46 @@ void discovery_asks_a_dns_server_too(void)
          3,
          {127, 0, 0, 4}},
     };
-    NmosResponder mdns;
-    REQUIRE(start_responder(&mdns, &on_link, 1, 1));
-    NmosResponder dns;
-    REQUIRE(start_responder_as(&dns, in_dns, 2, 2, "_nmos-query._tcp.studio.example", 1));
+    NmosResponder Mdns;
+    REQUIRE(StartResponder(&Mdns, &OnLink, 1, 1));
+    NmosResponder Dns;
+    REQUIRE(StartResponderAs(&Dns, InDns, 2, 2, "_nmos-query._tcp.studio.example", 1));
 
-    DtNmosDiscoveryConfig config = config_for(&mdns, 300);
-    config.Searches = 0;
-    config.DnsServer = dns.destination;
-    config.DnsDomain = "studio.example.";
-    DtNmosRegistryList* list = NULL;
-    const DtNmosResult result = DtNmos_Discover(&config, &list);
-    NmosOs_MutexLock(dns.mutex);
-    const int faults = dns.faults;
-    const int asked = dns.asked_srv_txt;
-    NmosOs_MutexUnlock(dns.mutex);
-    stop_responder(&dns);
-    stop_responder(&mdns);
-    REQUIRE(result == DTNMOS_OK);
-    CHECK_EQ(faults, 0);
-    CHECK(asked);
-    REQUIRE(DtNmosRegistryList_Count(list) == 3);
-    const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
-    CHECK_STR(first->Instance, "Studio");
-    CHECK_STR(first->Url, "http://127.0.0.3:8081");
-    CHECK_EQ(first->FoundBy, DTNMOS_SEARCH_UNICAST);
-    const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
-    CHECK_STR(second->Instance, "On link");
-    CHECK_EQ(second->FoundBy, DTNMOS_SEARCH_MULTICAST);
-    const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
-    CHECK_STR(third->Instance, "Backup");
-    CHECK_STR(third->Host, "backup.studio.example");
-    CHECK_EQ(third->FoundBy, DTNMOS_SEARCH_UNICAST);
-    DtNmosRegistryList_Free(list);
+    DtNmosDiscoveryConfig Config = ConfigFor(&Mdns, 300);
+    Config.Searches = 0;
+    Config.DnsServer = Dns.Destination;
+    Config.DnsDomain = "studio.example.";
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    NmosOs_MutexLock(Dns.Mutex);
+    const int Faults = Dns.Faults;
+    const int Asked = Dns.AskedSrvTxt;
+    NmosOs_MutexUnlock(Dns.Mutex);
+    StopResponder(&Dns);
+    StopResponder(&Mdns);
+    REQUIRE(Result == DTNMOS_OK);
+    CHECK_EQ(Faults, 0);
+    CHECK(Asked);
+    REQUIRE(DtNmosRegistryList_Count(List) == 3);
+    const DtNmosRegistryInfo* First = DtNmosRegistryList_At(List, 0);
+    CHECK_STR(First->Instance, "Studio");
+    CHECK_STR(First->Url, "http://127.0.0.3:8081");
+    CHECK_EQ(First->FoundBy, DTNMOS_SEARCH_UNICAST);
+    const DtNmosRegistryInfo* Second = DtNmosRegistryList_At(List, 1);
+    CHECK_STR(Second->Instance, "On link");
+    CHECK_EQ(Second->FoundBy, DTNMOS_SEARCH_MULTICAST);
+    const DtNmosRegistryInfo* Third = DtNmosRegistryList_At(List, 2);
+    CHECK_STR(Third->Instance, "Backup");
+    CHECK_STR(Third->Host, "backup.studio.example");
+    CHECK_EQ(Third->FoundBy, DTNMOS_SEARCH_UNICAST);
+    DtNmosRegistryList_Free(List);
 
     // What it refuses.
-    config.DnsServer = "no-address:53";
-    CHECK(DtNmos_Discover(&config, &list) == DTNMOS_E_INVALID_ARGUMENT);
-    config.DnsServer = "127.0.0.1:53";
-    config.DnsDomain = "studio..example";
-    CHECK(DtNmos_Discover(&config, &list) == DTNMOS_E_INVALID_ARGUMENT);
+    Config.DnsServer = "no-address:53";
+    CHECK(DtNmos_Discover(&Config, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    Config.DnsServer = "127.0.0.1:53";
+    Config.DnsDomain = "studio..example";
+    CHECK(DtNmos_Discover(&Config, &List) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "studio..example") != NULL);
 }
 
@@ -750,35 +749,35 @@ void discovery_asks_a_dns_server_too(void)
 //
 void discovery_takes_only_the_dns_server(void)
 {
-    NmosResponder mdns;
-    REQUIRE(start_responder(&mdns, &registry_b, 1, 1));
-    NmosResponder dns;
-    REQUIRE(start_responder_as(&dns, &registry_b, 1, 1, "_nmos-query._tcp.studio.example",
-                               1));
-    DtNmosDiscoveryConfig config = config_for(&mdns, 200);
-    config.Searches = DTNMOS_SEARCH_UNICAST;
-    config.DnsServer = dns.destination;
-    config.DnsDomain = "studio.example";
-    DtNmosRegistryList* list = NULL;
-    REQUIRE(DtNmos_Discover(&config, &list) == DTNMOS_OK);
-    NmosOs_MutexLock(mdns.mutex);
-    const int multicast_queries = mdns.queries;
-    NmosOs_MutexUnlock(mdns.mutex);
-    NmosOs_MutexLock(dns.mutex);
-    const int dns_queries = dns.queries;
-    NmosOs_MutexUnlock(dns.mutex);
-    CHECK_EQ(multicast_queries, 0);
+    NmosResponder Mdns;
+    REQUIRE(StartResponder(&Mdns, &RegistryB, 1, 1));
+    NmosResponder Dns;
+    REQUIRE(
+        StartResponderAs(&Dns, &RegistryB, 1, 1, "_nmos-query._tcp.studio.example", 1));
+    DtNmosDiscoveryConfig Config = ConfigFor(&Mdns, 200);
+    Config.Searches = DTNMOS_SEARCH_UNICAST;
+    Config.DnsServer = Dns.Destination;
+    Config.DnsDomain = "studio.example";
+    DtNmosRegistryList* List = NULL;
+    REQUIRE(DtNmos_Discover(&Config, &List) == DTNMOS_OK);
+    NmosOs_MutexLock(Mdns.Mutex);
+    const int MulticastQueries = Mdns.Queries;
+    NmosOs_MutexUnlock(Mdns.Mutex);
+    NmosOs_MutexLock(Dns.Mutex);
+    const int DnsQueries = Dns.Queries;
+    NmosOs_MutexUnlock(Dns.Mutex);
+    CHECK_EQ(MulticastQueries, 0);
     // It answered the first query at once, so that was sent once.
-    CHECK_EQ(dns_queries, 1);
-    REQUIRE(DtNmosRegistryList_Count(list) == 1);
-    CHECK_EQ(DtNmosRegistryList_At(list, 0)->FoundBy, DTNMOS_SEARCH_UNICAST);
-    DtNmosRegistryList_Free(list);
+    CHECK_EQ(DnsQueries, 1);
+    REQUIRE(DtNmosRegistryList_Count(List) == 1);
+    CHECK_EQ(DtNmosRegistryList_At(List, 0)->FoundBy, DTNMOS_SEARCH_UNICAST);
+    DtNmosRegistryList_Free(List);
 
     // Records of another domain than the one asked for are not taken.
-    config.DnsDomain = "elsewhere.example";
-    REQUIRE(DtNmos_Discover(&config, &list) == DTNMOS_OK);
-    CHECK_EQ(DtNmosRegistryList_Count(list), 0);
-    DtNmosRegistryList_Free(list);
-    stop_responder(&dns);
-    stop_responder(&mdns);
+    Config.DnsDomain = "elsewhere.example";
+    REQUIRE(DtNmos_Discover(&Config, &List) == DTNMOS_OK);
+    CHECK_EQ(DtNmosRegistryList_Count(List), 0);
+    DtNmosRegistryList_Free(List);
+    StopResponder(&Dns);
+    StopResponder(&Mdns);
 }

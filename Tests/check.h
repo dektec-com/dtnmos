@@ -12,16 +12,16 @@
 #include <string.h>
 
 // The number of checks that failed in the running test.
-extern int check_failures;
+extern int CheckFailures;
 
-void check_report(const char* file, int line, const char* expression);
+void CheckReport(const char* File, int Line, const char* Expression);
 
 #define CHECK(condition)                                                                 \
     do                                                                                   \
     {                                                                                    \
         if (!(condition))                                                                \
         {                                                                                \
-            check_report(__FILE__, __LINE__, #condition);                                \
+            CheckReport(__FILE__, __LINE__, #condition);                                 \
         }                                                                                \
     } while (0)
 
@@ -31,7 +31,7 @@ void check_report(const char* file, int line, const char* expression);
     {                                                                                    \
         if (!(condition))                                                                \
         {                                                                                \
-            check_report(__FILE__, __LINE__, #condition);                                \
+            CheckReport(__FILE__, __LINE__, #condition);                                 \
             return;                                                                      \
         }                                                                                \
     } while (0)
@@ -45,7 +45,7 @@ void check_report(const char* file, int line, const char* expression);
         {                                                                                \
             printf("  %s is %llu, expected %llu\n", #actual, check_actual,               \
                    check_expected);                                                      \
-            check_report(__FILE__, __LINE__, #actual " == " #expected);                  \
+            CheckReport(__FILE__, __LINE__, #actual " == " #expected);                   \
         }                                                                                \
     } while (0)
 
@@ -58,6 +58,6 @@ void check_report(const char* file, int line, const char* expression);
         {                                                                                \
             printf("  %s is \"%s\", expected \"%s\"\n", #actual, check_actual,           \
                    check_expected);                                                      \
-            check_report(__FILE__, __LINE__, #actual " == " #expected);                  \
+            CheckReport(__FILE__, __LINE__, #actual " == " #expected);                   \
         }                                                                                \
     } while (0)

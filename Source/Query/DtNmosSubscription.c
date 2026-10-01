@@ -19,19 +19,19 @@
 // and DtNmosSubscription_Close() empties it again.
 struct DtNmosSubscription
 {
-    int open;
-    DtNmosWebSocketTransport websocket;
-    void* connection;
-    char* url; // of the WebSocket
-    DtNmosChangeFunc on_change;
-    void* on_change_user;
+    int Open;
+    DtNmosWebSocketTransport Websocket;
+    void* Connection;
+    char* Url; // of the WebSocket
+    DtNmosChangeFunc OnChange;
+    void* OnChangeUser;
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosChangeKind_Name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* DtNmosChangeKind_Name(DtNmosChangeKind kind)
+const char* DtNmosChangeKind_Name(DtNmosChangeKind Kind)
 {
-    switch (kind)
+    switch (Kind)
     {
     case DTNMOS_CHANGE_PRESENT:
         return "present";
@@ -54,284 +54,283 @@ DtNmosSubscription* DtNmosSubscription_Alloc(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQuery* query,
-                                     const DtNmosSubscriptionConfig* config)
+DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* Subscription, DtNmosQuery* Query,
+                                     const DtNmosSubscriptionConfig* Config)
 {
-    if (subscription == NULL || config == NULL || config->ResourcePath == NULL ||
-        config->ResourcePath[0] != '/' || config->OnChange == NULL)
+    if (Subscription == NULL || Config == NULL || Config->ResourcePath == NULL ||
+        Config->ResourcePath[0] != '/' || Config->OnChange == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "A subscription needs a resource path such as \"/senders\" "
                               "and a function for the changes.");
     }
-    if (subscription->open)
+    if (Subscription->Open)
     {
         return NmosError_Fail(DTNMOS_E_STATE,
                               "The subscription is open already; close it first.");
     }
-    const DtNmosResult open = NmosQuery_CheckOpen(query, "DtNmosSubscription_Open");
-    if (open != DTNMOS_OK)
+    const DtNmosResult Open = NmosQuery_CheckOpen(Query, "DtNmosSubscription_Open");
+    if (Open != DTNMOS_OK)
     {
-        return open;
+        return Open;
     }
-    const DtNmosResult sized = DTNMOS_CHECK_SIZE(config, DtNmosSubscriptionConfig,
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(Config, DtNmosSubscriptionConfig,
                                                  sizeof(DtNmosSubscriptionConfig));
-    if (sized != DTNMOS_OK)
+    if (Sized != DTNMOS_OK)
     {
-        return sized;
+        return Sized;
     }
-    if (config->WebSocket != NULL)
+    if (Config->WebSocket != NULL)
     {
-        const DtNmosResult transport_sized =
-            DTNMOS_CHECK_SIZE(config->WebSocket, DtNmosWebSocketTransport,
+        const DtNmosResult TransportSized =
+            DTNMOS_CHECK_SIZE(Config->WebSocket, DtNmosWebSocketTransport,
                               sizeof(DtNmosWebSocketTransport));
-        if (transport_sized != DTNMOS_OK)
+        if (TransportSized != DTNMOS_OK)
         {
-            return transport_sized;
+            return TransportSized;
         }
     }
-    const DtNmosWebSocketTransport* websocket =
-        config->WebSocket != NULL ? config->WebSocket : DtNmos_CurlWebSocket();
-    const char* base = NmosQuery_Base(query);
+    const DtNmosWebSocketTransport* Websocket =
+        Config->WebSocket != NULL ? Config->WebSocket : DtNmos_CurlWebSocket();
+    const char* Base = NmosQuery_Base(Query);
 
     // Ask for the subscription: not persistent, so that it goes with its WebSocket, and
     // secure when the registry is asked over https.
-    NmosBuffer body;
-    memset(&body, 0, sizeof(body));
+    NmosBuffer Body;
+    memset(&Body, 0, sizeof(Body));
     NmosBuffer_Printf(
-        &body, "{\"max_update_rate_ms\": %u, \"resource_path\": ",
-        (unsigned)(config->MaxUpdateRateMs == 0 ? 100 : config->MaxUpdateRateMs));
-    NmosJson_WriteString(&body, config->ResourcePath);
-    NmosBuffer_Printf(&body, ", \"params\": {}, \"persist\": false, \"secure\": %s}",
-                      strncmp(base, "https:", 6) == 0 ? "true" : "false");
-    NmosBuffer url;
-    memset(&url, 0, sizeof(url));
-    NmosBuffer_Printf(&url, "%ssubscriptions", base);
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
-    DtNmosResult result = DTNMOS_OK;
-    if (body.failed || url.failed || response == NULL)
+        &Body, "{\"max_update_rate_ms\": %u, \"resource_path\": ",
+        (unsigned)(Config->MaxUpdateRateMs == 0 ? 100 : Config->MaxUpdateRateMs));
+    NmosJson_WriteString(&Body, Config->ResourcePath);
+    NmosBuffer_Printf(&Body, ", \"params\": {}, \"persist\": false, \"secure\": %s}",
+                      strncmp(Base, "https:", 6) == 0 ? "true" : "false");
+    NmosBuffer Url;
+    memset(&Url, 0, sizeof(Url));
+    NmosBuffer_Printf(&Url, "%ssubscriptions", Base);
+    DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+    DtNmosResult Result = DTNMOS_OK;
+    if (Body.Failed || Url.Failed || Response == NULL)
     {
-        result = NmosError_FailMemory();
+        Result = NmosError_FailMemory();
     }
     else
     {
-        result = NmosQuery_Request(query, "POST", url.data, "application/json", body.data,
-                                   body.length, response);
+        Result = NmosQuery_Request(Query, "POST", Url.Data, "application/json", Body.Data,
+                                   Body.Length, Response);
     }
-    NmosJson* answer = NULL;
-    if (result == DTNMOS_OK)
+    NmosJson* Answer = NULL;
+    if (Result == DTNMOS_OK)
     {
-        const int status = DtNmosHttpResponse_Status(response);
-        size_t length = 0;
-        const char* text = DtNmosHttpResponse_Body(response, &length);
-        if (status != 200 && status != 201)
+        const int Status = DtNmosHttpResponse_Status(Response);
+        size_t Length = 0;
+        const char* Text = DtNmosHttpResponse_Body(Response, &Length);
+        if (Status != 200 && Status != 201)
         {
-            result = NmosError_Fail(
+            Result = NmosError_Fail(
                 DTNMOS_E_HTTP, "The registry answered the subscription to %s with %d.",
-                config->ResourcePath, status);
+                Config->ResourcePath, Status);
         }
-        else if (NmosJson_Parse(text, length, &answer) != DTNMOS_OK ||
-                 NmosJson_MemberText(answer, "ws_href") == NULL)
+        else if (NmosJson_Parse(Text, Length, &Answer) != DTNMOS_OK ||
+                 NmosJson_MemberText(Answer, "ws_href") == NULL)
         {
-            result =
+            Result =
                 NmosError_Fail(DTNMOS_E_PARSE,
                                "The registry answered the subscription to %s without "
                                "the ws_href of its WebSocket.",
-                               config->ResourcePath);
+                               Config->ResourcePath);
         }
     }
-    DtNmosSubscription* made = NULL;
-    if (result == DTNMOS_OK)
+    DtNmosSubscription* Made = NULL;
+    if (Result == DTNMOS_OK)
     {
-        const char* href = NmosJson_MemberText(answer, "ws_href");
-        made = subscription;
-        const size_t length = strlen(href);
-        if ((made->url = malloc(length + 1)) == NULL)
+        const char* Href = NmosJson_MemberText(Answer, "ws_href");
+        Made = Subscription;
+        const size_t Length = strlen(Href);
+        if ((Made->Url = malloc(Length + 1)) == NULL)
         {
-            result = NmosError_FailMemory();
+            Result = NmosError_FailMemory();
         }
         else
         {
-            memcpy(made->url, href, length + 1);
-            made->websocket = *websocket;
-            made->on_change = config->OnChange;
-            made->on_change_user = config->OnChangeUser;
-            result = websocket->Connect(websocket->User, made->url,
-                                        NmosQuery_Timeout(query), &made->connection);
+            memcpy(Made->Url, Href, Length + 1);
+            Made->Websocket = *Websocket;
+            Made->OnChange = Config->OnChange;
+            Made->OnChangeUser = Config->OnChangeUser;
+            Result = Websocket->Connect(Websocket->User, Made->Url,
+                                        NmosQuery_Timeout(Query), &Made->Connection);
         }
     }
-    NmosJson_Free(answer);
-    DtNmosHttpResponse_Free(response);
-    NmosBuffer_Free(&url);
-    NmosBuffer_Free(&body);
-    if (result != DTNMOS_OK)
+    NmosJson_Free(Answer);
+    DtNmosHttpResponse_Free(Response);
+    NmosBuffer_Free(&Url);
+    NmosBuffer_Free(&Body);
+    if (Result != DTNMOS_OK)
     {
-        if (made != NULL)
+        if (Made != NULL)
         {
-            free(made->url);
-            memset(made, 0, sizeof(*made));
+            free(Made->Url);
+            memset(Made, 0, sizeof(*Made));
         }
-        return result;
+        return Result;
     }
-    made->open = 1;
+    Made->Open = 1;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- report_change -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReportChange -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reports one item of the data of a grain, {"path", "pre", "post"}; an item with neither
 // is skipped.
 //
-static DtNmosResult report_change(DtNmosSubscription* subscription, const NmosJson* item)
+static DtNmosResult ReportChange(DtNmosSubscription* Subscription, const NmosJson* Item)
 {
-    const NmosJson* pre = NmosJson_Member(item, "pre");
-    const NmosJson* post = NmosJson_Member(item, "post");
-    const int has_pre = pre != NULL && pre->type == DTNMOS_JSON_OBJECT;
-    const int has_post = post != NULL && post->type == DTNMOS_JSON_OBJECT;
-    if (!has_pre && !has_post)
+    const NmosJson* Pre = NmosJson_Member(Item, "pre");
+    const NmosJson* Post = NmosJson_Member(Item, "post");
+    const int HasPre = Pre != NULL && Pre->Type == DTNMOS_JSON_OBJECT;
+    const int HasPost = Post != NULL && Post->Type == DTNMOS_JSON_OBJECT;
+    if (!HasPre && !HasPost)
     {
         return DTNMOS_OK;
     }
-    NmosBuffer before;
-    NmosBuffer after;
-    memset(&before, 0, sizeof(before));
-    memset(&after, 0, sizeof(after));
-    if (has_pre)
+    NmosBuffer Before;
+    NmosBuffer After;
+    memset(&Before, 0, sizeof(Before));
+    memset(&After, 0, sizeof(After));
+    if (HasPre)
     {
-        NmosJson_Write(&before, pre);
+        NmosJson_Write(&Before, Pre);
     }
-    if (has_post)
+    if (HasPost)
     {
-        NmosJson_Write(&after, post);
+        NmosJson_Write(&After, Post);
     }
-    if (before.failed || after.failed)
+    if (Before.Failed || After.Failed)
     {
-        NmosBuffer_Free(&before);
-        NmosBuffer_Free(&after);
+        NmosBuffer_Free(&Before);
+        NmosBuffer_Free(&After);
         return NmosError_FailMemory();
     }
-    DtNmosChange change;
-    memset(&change, 0, sizeof(change));
-    const char* path = NmosJson_MemberText(item, "path");
-    change.Id = path != NULL ? path : "";
-    change.Pre = has_pre ? before.data : NULL;
-    change.PreLength = has_pre ? before.length : 0;
-    change.Post = has_post ? after.data : NULL;
-    change.PostLength = has_post ? after.length : 0;
-    if (has_pre && has_post)
+    DtNmosChange Change;
+    memset(&Change, 0, sizeof(Change));
+    const char* Path = NmosJson_MemberText(Item, "path");
+    Change.Id = Path != NULL ? Path : "";
+    Change.Pre = HasPre ? Before.Data : NULL;
+    Change.PreLength = HasPre ? Before.Length : 0;
+    Change.Post = HasPost ? After.Data : NULL;
+    Change.PostLength = HasPost ? After.Length : 0;
+    if (HasPre && HasPost)
     {
         // The first message gives each resource as it is, before and after the same.
-        change.Kind = before.length == after.length &&
-                              memcmp(before.data, after.data, before.length) == 0
+        Change.Kind = Before.Length == After.Length &&
+                              memcmp(Before.Data, After.Data, Before.Length) == 0
                           ? DTNMOS_CHANGE_PRESENT
                           : DTNMOS_CHANGE_MODIFIED;
     }
     else
     {
-        change.Kind = has_post ? DTNMOS_CHANGE_ADDED : DTNMOS_CHANGE_REMOVED;
+        Change.Kind = HasPost ? DTNMOS_CHANGE_ADDED : DTNMOS_CHANGE_REMOVED;
     }
-    subscription->on_change(subscription->on_change_user, &change);
-    NmosBuffer_Free(&before);
-    NmosBuffer_Free(&after);
+    Subscription->OnChange(Subscription->OnChangeUser, &Change);
+    NmosBuffer_Free(&Before);
+    NmosBuffer_Free(&After);
     return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
-                                     uint32_t timeout_ms)
+DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* Subscription, uint32_t TimeoutMs)
 {
-    if (subscription == NULL)
+    if (Subscription == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmosSubscription_Poll() needs a subscription.");
     }
-    if (!subscription->open)
+    if (!Subscription->Open)
     {
         return NmosError_Fail(DTNMOS_E_STATE,
                               "DtNmosSubscription_Poll() needs an open subscription.");
     }
-    const char* message = NULL;
-    size_t length = 0;
-    DtNmosResult result = subscription->websocket.Receive(subscription->websocket.User,
-                                                          subscription->connection,
-                                                          timeout_ms, &message, &length);
-    if (result != DTNMOS_OK)
+    const char* Message = NULL;
+    size_t Length = 0;
+    DtNmosResult Result = Subscription->Websocket.Receive(Subscription->Websocket.User,
+                                                          Subscription->Connection,
+                                                          TimeoutMs, &Message, &Length);
+    if (Result != DTNMOS_OK)
     {
-        return result;
+        return Result;
     }
     // A grain: {"grain_type": "event", ..., "grain": {"topic": "/senders/",
     // "data": [{"path": ..., "pre": ..., "post": ...}]}}.
-    NmosJson* json = NULL;
-    const NmosJson* data = NULL;
-    if (NmosJson_Parse(message, length, &json) == DTNMOS_OK)
+    NmosJson* Json = NULL;
+    const NmosJson* Data = NULL;
+    if (NmosJson_Parse(Message, Length, &Json) == DTNMOS_OK)
     {
-        data = NmosJson_Member(NmosJson_Member(json, "grain"), "data");
+        Data = NmosJson_Member(NmosJson_Member(Json, "grain"), "data");
     }
-    if (data == NULL || data->type != DTNMOS_JSON_ARRAY)
+    if (Data == NULL || Data->Type != DTNMOS_JSON_ARRAY)
     {
-        NmosJson_Free(json);
+        NmosJson_Free(Json);
         return NmosError_Fail(DTNMOS_E_PARSE,
                               "A message of the WebSocket %s is no grain with data.",
-                              subscription->url);
+                              Subscription->Url);
     }
-    for (size_t i = 0; result == DTNMOS_OK && i < data->count; ++i)
+    for (size_t i = 0; Result == DTNMOS_OK && i < Data->Count; ++i)
     {
-        result = report_change(subscription, &data->items[i]);
+        Result = ReportChange(Subscription, &Data->Items[i]);
     }
-    NmosJson_Free(json);
-    return result;
+    NmosJson_Free(Json);
+    return Result;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const char* DtNmosSubscription_Url(const DtNmosSubscription* subscription)
+const char* DtNmosSubscription_Url(const DtNmosSubscription* Subscription)
 {
-    return subscription == NULL || !subscription->open ? "" : subscription->url;
+    return Subscription == NULL || !Subscription->Open ? "" : Subscription->Url;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosSubscription_Close(DtNmosSubscription* subscription)
+DtNmosResult DtNmosSubscription_Close(DtNmosSubscription* Subscription)
 {
-    if (subscription == NULL)
+    if (Subscription == NULL)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmosSubscription_Close() needs a subscription.");
     }
-    if (!subscription->open)
+    if (!Subscription->Open)
     {
         return NmosError_Fail(DTNMOS_E_STATE,
                               "DtNmosSubscription_Close() needs an open subscription.");
     }
-    subscription->websocket.Close(subscription->websocket.User, subscription->connection);
-    free(subscription->url);
-    memset(subscription, 0, sizeof(*subscription));
+    Subscription->Websocket.Close(Subscription->Websocket.User, Subscription->Connection);
+    free(Subscription->Url);
+    memset(Subscription, 0, sizeof(*Subscription));
     return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void DtNmosSubscription_Free(DtNmosSubscription* subscription)
+void DtNmosSubscription_Free(DtNmosSubscription* Subscription)
 {
-    if (subscription == NULL)
+    if (Subscription == NULL)
     {
         return;
     }
-    if (subscription->open)
+    if (Subscription->Open)
     {
-        DtNmosSubscription_Close(subscription);
+        DtNmosSubscription_Close(Subscription);
     }
-    free(subscription);
+    free(Subscription);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosSubscription_Freep(DtNmosSubscription** subscription)
+void DtNmosSubscription_Freep(DtNmosSubscription** Subscription)
 {
-    if (subscription != NULL)
+    if (Subscription != NULL)
     {
-        DtNmosSubscription_Free(*subscription);
-        *subscription = NULL;
+        DtNmosSubscription_Free(*Subscription);
+        *Subscription = NULL;
     }
 }

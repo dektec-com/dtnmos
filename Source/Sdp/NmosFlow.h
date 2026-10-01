@@ -14,10 +14,10 @@
 // Makes target a copy of source whose strings and arrays without a fixed size,
 // ChannelOrder, Fmtp, DidSdid and RefClock.Text, are copies owned by store. Leaves target
 // as it was when the memory runs out.
-DtNmosResult NmosFlow_Copy(DtNmosFlow* target, NmosStore* store,
-                           const DtNmosFlow* source);
+DtNmosResult NmosFlow_Copy(DtNmosFlow* Target, NmosStore* Store,
+                           const DtNmosFlow* Source);
 
 // Writes the SDP of session with the count flows of flows into text, as
 // DtNmosSdp_Write() does into the caller's buffer.
-DtNmosResult NmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flows,
-                           size_t count, NmosBuffer* text);
+DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows,
+                           size_t Count, NmosBuffer* Text);

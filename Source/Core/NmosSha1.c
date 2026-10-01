@@ -10,32 +10,32 @@
 
 #include "NmosInternal.h"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- rotate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Rotate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static uint32_t rotate(uint32_t value, int bits)
+static uint32_t Rotate(uint32_t Value, int Bits)
 {
-    return (value << bits) | (value >> (32 - bits));
+    return (Value << Bits) | (Value >> (32 - Bits));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- process -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Process -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void process(NmosSha1* sha1, const uint8_t block[64])
+static void Process(NmosSha1* Sha1, const uint8_t Block[64])
 {
     uint32_t w[80];
     for (int i = 0; i < 16; ++i)
     {
-        w[i] = (uint32_t)block[4 * i] << 24 | (uint32_t)block[4 * i + 1] << 16 |
-               (uint32_t)block[4 * i + 2] << 8 | (uint32_t)block[4 * i + 3];
+        w[i] = (uint32_t)Block[4 * i] << 24 | (uint32_t)Block[4 * i + 1] << 16 |
+               (uint32_t)Block[4 * i + 2] << 8 | (uint32_t)Block[4 * i + 3];
     }
     for (int i = 16; i < 80; ++i)
     {
-        w[i] = rotate(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+        w[i] = Rotate(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
     }
-    uint32_t a = sha1->state[0];
-    uint32_t b = sha1->state[1];
-    uint32_t c = sha1->state[2];
-    uint32_t d = sha1->state[3];
-    uint32_t e = sha1->state[4];
+    uint32_t a = Sha1->State[0];
+    uint32_t b = Sha1->State[1];
+    uint32_t c = Sha1->State[2];
+    uint32_t d = Sha1->State[3];
+    uint32_t e = Sha1->State[4];
     for (int i = 0; i < 80; ++i)
     {
         uint32_t f = 0;
@@ -60,80 +60,80 @@ static void process(NmosSha1* sha1, const uint8_t block[64])
             f = b ^ c ^ d;
             k = 0xCA62C1D6u;
         }
-        const uint32_t next = rotate(a, 5) + f + e + k + w[i];
+        const uint32_t Next = Rotate(a, 5) + f + e + k + w[i];
         e = d;
         d = c;
-        c = rotate(b, 30);
+        c = Rotate(b, 30);
         b = a;
-        a = next;
+        a = Next;
     }
-    sha1->state[0] += a;
-    sha1->state[1] += b;
-    sha1->state[2] += c;
-    sha1->state[3] += d;
-    sha1->state[4] += e;
+    Sha1->State[0] += a;
+    Sha1->State[1] += b;
+    Sha1->State[2] += c;
+    Sha1->State[3] += d;
+    Sha1->State[4] += e;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Init -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosSha1_Init(NmosSha1* sha1)
+void NmosSha1_Init(NmosSha1* Sha1)
 {
-    memset(sha1, 0, sizeof(*sha1));
-    sha1->state[0] = 0x67452301u;
-    sha1->state[1] = 0xEFCDAB89u;
-    sha1->state[2] = 0x98BADCFEu;
-    sha1->state[3] = 0x10325476u;
-    sha1->state[4] = 0xC3D2E1F0u;
+    memset(Sha1, 0, sizeof(*Sha1));
+    Sha1->State[0] = 0x67452301u;
+    Sha1->State[1] = 0xEFCDAB89u;
+    Sha1->State[2] = 0x98BADCFEu;
+    Sha1->State[3] = 0x10325476u;
+    Sha1->State[4] = 0xC3D2E1F0u;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Update -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosSha1_Update(NmosSha1* sha1, const void* data, size_t length)
+void NmosSha1_Update(NmosSha1* Sha1, const void* Data, size_t Length)
 {
-    const uint8_t* bytes = data;
-    sha1->length += length;
-    while (length > 0)
+    const uint8_t* Bytes = Data;
+    Sha1->Length += Length;
+    while (Length > 0)
     {
-        size_t take = 64 - sha1->used;
-        if (take > length)
+        size_t Take = 64 - Sha1->Used;
+        if (Take > Length)
         {
-            take = length;
+            Take = Length;
         }
-        memcpy(sha1->block + sha1->used, bytes, take);
-        sha1->used += take;
-        bytes += take;
-        length -= take;
-        if (sha1->used == 64)
+        memcpy(Sha1->Block + Sha1->Used, Bytes, Take);
+        Sha1->Used += Take;
+        Bytes += Take;
+        Length -= Take;
+        if (Sha1->Used == 64)
         {
-            process(sha1, sha1->block);
-            sha1->used = 0;
+            Process(Sha1, Sha1->Block);
+            Sha1->Used = 0;
         }
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSha1_Final -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosSha1_Final(NmosSha1* sha1, uint8_t digest[20])
+void NmosSha1_Final(NmosSha1* Sha1, uint8_t Digest[20])
 {
-    const uint64_t bits = sha1->length * 8;
-    const uint8_t one = 0x80;
-    const uint8_t zero = 0;
-    NmosSha1_Update(sha1, &one, 1);
-    while (sha1->used != 56)
+    const uint64_t Bits = Sha1->Length * 8;
+    const uint8_t One = 0x80;
+    const uint8_t Zero = 0;
+    NmosSha1_Update(Sha1, &One, 1);
+    while (Sha1->Used != 56)
     {
-        NmosSha1_Update(sha1, &zero, 1);
+        NmosSha1_Update(Sha1, &Zero, 1);
     }
-    uint8_t length[8];
+    uint8_t Length[8];
     for (int i = 0; i < 8; ++i)
     {
-        length[i] = (uint8_t)(bits >> (56 - 8 * i));
+        Length[i] = (uint8_t)(Bits >> (56 - 8 * i));
     }
-    NmosSha1_Update(sha1, length, 8);
+    NmosSha1_Update(Sha1, Length, 8);
     for (int i = 0; i < 5; ++i)
     {
-        digest[4 * i] = (uint8_t)(sha1->state[i] >> 24);
-        digest[4 * i + 1] = (uint8_t)(sha1->state[i] >> 16);
-        digest[4 * i + 2] = (uint8_t)(sha1->state[i] >> 8);
-        digest[4 * i + 3] = (uint8_t)sha1->state[i];
+        Digest[4 * i] = (uint8_t)(Sha1->State[i] >> 24);
+        Digest[4 * i + 1] = (uint8_t)(Sha1->State[i] >> 16);
+        Digest[4 * i + 2] = (uint8_t)(Sha1->State[i] >> 8);
+        Digest[4 * i + 3] = (uint8_t)Sha1->State[i];
     }
 }

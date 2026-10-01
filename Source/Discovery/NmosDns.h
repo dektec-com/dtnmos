@@ -31,25 +31,25 @@ enum
 typedef struct NmosDnsQuestion
 {
     const char* name;
-    uint16_t type;
+    uint16_t Type;
 } NmosDnsQuestion;
 
 // Writes a query with id, flags and count questions into buffer; returns its length, or
 // 0 when it does not fit or a name is not valid.
-size_t NmosDns_WriteQuery(uint8_t* buffer, size_t size, uint16_t id, uint16_t flags,
-                          const NmosDnsQuestion* questions, size_t count);
+size_t NmosDns_WriteQuery(uint8_t* Buffer, size_t Size, uint16_t Id, uint16_t Flags,
+                          const NmosDnsQuestion* Questions, size_t Count);
 
 // Reads the ID and the response code (RCODE) of the header of a message; returns 0 when
 // it is shorter than a header.
-int NmosDns_ReadHeader(const uint8_t* message, size_t length, uint16_t* id,
-                       unsigned* rcode);
+int NmosDns_ReadHeader(const uint8_t* Message, size_t Length, uint16_t* Id,
+                       unsigned* Rcode);
 
 // Reads the text of a resolv.conf: the first IPv4 address of a nameserver line into
 // server, and the first domain of the last search or domain line into domain, as the
 // resolver takes them. Each is left empty when the text has none, or when it does not
 // fit.
-void NmosDns_ReadResolvConf(const char* text, char* server, size_t server_size,
-                            char* domain, size_t domain_size);
+void NmosDns_ReadResolvConf(const char* Text, char* Server, size_t ServerSize,
+                            char* Domain, size_t DomainSize);
 
 // A record of a message. Names are text without the final dot, a dot or backslash within
 // a label written as "\." or "\\", as NmosDns_WriteQuery() takes them. What a type
@@ -57,29 +57,29 @@ void NmosDns_ReadResolvConf(const char* text, char* server, size_t server_size,
 typedef struct NmosDnsRecord
 {
     char name[DTNMOS_DNS_NAME_SIZE];
-    uint16_t type;
-    uint32_t ttl;
-    char target[DTNMOS_DNS_NAME_SIZE]; // of a PTR or SRV record
-    uint16_t priority;                 // of an SRV record
-    uint16_t weight;
-    uint16_t port;
-    uint8_t address[4]; // of an A record
-    const uint8_t* txt; // of a TXT record: its data, within the message
-    size_t txt_length;
+    uint16_t Type;
+    uint32_t Ttl;
+    char Target[DTNMOS_DNS_NAME_SIZE]; // of a PTR or SRV record
+    uint16_t Priority;                 // of an SRV record
+    uint16_t Weight;
+    uint16_t Port;
+    uint8_t Address[4]; // of an A record
+    const uint8_t* Txt; // of a TXT record: its data, within the message
+    size_t TxtLength;
 } NmosDnsRecord;
 
-// Reads a response of length bytes and calls record() for each record of its answer,
-// authority and additional sections, of any type. Returns 0, having called record() for
+// Reads a response of length bytes and calls Record() for each record of its answer,
+// authority and additional sections, of any type. Returns 0, having called Record() for
 // the records before, when the message is no response or is malformed.
-int NmosDns_ReadResponse(const uint8_t* message, size_t length,
-                         void (*record)(void* user, const NmosDnsRecord* found),
-                         void* user);
+int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
+                         void (*Record)(void* User, const NmosDnsRecord* Found),
+                         void* User);
 
 // Writes the value of key in the data of a TXT record into value; returns 0 when the
 // record has no such key, or when the value does not fit. Keys compare without regard
 // to case; a key without "=" has an empty value.
-int NmosDns_TxtValue(const uint8_t* txt, size_t length, const char* key, char* value,
-                     size_t size);
+int NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* Value,
+                     size_t Size);
 
 // Whether two names are equal, comparing ASCII letters without regard to case.
 int NmosDns_SameName(const char* a, const char* b);

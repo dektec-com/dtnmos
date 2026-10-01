@@ -22,57 +22,57 @@
 // A request the fake registry received.
 typedef struct NmosRecorded
 {
-    char method[8];
-    char url[256];
-    char type[16]; // of a registration: the type of its resource
+    char Method[8];
+    char Url[256];
+    char Type[16]; // of a registration: the type of its resource
 } NmosRecorded;
 
 typedef struct NmosFakeRegistration
 {
-    NmosRecorded requests[64];
-    int count;
-    int heartbeat_status;
-    const char* unreachable; // a request to a URL that holds it gets no answer
+    NmosRecorded Requests[64];
+    int Count;
+    int HeartbeatStatus;
+    const char* Unreachable; // a request to a URL that holds it gets no answer
 } NmosFakeRegistration;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- record_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RecordHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static DtNmosResult record_http(void* user, const DtNmosHttpRequest* request,
-                                DtNmosHttpResponse* response)
+static DtNmosResult RecordHttp(void* User, const DtNmosHttpRequest* Request,
+                               DtNmosHttpResponse* Response)
 {
-    NmosFakeRegistration* registry = user;
-    NmosRecorded* r = &registry->requests[registry->count < 64 ? registry->count++ : 63];
+    NmosFakeRegistration* Registry = User;
+    NmosRecorded* r = &Registry->Requests[Registry->Count < 64 ? Registry->Count++ : 63];
     memset(r, 0, sizeof(*r));
-    snprintf(r->method, sizeof(r->method), "%s", request->Method);
-    snprintf(r->url, sizeof(r->url), "%s", request->Url);
-    if (registry->unreachable != NULL &&
-        strstr(request->Url, registry->unreachable) != NULL)
+    snprintf(r->Method, sizeof(r->Method), "%s", Request->Method);
+    snprintf(r->Url, sizeof(r->Url), "%s", Request->Url);
+    if (Registry->Unreachable != NULL &&
+        strstr(Request->Url, Registry->Unreachable) != NULL)
     {
-        return NmosError_Fail(DTNMOS_E_HTTP, "%s did not answer.", request->Url);
+        return NmosError_Fail(DTNMOS_E_HTTP, "%s did not answer.", Request->Url);
     }
-    int status = 404;
-    if (strstr(request->Url, "/x-nmos/registration/v1.3/resource") != NULL &&
-        strcmp(request->Method, "POST") == 0)
+    int Status = 404;
+    if (strstr(Request->Url, "/x-nmos/registration/v1.3/resource") != NULL &&
+        strcmp(Request->Method, "POST") == 0)
     {
-        NmosJson* json = NULL;
-        if (NmosJson_Parse(request->Body, request->BodyLength, &json) == DTNMOS_OK)
+        NmosJson* Json = NULL;
+        if (NmosJson_Parse(Request->Body, Request->BodyLength, &Json) == DTNMOS_OK)
         {
-            const char* type = NmosJson_MemberText(json, "type");
-            snprintf(r->type, sizeof(r->type), "%s", type == NULL ? "?" : type);
-            CHECK(NmosJson_Member(json, "data") != NULL);
-            NmosJson_Free(json);
+            const char* Type = NmosJson_MemberText(Json, "type");
+            snprintf(r->Type, sizeof(r->Type), "%s", Type == NULL ? "?" : Type);
+            CHECK(NmosJson_Member(Json, "data") != NULL);
+            NmosJson_Free(Json);
         }
-        status = 201;
+        Status = 201;
     }
-    else if (strstr(request->Url, "/health/nodes/") != NULL)
+    else if (strstr(Request->Url, "/health/nodes/") != NULL)
     {
-        status = registry->heartbeat_status;
+        Status = Registry->HeartbeatStatus;
     }
-    else if (strcmp(request->Method, "DELETE") == 0)
+    else if (strcmp(Request->Method, "DELETE") == 0)
     {
-        status = 204;
+        Status = 204;
     }
-    DtNmosHttpResponse_SetStatus(response, status);
+    DtNmosHttpResponse_SetStatus(Response, Status);
     return DTNMOS_OK;
 }
 
@@ -81,200 +81,200 @@ static DtNmosResult record_http(void* user, const DtNmosHttpRequest* request,
 #define SENDER_ID "aaaaaaaa-0000-4000-8000-000000000003"
 #define RECEIVER_ID "aaaaaaaa-0000-4000-8000-000000000004"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_node -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MakeNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Makes a node with a device, a video sender and an audio receiver.
 //
-static DtNmosNode* make_node(NmosFakeRegistration* registry, const char* host,
-                             uint16_t port, DtNmosHttpFunc http)
+static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
+                            uint16_t Port, DtNmosHttpFunc Http)
 {
-    DtNmosNodeConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.Id = (DtNmosId){NODE_ID};
-    config.Label = "test node";
-    config.Hostname = "test-host";
-    config.ApiHost = host;
-    config.ApiPort = port;
-    config.RegistrationUrl = "http://registry.test/";
-    config.Http = http;
-    config.HttpUser = registry;
-    config.HeartbeatMs = 1;
-    DtNmosNode* node = DtNmosNode_Alloc();
-    if (node == NULL || DtNmosNode_Open(node, &config) != DTNMOS_OK)
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){NODE_ID};
+    Config.Label = "test node";
+    Config.Hostname = "test-host";
+    Config.ApiHost = Host;
+    Config.ApiPort = Port;
+    Config.RegistrationUrl = "http://registry.test/";
+    Config.Http = Http;
+    Config.HttpUser = Registry;
+    Config.HeartbeatMs = 1;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    if (Node == NULL || DtNmosNode_Open(Node, &Config) != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
-        DtNmosNode_Free(node);
+        DtNmosNode_Free(Node);
         return NULL;
     }
-    DtNmosDeviceConfig device = {sizeof(device), {DEVICE_ID}, "a card", "its port 1"};
-    CHECK(DtNmosNode_AddDevice(node, &device) == DTNMOS_OK);
-    DtNmosFlow flow = {0};
-    flow.Size = sizeof(flow);
-    flow.Media = DTNMOS_MEDIA_VIDEO;
-    snprintf(flow.DestinationIp, sizeof(flow.DestinationIp), "%s", "239.0.0.1");
-    flow.DestinationPort = 5004;
-    flow.PayloadType = 96;
-    flow.ClockRate = 90000;
-    flow.Format.Video.Width = 1920;
-    flow.Format.Video.Height = 1080;
-    flow.Format.Video.RateNumerator = 25;
-    flow.Format.Video.RateDenominator = 1;
-    flow.Format.Video.Interlaced = 1;
-    flow.Format.Video.Depth = 10;
-    snprintf(flow.Format.Video.Sampling, sizeof(flow.Format.Video.Sampling), "%s",
+    DtNmosDeviceConfig Device = {sizeof(Device), {DEVICE_ID}, "a card", "its port 1"};
+    CHECK(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_OK);
+    DtNmosFlow Flow = {0};
+    Flow.Size = sizeof(Flow);
+    Flow.Media = DTNMOS_MEDIA_VIDEO;
+    snprintf(Flow.DestinationIp, sizeof(Flow.DestinationIp), "%s", "239.0.0.1");
+    Flow.DestinationPort = 5004;
+    Flow.PayloadType = 96;
+    Flow.ClockRate = 90000;
+    Flow.Format.Video.Width = 1920;
+    Flow.Format.Video.Height = 1080;
+    Flow.Format.Video.RateNumerator = 25;
+    Flow.Format.Video.RateDenominator = 1;
+    Flow.Format.Video.Interlaced = 1;
+    Flow.Format.Video.Depth = 10;
+    snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
              "YCbCr-4:2:2");
-    DtNmosSenderConfig sender = {sizeof(sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
-                                 &flow,          "192.168.1.5"};
-    CHECK(DtNmosNode_AddSender(node, &sender, NULL, NULL) == DTNMOS_OK);
-    DtNmosReceiverConfig receiver = {
-        sizeof(receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
-    CHECK(DtNmosNode_AddReceiver(node, &receiver, NULL, NULL) == DTNMOS_OK);
-    return node;
+    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
+                                 &Flow,          "192.168.1.5"};
+    CHECK(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
+    DtNmosReceiverConfig Receiver = {
+        sizeof(Receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
+    CHECK(DtNmosNode_AddReceiver(Node, &Receiver, NULL, NULL) == DTNMOS_OK);
+    return Node;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- node_registers_parents_before_children -.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void node_registers_parents_before_children(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
-    DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
-    REQUIRE(node != NULL);
-    CHECK(!DtNmosNode_IsRegistered(node));
-    uint32_t next_ms = 0;
-    REQUIRE(DtNmosNode_Poll(node, &next_ms) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(node));
-    const char* const order[] = {"node", "device", "source",
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    REQUIRE(Node != NULL);
+    CHECK(!DtNmosNode_IsRegistered(Node));
+    uint32_t NextMs = 0;
+    REQUIRE(DtNmosNode_Poll(Node, &NextMs) == DTNMOS_OK);
+    CHECK(DtNmosNode_IsRegistered(Node));
+    const char* const Order[] = {"node", "device", "source",
                                  "flow", "sender", "receiver"};
-    REQUIRE(registry.count >= 6);
+    REQUIRE(Registry.Count >= 6);
     for (int i = 0; i < 6; ++i)
     {
-        CHECK_STR(registry.requests[i].type, order[i]);
-        CHECK_STR(registry.requests[i].url,
+        CHECK_STR(Registry.Requests[i].Type, Order[i]);
+        CHECK_STR(Registry.Requests[i].Url,
                   "http://registry.test/x-nmos/registration/v1.3/resource");
     }
     // Adding an ID twice, or a sender to a device the node lacks, fails.
-    DtNmosDeviceConfig twice = {sizeof(twice), {DEVICE_ID}, "again", ""};
-    CHECK(DtNmosNode_AddDevice(node, &twice) == DTNMOS_E_INVALID_ARGUMENT);
-    DtNmosReceiverConfig orphan = {sizeof(orphan),
+    DtNmosDeviceConfig Twice = {sizeof(Twice), {DEVICE_ID}, "again", ""};
+    CHECK(DtNmosNode_AddDevice(Node, &Twice) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosReceiverConfig Orphan = {sizeof(Orphan),
                                    {"aaaaaaaa-0000-4000-8000-00000000000f"},
                                    {"aaaaaaaa-0000-4000-8000-00000000000e"},
                                    "x",
                                    "",
                                    DTNMOS_MEDIA_VIDEO};
-    CHECK(DtNmosNode_AddReceiver(node, &orphan, NULL, NULL) == DTNMOS_E_INVALID_ARGUMENT);
-    DtNmosNode_Free(node);
+    CHECK(DtNmosNode_AddReceiver(Node, &Orphan, NULL, NULL) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosNode_Free(Node);
 }
 
 // .-.-.-.-.-.-.-.-.- node_registers_again_when_the_registry_lost_it -.-.-.-.-.-.-.-.-.-.-
 //
 void node_registers_again_when_the_registry_lost_it(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
-    DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
-    REQUIRE(node != NULL);
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    const int registered = registry.count;
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    REQUIRE(Node != NULL);
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    const int Registered = Registry.Count;
     // A heartbeat the registry answers with 404 means it lost the node. The wait is
     // longer than a tick of the clock of Windows, about 16 ms, so that the heartbeat is
     // due.
     NmosOs_SleepMs(40);
-    registry.heartbeat_status = 404;
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK(strstr(registry.requests[registered].url, "/health/nodes/" NODE_ID) != NULL);
-    CHECK(!DtNmosNode_IsRegistered(node));
-    registry.heartbeat_status = 200;
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(node));
-    CHECK_STR(registry.requests[registered + 1].type, "node");
-    CHECK_STR(registry.requests[registered + 6].type, "receiver");
-    DtNmosNode_Free(node);
+    Registry.HeartbeatStatus = 404;
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK(strstr(Registry.Requests[Registered].Url, "/health/nodes/" NODE_ID) != NULL);
+    CHECK(!DtNmosNode_IsRegistered(Node));
+    Registry.HeartbeatStatus = 200;
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_IsRegistered(Node));
+    CHECK_STR(Registry.Requests[Registered + 1].Type, "node");
+    CHECK_STR(Registry.Requests[Registered + 6].Type, "receiver");
+    DtNmosNode_Free(Node);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- node_is_opened_closed_and_opened_again -.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void node_is_opened_closed_and_opened_again(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
-    DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
-    REQUIRE(node != NULL);
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(node));
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    REQUIRE(Node != NULL);
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_IsRegistered(Node));
 
     // Closing deletes what the node registered, and leaves it closed.
-    const int registered = registry.count;
-    REQUIRE(DtNmosNode_Close(node) == DTNMOS_OK);
-    CHECK(registry.count > registered);
-    CHECK(!DtNmosNode_IsRegistered(node));
-    CHECK_EQ(DtNmosNode_ApiPort(node), 0);
-    CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_E_STATE);
+    const int Registered = Registry.Count;
+    REQUIRE(DtNmosNode_Close(Node) == DTNMOS_OK);
+    CHECK(Registry.Count > Registered);
+    CHECK(!DtNmosNode_IsRegistered(Node));
+    CHECK_EQ(DtNmosNode_ApiPort(Node), 0);
+    CHECK(DtNmosNode_Poll(Node, NULL) == DTNMOS_E_STATE);
     CHECK(strstr(DtNmos_GetLastError(), "needs an open node") != NULL);
-    CHECK(DtNmosNode_Close(node) == DTNMOS_E_STATE);
+    CHECK(DtNmosNode_Close(Node) == DTNMOS_E_STATE);
 
     // Opened again with a config, the same handle starts empty, and opens only once.
-    DtNmosNodeConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.Id = (DtNmosId){NODE_ID};
-    config.RegistrationUrl = "http://registry.test/";
-    config.Http = record_http;
-    config.HttpUser = &registry;
-    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
-    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_STATE);
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(node));
-    DtNmosNode_Freep(&node);
-    CHECK(node == NULL);
-    DtNmosNode_Freep(&node);
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){NODE_ID};
+    Config.RegistrationUrl = "http://registry.test/";
+    Config.Http = RecordHttp;
+    Config.HttpUser = &Registry;
+    REQUIRE(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    CHECK(DtNmosNode_Open(Node, &Config) == DTNMOS_E_STATE);
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_IsRegistered(Node));
+    DtNmosNode_Freep(&Node);
+    CHECK(Node == NULL);
+    DtNmosNode_Freep(&Node);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- node_checks_the_size_of_a_config -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void node_checks_the_size_of_a_config(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    DtNmosNodeConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Id = (DtNmosId){NODE_ID};
-    config.RegistrationUrl = "http://registry.test/";
-    config.Http = record_http;
-    config.HttpUser = &registry;
-    config.FailuresBeforeSwitch = 7;
-    DtNmosNode* node = DtNmosNode_Alloc();
-    REQUIRE(node != NULL);
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Id = (DtNmosId){NODE_ID};
+    Config.RegistrationUrl = "http://registry.test/";
+    Config.Http = RecordHttp;
+    Config.HttpUser = &Registry;
+    Config.FailuresBeforeSwitch = 7;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    REQUIRE(Node != NULL);
 
     // 0 is not the current version: it is a Size not set.
-    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "Size of the DtNmosNodeConfig is not set") !=
           NULL);
     // Smaller than the first version, and larger than this library knows.
-    config.Size = offsetof(DtNmosNodeConfig, RegistryFailed) - 1;
-    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    Config.Size = offsetof(DtNmosNodeConfig, RegistryFailed) - 1;
+    CHECK(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "smaller than any version") != NULL);
-    config.Size = sizeof(config) + 8;
-    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    Config.Size = sizeof(Config) + 8;
+    CHECK(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "older than the header") != NULL);
     // The first version opens, without the fields that came after it.
-    config.Size = offsetof(DtNmosNodeConfig, RegistryFailed);
-    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
-    CHECK_EQ(node->failures_before_switch, 3);
-    REQUIRE(DtNmosNode_Close(node) == DTNMOS_OK);
-    config.Size = sizeof(config);
-    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
-    CHECK_EQ(node->failures_before_switch, 7);
+    Config.Size = offsetof(DtNmosNodeConfig, RegistryFailed);
+    REQUIRE(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    CHECK_EQ(Node->FailuresBeforeSwitch, 3);
+    REQUIRE(DtNmosNode_Close(Node) == DTNMOS_OK);
+    Config.Size = sizeof(Config);
+    REQUIRE(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    CHECK_EQ(Node->FailuresBeforeSwitch, 7);
 
     // A device the caller gives is checked the same way.
-    DtNmosDeviceConfig device = {0, {DEVICE_ID}, "a card", ""};
-    CHECK(DtNmosNode_AddDevice(node, &device) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosDeviceConfig Device = {0, {DEVICE_ID}, "a card", ""};
+    CHECK(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "DtNmosDeviceConfig") != NULL);
-    DtNmosNode_Free(node);
+    DtNmosNode_Free(Node);
 }
 
 // .-.-.-.-.-.-.-.-.-.- node_deletes_what_is_removed_and_what_it_had -.-.-.-.-.-.-.-.-.-.-
@@ -282,24 +282,24 @@ void node_checks_the_size_of_a_config(void)
 // The registry a callback moves the node to, and what it was asked.
 typedef struct NmosNextRegistry
 {
-    int calls;
-    uint32_t failures;
-    const char* url; // null keeps the node where it is
+    int Calls;
+    uint32_t Failures;
+    const char* Url; // null keeps the node where it is
 } NmosNextRegistry;
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- give_next_registry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GiveNextRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int give_next_registry(void* user, uint32_t failures, char* next_url, size_t size)
+static int GiveNextRegistry(void* User, uint32_t Failures, char* NextUrl, size_t Size)
 {
-    NmosNextRegistry* next = user;
-    ++next->calls;
-    next->failures = failures;
-    CHECK_EQ(size, DTNMOS_MAX_URL_SIZE);
-    if (next->url == NULL)
+    NmosNextRegistry* Next = User;
+    ++Next->Calls;
+    Next->Failures = Failures;
+    CHECK_EQ(Size, DTNMOS_MAX_URL_SIZE);
+    if (Next->Url == NULL)
     {
         return 0;
     }
-    snprintf(next_url, size, "%s", next->url);
+    snprintf(NextUrl, Size, "%s", Next->Url);
     return 1;
 }
 
@@ -307,179 +307,179 @@ static int give_next_registry(void* user, uint32_t failures, char* next_url, siz
 //
 void node_moves_to_the_next_registry(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
-    registry.unreachable = "registry-a.test";
-    NmosNextRegistry next = {0, 0, "http://registry-b.test"};
-    DtNmosNodeConfig config;
-    memset(&config, 0, sizeof(config));
-    config.Size = sizeof(config);
-    config.Id = (DtNmosId){NODE_ID};
-    config.Label = "moving node";
-    config.ApiHost = "192.168.1.5";
-    config.ApiPort = 8080;
-    config.RegistrationUrl = "http://registry-a.test";
-    config.Http = record_http;
-    config.HttpUser = &registry;
-    config.HeartbeatMs = 1;
-    config.RegistryFailed = give_next_registry;
-    config.RegistryFailedUser = &next;
-    config.FailuresBeforeSwitch = 2;
-    DtNmosNode* node = DtNmosNode_Alloc();
-    REQUIRE(node != NULL);
-    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    Registry.Unreachable = "registry-a.test";
+    NmosNextRegistry Next = {0, 0, "http://registry-b.test"};
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){NODE_ID};
+    Config.Label = "moving node";
+    Config.ApiHost = "192.168.1.5";
+    Config.ApiPort = 8080;
+    Config.RegistrationUrl = "http://registry-a.test";
+    Config.Http = RecordHttp;
+    Config.HttpUser = &Registry;
+    Config.HeartbeatMs = 1;
+    Config.RegistryFailed = GiveNextRegistry;
+    Config.RegistryFailedUser = &Next;
+    Config.FailuresBeforeSwitch = 2;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    REQUIRE(Node != NULL);
+    REQUIRE(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
 
     // The first registry does not answer; after two failed polls the node moves on, and
     // registers with the next one from the start.
-    CHECK(DtNmosNode_Poll(node, NULL) != DTNMOS_OK);
-    CHECK_EQ(next.calls, 0);
-    CHECK(DtNmosNode_Poll(node, NULL) != DTNMOS_OK);
-    CHECK_EQ(next.calls, 1);
-    CHECK_EQ(next.failures, 2);
-    const int before = registry.count;
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK(DtNmosNode_IsRegistered(node));
-    REQUIRE(registry.count > before);
-    CHECK(strstr(registry.requests[before].url,
+    CHECK(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
+    CHECK_EQ(Next.Calls, 0);
+    CHECK(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
+    CHECK_EQ(Next.Calls, 1);
+    CHECK_EQ(Next.Failures, 2);
+    const int Before = Registry.Count;
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK(DtNmosNode_IsRegistered(Node));
+    REQUIRE(Registry.Count > Before);
+    CHECK(strstr(Registry.Requests[Before].Url,
                  "http://registry-b.test/x-nmos/registration/v1.3/resource") != NULL);
-    CHECK_STR(registry.requests[before].type, "node");
+    CHECK_STR(Registry.Requests[Before].Type, "node");
 
     // A heartbeat answered with 404 is no failure: the node registers again with the
     // same registry.
-    registry.heartbeat_status = 404;
+    Registry.HeartbeatStatus = 404;
     NmosOs_SleepMs(40);
-    CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    registry.heartbeat_status = 200;
-    CHECK(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    CHECK_EQ(next.calls, 1);
-    CHECK(strstr(registry.requests[registry.count - 1].url, "registry-b.test") != NULL);
+    CHECK(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    Registry.HeartbeatStatus = 200;
+    CHECK(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    CHECK_EQ(Next.Calls, 1);
+    CHECK(strstr(Registry.Requests[Registry.Count - 1].Url, "registry-b.test") != NULL);
 
     // A callback without another registry keeps the node where it is.
-    registry.unreachable = "registry-b.test";
-    next.url = NULL;
-    for (int poll = 0; poll < 2; ++poll)
+    Registry.Unreachable = "registry-b.test";
+    Next.Url = NULL;
+    for (int Poll = 0; Poll < 2; ++Poll)
     {
         NmosOs_SleepMs(40);
-        CHECK(DtNmosNode_Poll(node, NULL) != DTNMOS_OK);
+        CHECK(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
     }
-    CHECK_EQ(next.calls, 2);
-    CHECK(strstr(registry.requests[registry.count - 1].url, "registry-b.test") != NULL);
-    registry.unreachable = NULL;
-    DtNmosNode_Free(node);
+    CHECK_EQ(Next.Calls, 2);
+    CHECK(strstr(Registry.Requests[Registry.Count - 1].Url, "registry-b.test") != NULL);
+    Registry.Unreachable = NULL;
+    DtNmosNode_Free(Node);
 }
 
 void node_deletes_what_is_removed_and_what_it_had(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
-    DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
-    REQUIRE(node != NULL);
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
-    const int before = registry.count;
-    const DtNmosId sender = {SENDER_ID};
-    REQUIRE(DtNmosNode_Remove(node, &sender) == DTNMOS_OK);
-    CHECK(DtNmosNode_Remove(node, &sender) == DTNMOS_E_NOT_FOUND);
-    REQUIRE(DtNmosNode_Poll(node, NULL) == DTNMOS_OK);
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    REQUIRE(Node != NULL);
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    const int Before = Registry.Count;
+    const DtNmosId Sender = {SENDER_ID};
+    REQUIRE(DtNmosNode_Remove(Node, &Sender) == DTNMOS_OK);
+    CHECK(DtNmosNode_Remove(Node, &Sender) == DTNMOS_E_NOT_FOUND);
+    REQUIRE(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
     // The sender, its flow and its source go, and the device that listed it registers
     // anew.
-    CHECK_STR(registry.requests[before].method, "DELETE");
-    CHECK(strstr(registry.requests[before].url, "resource/senders/" SENDER_ID) != NULL);
-    CHECK(strstr(registry.requests[before + 1].url, "resource/flows/") != NULL);
-    CHECK(strstr(registry.requests[before + 2].url, "resource/sources/") != NULL);
-    CHECK_STR(registry.requests[before + 3].type, "device");
-    const int kept = registry.count;
-    DtNmosNode_Free(node);
+    CHECK_STR(Registry.Requests[Before].Method, "DELETE");
+    CHECK(strstr(Registry.Requests[Before].Url, "resource/senders/" SENDER_ID) != NULL);
+    CHECK(strstr(Registry.Requests[Before + 1].Url, "resource/flows/") != NULL);
+    CHECK(strstr(Registry.Requests[Before + 2].Url, "resource/sources/") != NULL);
+    CHECK_STR(Registry.Requests[Before + 3].Type, "device");
+    const int Kept = Registry.Count;
+    DtNmosNode_Free(Node);
     // The end of the node deletes the receiver, the device and the node.
-    REQUIRE(registry.count == kept + 3);
-    CHECK(strstr(registry.requests[kept].url, "resource/receivers/" RECEIVER_ID) != NULL);
-    CHECK(strstr(registry.requests[kept + 1].url, "resource/devices/" DEVICE_ID) != NULL);
-    CHECK(strstr(registry.requests[kept + 2].url, "resource/nodes/" NODE_ID) != NULL);
+    REQUIRE(Registry.Count == Kept + 3);
+    CHECK(strstr(Registry.Requests[Kept].Url, "resource/receivers/" RECEIVER_ID) != NULL);
+    CHECK(strstr(Registry.Requests[Kept + 1].Url, "resource/devices/" DEVICE_ID) != NULL);
+    CHECK(strstr(Registry.Requests[Kept + 2].Url, "resource/nodes/" NODE_ID) != NULL);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ask -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Ask -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Asks the node for path and returns the response, which the caller frees.
 //
-static DtNmosHttpResponse* ask(DtNmosNode* node, const char* method, const char* path)
+static DtNmosHttpResponse* Ask(DtNmosNode* Node, const char* Method, const char* Path)
 {
-    DtNmosHttpRequest request;
-    memset(&request, 0, sizeof(request));
-    request.Size = sizeof(request);
-    request.Method = method;
-    request.Url = path;
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
-    CHECK(DtNmosNode_Handle(node, &request, response) == DTNMOS_OK);
-    return response;
+    DtNmosHttpRequest Request;
+    memset(&Request, 0, sizeof(Request));
+    Request.Size = sizeof(Request);
+    Request.Method = Method;
+    Request.Url = Path;
+    DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+    CHECK(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
+    return Response;
 }
 
 // .-.-.-.-.-.-.-.-.-.- node_answers_its_node_api_and_transport_files -.-.-.-.-.-.-.-.-.-.
 //
 void node_answers_its_node_api_and_transport_files(void)
 {
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    DtNmosNode* node = make_node(&registry, "192.168.1.5", 8080, record_http);
-    REQUIRE(node != NULL);
-    DtNmosHttpResponse* response = ask(node, "GET", "/x-nmos/node/v1.3/self");
-    CHECK_EQ(DtNmosHttpResponse_Status(response), 200);
-    NmosJson* json = NULL;
-    size_t length = 0;
-    const char* body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
-    CHECK_STR(NmosJson_MemberText(json, "id"), NODE_ID);
-    CHECK_STR(NmosJson_MemberText(json, "href"), "http://192.168.1.5:8080/");
-    NmosJson_Free(json);
-    DtNmosHttpResponse_Free(response);
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosNode* Node = MakeNode(&Registry, "192.168.1.5", 8080, RecordHttp);
+    REQUIRE(Node != NULL);
+    DtNmosHttpResponse* Response = Ask(Node, "GET", "/x-nmos/node/v1.3/self");
+    CHECK_EQ(DtNmosHttpResponse_Status(Response), 200);
+    NmosJson* Json = NULL;
+    size_t Length = 0;
+    const char* Body = DtNmosHttpResponse_Body(Response, &Length);
+    REQUIRE(NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK);
+    CHECK_STR(NmosJson_MemberText(Json, "id"), NODE_ID);
+    CHECK_STR(NmosJson_MemberText(Json, "href"), "http://192.168.1.5:8080/");
+    NmosJson_Free(Json);
+    DtNmosHttpResponse_Free(Response);
 
-    response = ask(node, "GET", "/x-nmos/node/v1.3/senders/?paging.limit=10");
-    body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
-    REQUIRE(json->type == DTNMOS_JSON_ARRAY && json->count == 1);
-    CHECK_STR(NmosJson_MemberText(&json->items[0], "manifest_href"),
+    Response = Ask(Node, "GET", "/x-nmos/node/v1.3/senders/?paging.limit=10");
+    Body = DtNmosHttpResponse_Body(Response, &Length);
+    REQUIRE(NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK);
+    REQUIRE(Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 1);
+    CHECK_STR(NmosJson_MemberText(&Json->Items[0], "manifest_href"),
               "http://192.168.1.5:8080/x-nmos/connection/v1.1/single/senders/" SENDER_ID
               "/transportfile");
-    CHECK_STR(NmosJson_MemberText(&json->items[0], "transport"),
+    CHECK_STR(NmosJson_MemberText(&Json->Items[0], "transport"),
               "urn:x-nmos:transport:rtp.mcast");
-    NmosJson_Free(json);
-    DtNmosHttpResponse_Free(response);
+    NmosJson_Free(Json);
+    DtNmosHttpResponse_Free(Response);
 
-    response = ask(node, "GET", "/x-nmos/node/v1.3/flows");
-    body = DtNmosHttpResponse_Body(response, &length);
-    REQUIRE(NmosJson_Parse(body, length, &json) == DTNMOS_OK);
-    REQUIRE(json->count == 1);
-    CHECK_STR(NmosJson_MemberText(&json->items[0], "interlace_mode"), "interlaced_tff");
-    CHECK_STR(NmosJson_MemberText(&json->items[0], "media_type"), "video/raw");
-    NmosJson_Free(json);
-    DtNmosHttpResponse_Free(response);
+    Response = Ask(Node, "GET", "/x-nmos/node/v1.3/flows");
+    Body = DtNmosHttpResponse_Body(Response, &Length);
+    REQUIRE(NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK);
+    REQUIRE(Json->Count == 1);
+    CHECK_STR(NmosJson_MemberText(&Json->Items[0], "interlace_mode"), "interlaced_tff");
+    CHECK_STR(NmosJson_MemberText(&Json->Items[0], "media_type"), "video/raw");
+    NmosJson_Free(Json);
+    DtNmosHttpResponse_Free(Response);
 
     // The transport file is the SDP of the flow of the sender.
-    response = ask(node, "GET",
+    Response = Ask(Node, "GET",
                    "/x-nmos/connection/v1.1/single/senders/" SENDER_ID "/transportfile");
-    CHECK_EQ(DtNmosHttpResponse_Status(response), 200);
-    CHECK_STR(DtNmosHttpResponse_ContentType(response), "application/sdp");
-    body = DtNmosHttpResponse_Body(response, &length);
-    DtNmosSdp* sdp = NULL;
-    REQUIRE(DtNmosSdp_Parse(body, length, &sdp) == DTNMOS_OK);
-    CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->Format.Video.Height, 1080);
-    CHECK(DtNmosSdp_Flow(sdp, 0)->Format.Video.Interlaced);
-    CHECK_STR(DtNmosSdp_Session(sdp)->OriginIp, "192.168.1.5");
-    DtNmosSdp_Free(sdp);
-    DtNmosHttpResponse_Free(response);
+    CHECK_EQ(DtNmosHttpResponse_Status(Response), 200);
+    CHECK_STR(DtNmosHttpResponse_ContentType(Response), "application/sdp");
+    Body = DtNmosHttpResponse_Body(Response, &Length);
+    DtNmosSdp* Sdp = NULL;
+    REQUIRE(DtNmosSdp_Parse(Body, Length, &Sdp) == DTNMOS_OK);
+    CHECK_EQ(DtNmosSdp_Flow(Sdp, 0)->Format.Video.Height, 1080);
+    CHECK(DtNmosSdp_Flow(Sdp, 0)->Format.Video.Interlaced);
+    CHECK_STR(DtNmosSdp_Session(Sdp)->OriginIp, "192.168.1.5");
+    DtNmosSdp_Free(Sdp);
+    DtNmosHttpResponse_Free(Response);
 
-    const char* const missing[] = {"/x-nmos/node/v1.3/senders/nobody", "/x-nmos/nothing",
+    const char* const Missing[] = {"/x-nmos/node/v1.3/senders/nobody", "/x-nmos/nothing",
                                    "/x-nmos/node/v1.3/clocks"};
     for (size_t i = 0; i < 3; ++i)
     {
-        response = ask(node, "GET", missing[i]);
-        CHECK_EQ(DtNmosHttpResponse_Status(response), 404);
-        DtNmosHttpResponse_Free(response);
+        Response = Ask(Node, "GET", Missing[i]);
+        CHECK_EQ(DtNmosHttpResponse_Status(Response), 404);
+        DtNmosHttpResponse_Free(Response);
     }
-    response = ask(node, "POST", "/x-nmos/node/v1.3/self");
-    CHECK_EQ(DtNmosHttpResponse_Status(response), 405);
-    DtNmosHttpResponse_Free(response);
-    DtNmosNode_Free(node);
+    Response = Ask(Node, "POST", "/x-nmos/node/v1.3/self");
+    CHECK_EQ(DtNmosHttpResponse_Status(Response), 405);
+    DtNmosHttpResponse_Free(Response);
+    DtNmosNode_Free(Node);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- node_serves_itself_over_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -491,40 +491,40 @@ void node_serves_itself_over_http(void)
         printf("  skipped: the library has no server or no libcurl\n");
         return;
     }
-    NmosFakeRegistration registry;
-    memset(&registry, 0, sizeof(registry));
-    registry.heartbeat_status = 200;
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    Registry.HeartbeatStatus = 200;
     // The registry is fake, the node's own server is real.
-    DtNmosNode* node = make_node(&registry, "127.0.0.1", 0, record_http);
-    REQUIRE(node != NULL);
-    const DtNmosResult served = DtNmosNode_Serve(node);
-    if (served != DTNMOS_OK)
+    DtNmosNode* Node = MakeNode(&Registry, "127.0.0.1", 0, RecordHttp);
+    REQUIRE(Node != NULL);
+    const DtNmosResult Served = DtNmosNode_Serve(Node);
+    if (Served != DTNMOS_OK)
     {
         printf("  %s\n", DtNmos_GetLastError());
     }
-    REQUIRE(served == DTNMOS_OK);
-    CHECK(DtNmosNode_ApiPort(node) != 0);
+    REQUIRE(Served == DTNMOS_OK);
+    CHECK(DtNmosNode_ApiPort(Node) != 0);
     // Too small a buffer tells the size it needs.
-    char base[64];
-    size_t size = 4;
-    CHECK(DtNmosNode_ApiUrl(node, base, &size) == DTNMOS_E_BUFFER_TOO_SMALL);
-    CHECK(size > 4 && size <= sizeof(base));
-    size = sizeof(base);
-    REQUIRE(DtNmosNode_ApiUrl(node, base, &size) == DTNMOS_OK);
-    CHECK_EQ(size, strlen(base));
-    char url[256];
-    snprintf(url, sizeof(url), "%s/x-nmos/node/v1.3/self", base);
-    DtNmosHttpRequest request = {sizeof(request), "GET", url, NULL, NULL, 0, 3000};
-    DtNmosHttpResponse* response = DtNmosHttpResponse_Alloc();
-    REQUIRE(DtNmos_CurlHttp(NULL, &request, response) == DTNMOS_OK);
-    CHECK_EQ(DtNmosHttpResponse_Status(response), 200);
-    CHECK(strstr(DtNmosHttpResponse_Body(response, NULL), NODE_ID) != NULL);
-    DtNmosHttpResponse_Free(response);
+    char Base[64];
+    size_t Size = 4;
+    CHECK(DtNmosNode_ApiUrl(Node, Base, &Size) == DTNMOS_E_BUFFER_TOO_SMALL);
+    CHECK(Size > 4 && Size <= sizeof(Base));
+    Size = sizeof(Base);
+    REQUIRE(DtNmosNode_ApiUrl(Node, Base, &Size) == DTNMOS_OK);
+    CHECK_EQ(Size, strlen(Base));
+    char Url[256];
+    snprintf(Url, sizeof(Url), "%s/x-nmos/node/v1.3/self", Base);
+    DtNmosHttpRequest Request = {sizeof(Request), "GET", Url, NULL, NULL, 0, 3000};
+    DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+    REQUIRE(DtNmos_CurlHttp(NULL, &Request, Response) == DTNMOS_OK);
+    CHECK_EQ(DtNmosHttpResponse_Status(Response), 200);
+    CHECK(strstr(DtNmosHttpResponse_Body(Response, NULL), NODE_ID) != NULL);
+    DtNmosHttpResponse_Free(Response);
     // The thread of the server polls the node, which registers.
-    for (int wait = 0; wait < 100 && !DtNmosNode_IsRegistered(node); ++wait)
+    for (int Wait = 0; Wait < 100 && !DtNmosNode_IsRegistered(Node); ++Wait)
     {
         NmosOs_SleepMs(20);
     }
-    CHECK(DtNmosNode_IsRegistered(node));
-    DtNmosNode_Free(node);
+    CHECK(DtNmosNode_IsRegistered(Node));
+    DtNmosNode_Free(Node);
 }

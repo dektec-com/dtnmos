@@ -16,34 +16,34 @@
 typedef struct NmosOwnedHeader
 {
     char* name;
-    char* value;
+    char* Value;
 } NmosOwnedHeader;
 
 struct DtNmosHttpResponse
 {
-    int status;
-    NmosBuffer body;
-    char* content_type;
-    NmosOwnedHeader* headers;
-    size_t header_count;
-    size_t header_capacity;
+    int Status;
+    NmosBuffer Body;
+    char* ContentType;
+    NmosOwnedHeader* Headers;
+    size_t HeaderCount;
+    size_t HeaderCapacity;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static char* copy_text(const char* text)
+static char* CopyText(const char* Text)
 {
-    const size_t length = text == NULL ? 0 : strlen(text);
-    char* copy = malloc(length + 1);
-    if (copy != NULL)
+    const size_t Length = Text == NULL ? 0 : strlen(Text);
+    char* Copy = malloc(Length + 1);
+    if (Copy != NULL)
     {
-        if (length > 0)
+        if (Length > 0)
         {
-            memcpy(copy, text, length);
+            memcpy(Copy, Text, Length);
         }
-        copy[length] = '\0';
+        Copy[Length] = '\0';
     }
-    return copy;
+    return Copy;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Alloc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -55,182 +55,181 @@ DtNmosHttpResponse* DtNmosHttpResponse_Alloc(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void DtNmosHttpResponse_Free(DtNmosHttpResponse* response)
+void DtNmosHttpResponse_Free(DtNmosHttpResponse* Response)
 {
-    if (response == NULL)
+    if (Response == NULL)
     {
         return;
     }
-    NmosBuffer_Free(&response->body);
-    free(response->content_type);
-    for (size_t i = 0; i < response->header_count; ++i)
+    NmosBuffer_Free(&Response->Body);
+    free(Response->ContentType);
+    for (size_t i = 0; i < Response->HeaderCount; ++i)
     {
-        free(response->headers[i].name);
-        free(response->headers[i].value);
+        free(Response->Headers[i].name);
+        free(Response->Headers[i].Value);
     }
-    free(response->headers);
-    free(response);
+    free(Response->Headers);
+    free(Response);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Freep -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosHttpResponse_Freep(DtNmosHttpResponse** response)
+void DtNmosHttpResponse_Freep(DtNmosHttpResponse** Response)
 {
-    if (response != NULL)
+    if (Response != NULL)
     {
-        DtNmosHttpResponse_Free(*response);
-        *response = NULL;
+        DtNmosHttpResponse_Free(*Response);
+        *Response = NULL;
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_SetStatus -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* response, int status)
+void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* Response, int Status)
 {
-    if (response != NULL)
+    if (Response != NULL)
     {
-        response->status = status;
+        Response->Status = Status;
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_SetBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosHttpResponse_SetBody(DtNmosHttpResponse* response,
-                                        const char* content_type, const char* body,
-                                        size_t length)
+DtNmosResult DtNmosHttpResponse_SetBody(DtNmosHttpResponse* Response,
+                                        const char* ContentType, const char* Body,
+                                        size_t Length)
 {
-    if (response == NULL || (body == NULL && length > 0))
+    if (Response == NULL || (Body == NULL && Length > 0))
     {
         return DTNMOS_E_INVALID_ARGUMENT;
     }
-    char* type = NULL;
-    if (content_type != NULL)
+    char* Type = NULL;
+    if (ContentType != NULL)
     {
-        type = copy_text(content_type);
-        if (type == NULL)
+        Type = CopyText(ContentType);
+        if (Type == NULL)
         {
             return DTNMOS_E_NO_MEMORY;
         }
     }
-    free(response->content_type);
-    response->content_type = type;
-    response->body.length = 0;
-    return DtNmosHttpResponse_AppendBody(response, body, length);
+    free(Response->ContentType);
+    Response->ContentType = Type;
+    Response->Body.Length = 0;
+    return DtNmosHttpResponse_AppendBody(Response, Body, Length);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_AppendBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* response, const char* body,
-                                           size_t length)
+DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* Response, const char* Body,
+                                           size_t Length)
 {
-    if (response == NULL || (body == NULL && length > 0))
+    if (Response == NULL || (Body == NULL && Length > 0))
     {
         return DTNMOS_E_INVALID_ARGUMENT;
     }
     // An empty body still holds its null character.
-    NmosBuffer_Append(&response->body, length > 0 ? body : "", length);
-    return response->body.failed ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
+    NmosBuffer_Append(&Response->Body, Length > 0 ? Body : "", Length);
+    return Response->Body.Failed ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_AddHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* response, const char* name,
-                                          const char* value)
+DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* Response, const char* name,
+                                          const char* Value)
 {
-    if (response == NULL || name == NULL || value == NULL)
+    if (Response == NULL || name == NULL || Value == NULL)
     {
         return DTNMOS_E_INVALID_ARGUMENT;
     }
-    if (response->header_count == response->header_capacity)
+    if (Response->HeaderCount == Response->HeaderCapacity)
     {
-        const size_t capacity =
-            response->header_capacity == 0 ? 8 : response->header_capacity * 2;
-        NmosOwnedHeader* headers =
-            realloc(response->headers, capacity * sizeof(*headers));
-        if (headers == NULL)
+        const size_t Capacity =
+            Response->HeaderCapacity == 0 ? 8 : Response->HeaderCapacity * 2;
+        NmosOwnedHeader* Headers =
+            realloc(Response->Headers, Capacity * sizeof(*Headers));
+        if (Headers == NULL)
         {
             return DTNMOS_E_NO_MEMORY;
         }
-        response->headers = headers;
-        response->header_capacity = capacity;
+        Response->Headers = Headers;
+        Response->HeaderCapacity = Capacity;
     }
-    NmosOwnedHeader header = {copy_text(name), copy_text(value)};
-    if (header.name == NULL || header.value == NULL)
+    NmosOwnedHeader Header = {CopyText(name), CopyText(Value)};
+    if (Header.name == NULL || Header.Value == NULL)
     {
-        free(header.name);
-        free(header.value);
+        free(Header.name);
+        free(Header.Value);
         return DTNMOS_E_NO_MEMORY;
     }
     if (NmosSpan_Equals(NmosSpan_Of(name), "content-type", 1) &&
-        response->content_type == NULL)
+        Response->ContentType == NULL)
     {
-        response->content_type = copy_text(value);
+        Response->ContentType = CopyText(Value);
     }
-    response->headers[response->header_count++] = header;
+    Response->Headers[Response->HeaderCount++] = Header;
     return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Status -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int DtNmosHttpResponse_Status(const DtNmosHttpResponse* response)
+int DtNmosHttpResponse_Status(const DtNmosHttpResponse* Response)
 {
-    return response == NULL ? 0 : response->status;
+    return Response == NULL ? 0 : Response->Status;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* DtNmosHttpResponse_Body(const DtNmosHttpResponse* response, size_t* length)
+const char* DtNmosHttpResponse_Body(const DtNmosHttpResponse* Response, size_t* Length)
 {
-    if (length != NULL)
+    if (Length != NULL)
     {
-        *length = response == NULL ? 0 : response->body.length;
+        *Length = Response == NULL ? 0 : Response->Body.Length;
     }
-    return response == NULL || response->body.data == NULL ? "" : response->body.data;
+    return Response == NULL || Response->Body.Data == NULL ? "" : Response->Body.Data;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_ContentType -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const char* DtNmosHttpResponse_ContentType(const DtNmosHttpResponse* response)
+const char* DtNmosHttpResponse_ContentType(const DtNmosHttpResponse* Response)
 {
-    return response == NULL || response->content_type == NULL ? ""
-                                                              : response->content_type;
+    return Response == NULL || Response->ContentType == NULL ? "" : Response->ContentType;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_HeaderCount -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-size_t DtNmosHttpResponse_HeaderCount(const DtNmosHttpResponse* response)
+size_t DtNmosHttpResponse_HeaderCount(const DtNmosHttpResponse* Response)
 {
-    return response == NULL ? 0 : response->header_count;
+    return Response == NULL ? 0 : Response->HeaderCount;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* response,
-                                           size_t index)
+DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* Response,
+                                           size_t Index)
 {
-    DtNmosHttpHeader header = {NULL, NULL};
-    if (response != NULL && index < response->header_count)
+    DtNmosHttpHeader Header = {NULL, NULL};
+    if (Response != NULL && Index < Response->HeaderCount)
     {
-        header.Name = response->headers[index].name;
-        header.Value = response->headers[index].value;
+        Header.Name = Response->Headers[Index].name;
+        Header.Value = Response->Headers[Index].Value;
     }
-    return header;
+    return Header;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_FindHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* response,
+const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* Response,
                                           const char* name)
 {
-    if (response == NULL || name == NULL)
+    if (Response == NULL || name == NULL)
     {
         return NULL;
     }
-    for (size_t i = 0; i < response->header_count; ++i)
+    for (size_t i = 0; i < Response->HeaderCount; ++i)
     {
-        if (NmosSpan_Equals(NmosSpan_Of(response->headers[i].name), name, 1))
+        if (NmosSpan_Equals(NmosSpan_Of(Response->Headers[i].name), name, 1))
         {
-            return response->headers[i].value;
+            return Response->Headers[i].Value;
         }
     }
     return NULL;

@@ -48,96 +48,96 @@
 
 struct NmosMutex
 {
-    SRWLOCK lock;
+    SRWLOCK Lock;
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 NmosMutex* NmosOs_MutexCreate(void)
 {
-    NmosMutex* mutex = malloc(sizeof(*mutex));
-    if (mutex != NULL)
+    NmosMutex* Mutex = malloc(sizeof(*Mutex));
+    if (Mutex != NULL)
     {
-        InitializeSRWLock(&mutex->lock);
+        InitializeSRWLock(&Mutex->Lock);
     }
-    return mutex;
+    return Mutex;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexFree(NmosMutex* mutex)
+void NmosOs_MutexFree(NmosMutex* Mutex)
 {
-    free(mutex);
+    free(Mutex);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexLock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexLock(NmosMutex* mutex)
+void NmosOs_MutexLock(NmosMutex* Mutex)
 {
-    AcquireSRWLockExclusive(&mutex->lock);
+    AcquireSRWLockExclusive(&Mutex->Lock);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexUnlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexUnlock(NmosMutex* mutex)
+void NmosOs_MutexUnlock(NmosMutex* Mutex)
 {
-    ReleaseSRWLockExclusive(&mutex->lock);
+    ReleaseSRWLockExclusive(&Mutex->Lock);
 }
 
 struct NmosThread
 {
-    HANDLE handle;
-    void (*function)(void*);
-    void* argument;
+    HANDLE Handle;
+    void (*Function)(void*);
+    void* Argument;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- run_thread -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RunThread -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DWORD WINAPI run_thread(LPVOID parameter)
+static DWORD WINAPI RunThread(LPVOID Parameter)
 {
-    NmosThread* thread = parameter;
-    thread->function(thread->argument);
+    NmosThread* Thread = Parameter;
+    Thread->Function(Thread->Argument);
     return 0;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadStart -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-NmosThread* NmosOs_ThreadStart(void (*function)(void*), void* argument)
+NmosThread* NmosOs_ThreadStart(void (*Function)(void*), void* Argument)
 {
-    NmosThread* thread = malloc(sizeof(*thread));
-    if (thread == NULL)
+    NmosThread* Thread = malloc(sizeof(*Thread));
+    if (Thread == NULL)
     {
         return NULL;
     }
-    thread->function = function;
-    thread->argument = argument;
-    thread->handle = CreateThread(NULL, 0, run_thread, thread, 0, NULL);
-    if (thread->handle == NULL)
+    Thread->Function = Function;
+    Thread->Argument = Argument;
+    Thread->Handle = CreateThread(NULL, 0, RunThread, Thread, 0, NULL);
+    if (Thread->Handle == NULL)
     {
-        free(thread);
+        free(Thread);
         return NULL;
     }
-    return thread;
+    return Thread;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadJoin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosOs_ThreadJoin(NmosThread* thread)
+void NmosOs_ThreadJoin(NmosThread* Thread)
 {
-    if (thread == NULL)
+    if (Thread == NULL)
     {
         return;
     }
-    WaitForSingleObject(thread->handle, INFINITE);
-    CloseHandle(thread->handle);
-    free(thread);
+    WaitForSingleObject(Thread->Handle, INFINITE);
+    CloseHandle(Thread->Handle);
+    free(Thread);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SleepMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_SleepMs(uint32_t milliseconds)
+void NmosOs_SleepMs(uint32_t Milliseconds)
 {
-    Sleep(milliseconds);
+    Sleep(Milliseconds);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MonotonicMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -147,19 +147,19 @@ uint64_t NmosOs_MonotonicMs(void)
     return (uint64_t)GetTickCount64();
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_sockets -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartSockets -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Winsock is started once per process and left running, as the process ends it.
 //
-static int start_sockets(void)
+static int StartSockets(void)
 {
-    static volatile LONG started = 0;
-    if (InterlockedCompareExchange(&started, 1, 0) == 0)
+    static volatile LONG Started = 0;
+    if (InterlockedCompareExchange(&Started, 1, 0) == 0)
     {
-        WSADATA data;
-        if (WSAStartup(MAKEWORD(2, 2), &data) != 0)
+        WSADATA Data;
+        if (WSAStartup(MAKEWORD(2, 2), &Data) != 0)
         {
-            started = 0;
+            Started = 0;
             return 0;
         }
     }
@@ -176,102 +176,102 @@ typedef SOCKET NmosSocket;
 
 struct NmosMutex
 {
-    pthread_mutex_t lock;
+    pthread_mutex_t Lock;
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 NmosMutex* NmosOs_MutexCreate(void)
 {
-    NmosMutex* mutex = malloc(sizeof(*mutex));
-    if (mutex != NULL && pthread_mutex_init(&mutex->lock, NULL) != 0)
+    NmosMutex* Mutex = malloc(sizeof(*Mutex));
+    if (Mutex != NULL && pthread_mutex_init(&Mutex->Lock, NULL) != 0)
     {
-        free(mutex);
+        free(Mutex);
         return NULL;
     }
-    return mutex;
+    return Mutex;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexFree(NmosMutex* mutex)
+void NmosOs_MutexFree(NmosMutex* Mutex)
 {
-    if (mutex != NULL)
+    if (Mutex != NULL)
     {
-        pthread_mutex_destroy(&mutex->lock);
-        free(mutex);
+        pthread_mutex_destroy(&Mutex->Lock);
+        free(Mutex);
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexLock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexLock(NmosMutex* mutex)
+void NmosOs_MutexLock(NmosMutex* Mutex)
 {
-    pthread_mutex_lock(&mutex->lock);
+    pthread_mutex_lock(&Mutex->Lock);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_MutexUnlock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_MutexUnlock(NmosMutex* mutex)
+void NmosOs_MutexUnlock(NmosMutex* Mutex)
 {
-    pthread_mutex_unlock(&mutex->lock);
+    pthread_mutex_unlock(&Mutex->Lock);
 }
 
 struct NmosThread
 {
-    pthread_t handle;
-    void (*function)(void*);
-    void* argument;
+    pthread_t Handle;
+    void (*Function)(void*);
+    void* Argument;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- run_thread -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RunThread -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void* run_thread(void* parameter)
+static void* RunThread(void* Parameter)
 {
-    NmosThread* thread = parameter;
-    thread->function(thread->argument);
+    NmosThread* Thread = Parameter;
+    Thread->Function(Thread->Argument);
     return NULL;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadStart -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-NmosThread* NmosOs_ThreadStart(void (*function)(void*), void* argument)
+NmosThread* NmosOs_ThreadStart(void (*Function)(void*), void* Argument)
 {
-    NmosThread* thread = malloc(sizeof(*thread));
-    if (thread == NULL)
+    NmosThread* Thread = malloc(sizeof(*Thread));
+    if (Thread == NULL)
     {
         return NULL;
     }
-    thread->function = function;
-    thread->argument = argument;
-    if (pthread_create(&thread->handle, NULL, run_thread, thread) != 0)
+    Thread->Function = Function;
+    Thread->Argument = Argument;
+    if (pthread_create(&Thread->Handle, NULL, RunThread, Thread) != 0)
     {
-        free(thread);
+        free(Thread);
         return NULL;
     }
-    return thread;
+    return Thread;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ThreadJoin -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosOs_ThreadJoin(NmosThread* thread)
+void NmosOs_ThreadJoin(NmosThread* Thread)
 {
-    if (thread == NULL)
+    if (Thread == NULL)
     {
         return;
     }
-    pthread_join(thread->handle, NULL);
-    free(thread);
+    pthread_join(Thread->Handle, NULL);
+    free(Thread);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SleepMs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_SleepMs(uint32_t milliseconds)
+void NmosOs_SleepMs(uint32_t Milliseconds)
 {
-    struct timespec duration;
-    duration.tv_sec = (time_t)(milliseconds / 1000);
-    duration.tv_nsec = (long)(milliseconds % 1000) * 1000000L;
-    while (nanosleep(&duration, &duration) != 0)
+    struct timespec Duration;
+    Duration.tv_sec = (time_t)(Milliseconds / 1000);
+    Duration.tv_nsec = (long)(Milliseconds % 1000) * 1000000L;
+    while (nanosleep(&Duration, &Duration) != 0)
     {
     }
 }
@@ -280,14 +280,14 @@ void NmosOs_SleepMs(uint32_t milliseconds)
 //
 uint64_t NmosOs_MonotonicMs(void)
 {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (uint64_t)now.tv_sec * 1000u + (uint64_t)now.tv_nsec / 1000000u;
+    struct timespec Now;
+    clock_gettime(CLOCK_MONOTONIC, &Now);
+    return (uint64_t)Now.tv_sec * 1000u + (uint64_t)Now.tv_nsec / 1000000u;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- start_sockets -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartSockets -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int start_sockets(void)
+static int StartSockets(void)
 {
     return 1;
 }
@@ -301,320 +301,319 @@ typedef int NmosSocket;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_VersionNow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosOs_VersionNow(uint64_t* last, char* text, size_t size)
+void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size)
 {
-    struct timespec now;
-    timespec_get(&now, TIME_UTC);
-    uint64_t nanoseconds =
-        ((uint64_t)now.tv_sec + DTNMOS_TAI_OFFSET) * 1000000000u + (uint64_t)now.tv_nsec;
+    struct timespec Now;
+    timespec_get(&Now, TIME_UTC);
+    uint64_t Nanoseconds =
+        ((uint64_t)Now.tv_sec + DTNMOS_TAI_OFFSET) * 1000000000u + (uint64_t)Now.tv_nsec;
     // Versions must rise even when two changes fall within one tick of the clock.
-    if (nanoseconds <= *last)
+    if (Nanoseconds <= *Last)
     {
-        nanoseconds = *last + 1;
+        Nanoseconds = *Last + 1;
     }
-    *last = nanoseconds;
-    snprintf(text, size, "%llu:%llu", (unsigned long long)(nanoseconds / 1000000000u),
-             (unsigned long long)(nanoseconds % 1000000000u));
+    *Last = Nanoseconds;
+    snprintf(Text, Size, "%llu:%llu", (unsigned long long)(Nanoseconds / 1000000000u),
+             (unsigned long long)(Nanoseconds % 1000000000u));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_AddressToward -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosOs_AddressToward(const char* host, char* address, size_t size)
+int NmosOs_AddressToward(const char* Host, char* Address, size_t Size)
 {
-    if (host == NULL || !start_sockets())
+    if (Host == NULL || !StartSockets())
     {
         return 0;
     }
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_DGRAM;
-    struct addrinfo* found = NULL;
-    if (getaddrinfo(host, "9", &hints, &found) != 0 || found == NULL)
+    struct addrinfo Hints;
+    memset(&Hints, 0, sizeof(Hints));
+    Hints.ai_family = AF_UNSPEC;
+    Hints.ai_socktype = SOCK_DGRAM;
+    struct addrinfo* Found = NULL;
+    if (getaddrinfo(Host, "9", &Hints, &Found) != 0 || Found == NULL)
     {
         return 0;
     }
-    int result = 0;
+    int Result = 0;
     // Connecting a datagram socket sends nothing; it only chooses the route and so the
     // address of this host on it.
-    const NmosSocket probe = socket(found->ai_family, SOCK_DGRAM, 0);
-    if (probe != DTNMOS_NO_SOCKET)
+    const NmosSocket Probe = socket(Found->ai_family, SOCK_DGRAM, 0);
+    if (Probe != DTNMOS_NO_SOCKET)
     {
-        struct sockaddr_storage local;
-        socklen_t length = sizeof(local);
-        if (connect(probe, found->ai_addr, (socklen_t)found->ai_addrlen) == 0 &&
-            getsockname(probe, (struct sockaddr*)&local, &length) == 0)
+        struct sockaddr_storage Local;
+        socklen_t Length = sizeof(Local);
+        if (connect(Probe, Found->ai_addr, (socklen_t)Found->ai_addrlen) == 0 &&
+            getsockname(Probe, (struct sockaddr*)&Local, &Length) == 0)
         {
-            const void* bytes =
-                local.ss_family == AF_INET6
-                    ? (const void*)&((struct sockaddr_in6*)&local)->sin6_addr
-                    : (const void*)&((struct sockaddr_in*)&local)->sin_addr;
-            result = inet_ntop(local.ss_family, bytes, address, (socklen_t)size) != NULL;
+            const void* Bytes =
+                Local.ss_family == AF_INET6
+                    ? (const void*)&((struct sockaddr_in6*)&Local)->sin6_addr
+                    : (const void*)&((struct sockaddr_in*)&Local)->sin_addr;
+            Result = inet_ntop(Local.ss_family, Bytes, Address, (socklen_t)Size) != NULL;
         }
-        DTNMOS_CLOSE_SOCKET(probe);
+        DTNMOS_CLOSE_SOCKET(Probe);
     }
-    freeaddrinfo(found);
-    return result;
+    freeaddrinfo(Found);
+    return Result;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_FreePort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-uint16_t NmosOs_FreePort(const char* host)
+uint16_t NmosOs_FreePort(const char* Host)
 {
-    if (host == NULL || !start_sockets())
+    if (Host == NULL || !StartSockets())
     {
         return 0;
     }
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    struct addrinfo* found = NULL;
-    if (getaddrinfo(host, "0", &hints, &found) != 0 || found == NULL)
+    struct addrinfo Hints;
+    memset(&Hints, 0, sizeof(Hints));
+    Hints.ai_family = AF_UNSPEC;
+    Hints.ai_socktype = SOCK_STREAM;
+    Hints.ai_flags = AI_PASSIVE;
+    struct addrinfo* Found = NULL;
+    if (getaddrinfo(Host, "0", &Hints, &Found) != 0 || Found == NULL)
     {
         return 0;
     }
-    uint16_t port = 0;
-    const NmosSocket probe = socket(found->ai_family, SOCK_STREAM, 0);
-    if (probe != DTNMOS_NO_SOCKET)
+    uint16_t Port = 0;
+    const NmosSocket Probe = socket(Found->ai_family, SOCK_STREAM, 0);
+    if (Probe != DTNMOS_NO_SOCKET)
     {
-        struct sockaddr_storage local;
-        socklen_t length = sizeof(local);
-        if (bind(probe, found->ai_addr, (socklen_t)found->ai_addrlen) == 0 &&
-            getsockname(probe, (struct sockaddr*)&local, &length) == 0)
+        struct sockaddr_storage Local;
+        socklen_t Length = sizeof(Local);
+        if (bind(Probe, Found->ai_addr, (socklen_t)Found->ai_addrlen) == 0 &&
+            getsockname(Probe, (struct sockaddr*)&Local, &Length) == 0)
         {
-            port = ntohs(local.ss_family == AF_INET6
-                             ? ((struct sockaddr_in6*)&local)->sin6_port
-                             : ((struct sockaddr_in*)&local)->sin_port);
+            Port = ntohs(Local.ss_family == AF_INET6
+                             ? ((struct sockaddr_in6*)&Local)->sin6_port
+                             : ((struct sockaddr_in*)&Local)->sin_port);
         }
-        DTNMOS_CLOSE_SOCKET(probe);
+        DTNMOS_CLOSE_SOCKET(Probe);
     }
-    freeaddrinfo(found);
-    return port;
+    freeaddrinfo(Found);
+    return Port;
 }
 
 struct NmosUdp
 {
-    NmosSocket socket;
+    NmosSocket Socket;
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpOpen -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-NmosUdp* NmosOs_UdpOpen(const char* bind_address, const char* interface_address)
+NmosUdp* NmosOs_UdpOpen(const char* BindAddress, const char* InterfaceAddress)
 {
-    if (!start_sockets())
+    if (!StartSockets())
     {
         return NULL;
     }
-    struct sockaddr_in local;
-    memset(&local, 0, sizeof(local));
-    local.sin_family = AF_INET;
-    local.sin_addr.s_addr = htonl(INADDR_ANY);
-    struct in_addr interface;
-    memset(&interface, 0, sizeof(interface));
-    if ((bind_address != NULL &&
-         inet_pton(AF_INET, bind_address, &local.sin_addr) != 1) ||
-        (interface_address != NULL &&
-         inet_pton(AF_INET, interface_address, &interface) != 1))
+    struct sockaddr_in Local;
+    memset(&Local, 0, sizeof(Local));
+    Local.sin_family = AF_INET;
+    Local.sin_addr.s_addr = htonl(INADDR_ANY);
+    struct in_addr Interface;
+    memset(&Interface, 0, sizeof(Interface));
+    if ((BindAddress != NULL && inet_pton(AF_INET, BindAddress, &Local.sin_addr) != 1) ||
+        (InterfaceAddress != NULL &&
+         inet_pton(AF_INET, InterfaceAddress, &Interface) != 1))
     {
         return NULL;
     }
-    const NmosSocket handle = socket(AF_INET, SOCK_DGRAM, 0);
-    if (handle == DTNMOS_NO_SOCKET)
+    const NmosSocket Handle = socket(AF_INET, SOCK_DGRAM, 0);
+    if (Handle == DTNMOS_NO_SOCKET)
     {
         return NULL;
     }
     // Multicast DNS asks for a hop limit of 255, and a responder on this host answers
     // too.
-    const int ttl = 255;
-    const int loop = 1;
-    int ok = bind(handle, (struct sockaddr*)&local, sizeof(local)) == 0 &&
-             setsockopt(handle, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&ttl,
-                        sizeof(ttl)) == 0 &&
-             setsockopt(handle, IPPROTO_IP, IP_MULTICAST_LOOP, (const char*)&loop,
-                        sizeof(loop)) == 0;
-    if (ok && interface_address != NULL)
+    const int Ttl = 255;
+    const int Loop = 1;
+    int Ok = bind(Handle, (struct sockaddr*)&Local, sizeof(Local)) == 0 &&
+             setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&Ttl,
+                        sizeof(Ttl)) == 0 &&
+             setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_LOOP, (const char*)&Loop,
+                        sizeof(Loop)) == 0;
+    if (Ok && InterfaceAddress != NULL)
     {
-        ok = setsockopt(handle, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&interface,
-                        sizeof(interface)) == 0;
+        Ok = setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&Interface,
+                        sizeof(Interface)) == 0;
     }
 #if defined(_WIN32)
     // Without this, a datagram to a port nobody listens on makes the next receive fail.
-    BOOL report = FALSE;
-    DWORD returned = 0;
-    WSAIoctl(handle, SIO_UDP_CONNRESET, &report, sizeof(report), NULL, 0, &returned, NULL,
+    BOOL Report = FALSE;
+    DWORD Returned = 0;
+    WSAIoctl(Handle, SIO_UDP_CONNRESET, &Report, sizeof(Report), NULL, 0, &Returned, NULL,
              NULL);
 #endif
-    NmosUdp* udp = ok ? malloc(sizeof(*udp)) : NULL;
-    if (udp == NULL)
+    NmosUdp* Udp = Ok ? malloc(sizeof(*Udp)) : NULL;
+    if (Udp == NULL)
     {
-        DTNMOS_CLOSE_SOCKET(handle);
+        DTNMOS_CLOSE_SOCKET(Handle);
         return NULL;
     }
-    udp->socket = handle;
-    return udp;
+    Udp->Socket = Handle;
+    return Udp;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpPort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-uint16_t NmosOs_UdpPort(const NmosUdp* udp)
+uint16_t NmosOs_UdpPort(const NmosUdp* Udp)
 {
-    struct sockaddr_in local;
-    socklen_t length = sizeof(local);
-    if (getsockname(udp->socket, (struct sockaddr*)&local, &length) != 0)
+    struct sockaddr_in Local;
+    socklen_t Length = sizeof(Local);
+    if (getsockname(Udp->Socket, (struct sockaddr*)&Local, &Length) != 0)
     {
         return 0;
     }
-    return ntohs(local.sin_port);
+    return ntohs(Local.sin_port);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpSend -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosOs_UdpSend(NmosUdp* udp, const char* address, uint16_t port, const void* data,
-                   size_t length)
+int NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
+                   size_t Length)
 {
-    struct sockaddr_in to;
-    memset(&to, 0, sizeof(to));
-    to.sin_family = AF_INET;
-    to.sin_port = htons(port);
-    if (inet_pton(AF_INET, address, &to.sin_addr) != 1)
+    struct sockaddr_in To;
+    memset(&To, 0, sizeof(To));
+    To.sin_family = AF_INET;
+    To.sin_port = htons(Port);
+    if (inet_pton(AF_INET, Address, &To.sin_addr) != 1)
     {
         return 0;
     }
-    return (size_t)sendto(udp->socket, (const char*)data, DTNMOS_SOCKET_LENGTH(length), 0,
-                          (struct sockaddr*)&to, sizeof(to)) == length;
+    return (size_t)sendto(Udp->Socket, (const char*)Data, DTNMOS_SOCKET_LENGTH(Length), 0,
+                          (struct sockaddr*)&To, sizeof(To)) == Length;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosOs_UdpReceive(NmosUdp* udp, void* buffer, size_t size, uint32_t timeout_ms,
-                      char* from_address, size_t from_size, uint16_t* from_port)
+int NmosOs_UdpReceive(NmosUdp* Udp, void* Buffer, size_t Size, uint32_t TimeoutMs,
+                      char* FromAddress, size_t FromSize, uint16_t* FromPort)
 {
-    fd_set readable;
-    FD_ZERO(&readable);
-    FD_SET(udp->socket, &readable);
-    struct timeval timeout;
-    timeout.tv_sec = (long)(timeout_ms / 1000u);
-    timeout.tv_usec = (long)(timeout_ms % 1000u) * 1000;
-    const int ready = select((int)udp->socket + 1, &readable, NULL, NULL, &timeout);
-    if (ready == 0)
+    fd_set Readable;
+    FD_ZERO(&Readable);
+    FD_SET(Udp->Socket, &Readable);
+    struct timeval Timeout;
+    Timeout.tv_sec = (long)(TimeoutMs / 1000u);
+    Timeout.tv_usec = (long)(TimeoutMs % 1000u) * 1000;
+    const int Ready = select((int)Udp->Socket + 1, &Readable, NULL, NULL, &Timeout);
+    if (Ready == 0)
     {
         return 0;
     }
-    if (ready < 0)
+    if (Ready < 0)
     {
         return -1;
     }
-    struct sockaddr_in from;
-    socklen_t from_length = sizeof(from);
-    const int received =
-        (int)recvfrom(udp->socket, (char*)buffer, DTNMOS_SOCKET_LENGTH(size), 0,
-                      (struct sockaddr*)&from, &from_length);
-    if (received < 0)
+    struct sockaddr_in From;
+    socklen_t FromLength = sizeof(From);
+    const int Received =
+        (int)recvfrom(Udp->Socket, (char*)Buffer, DTNMOS_SOCKET_LENGTH(Size), 0,
+                      (struct sockaddr*)&From, &FromLength);
+    if (Received < 0)
     {
         return -1;
     }
-    if (from_address != NULL &&
-        inet_ntop(AF_INET, &from.sin_addr, from_address, (socklen_t)from_size) == NULL)
+    if (FromAddress != NULL &&
+        inet_ntop(AF_INET, &From.sin_addr, FromAddress, (socklen_t)FromSize) == NULL)
     {
-        from_address[0] = '\0';
+        FromAddress[0] = '\0';
     }
-    if (from_port != NULL)
+    if (FromPort != NULL)
     {
-        *from_port = ntohs(from.sin_port);
+        *FromPort = ntohs(From.sin_port);
     }
-    return received;
+    return Received;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpClose -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void NmosOs_UdpClose(NmosUdp* udp)
+void NmosOs_UdpClose(NmosUdp* Udp)
 {
-    if (udp != NULL)
+    if (Udp != NULL)
     {
-        DTNMOS_CLOSE_SOCKET(udp->socket);
-        free(udp);
+        DTNMOS_CLOSE_SOCKET(Udp->Socket);
+        free(Udp);
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_SystemDns -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void NmosOs_SystemDns(char* server, size_t server_size, char* domain, size_t domain_size)
+void NmosOs_SystemDns(char* Server, size_t ServerSize, char* Domain, size_t DomainSize)
 {
-    server[0] = '\0';
-    domain[0] = '\0';
+    Server[0] = '\0';
+    Domain[0] = '\0';
 #if defined(_WIN32)
     // The suffix that DHCP gives is the one of the connection, which GetNetworkParams()
     // does not know; that of the domain of the PC is taken when it has none.
-    ULONG size = 16 * 1024;
-    IP_ADAPTER_ADDRESSES* adapters = NULL;
-    ULONG status = ERROR_BUFFER_OVERFLOW;
-    for (int attempt = 0; attempt < 3 && status == ERROR_BUFFER_OVERFLOW; ++attempt)
+    ULONG Size = 16 * 1024;
+    IP_ADAPTER_ADDRESSES* Adapters = NULL;
+    ULONG Status = ERROR_BUFFER_OVERFLOW;
+    for (int Attempt = 0; Attempt < 3 && Status == ERROR_BUFFER_OVERFLOW; ++Attempt)
     {
-        free(adapters);
-        adapters = malloc(size);
-        if (adapters == NULL)
+        free(Adapters);
+        Adapters = malloc(Size);
+        if (Adapters == NULL)
         {
             return;
         }
-        status = GetAdaptersAddresses(AF_UNSPEC,
+        Status = GetAdaptersAddresses(AF_UNSPEC,
                                       GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_SKIP_ANYCAST |
                                           GAA_FLAG_SKIP_MULTICAST,
-                                      NULL, adapters, &size);
+                                      NULL, Adapters, &Size);
     }
-    for (const IP_ADAPTER_ADDRESSES* adapter = status == NO_ERROR ? adapters : NULL;
-         adapter != NULL && server[0] == '\0'; adapter = adapter->Next)
+    for (const IP_ADAPTER_ADDRESSES* Adapter = Status == NO_ERROR ? Adapters : NULL;
+         Adapter != NULL && Server[0] == '\0'; Adapter = Adapter->Next)
     {
-        if (adapter->OperStatus != IfOperStatusUp ||
-            adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||
-            adapter->FirstGatewayAddress == NULL)
+        if (Adapter->OperStatus != IfOperStatusUp ||
+            Adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||
+            Adapter->FirstGatewayAddress == NULL)
         {
             continue;
         }
-        for (const IP_ADAPTER_DNS_SERVER_ADDRESS* dns = adapter->FirstDnsServerAddress;
-             dns != NULL; dns = dns->Next)
+        for (const IP_ADAPTER_DNS_SERVER_ADDRESS* Dns = Adapter->FirstDnsServerAddress;
+             Dns != NULL; Dns = Dns->Next)
         {
-            const struct sockaddr* address = dns->Address.lpSockaddr;
-            if (address != NULL && address->sa_family == AF_INET &&
-                inet_ntop(AF_INET, &((const struct sockaddr_in*)address)->sin_addr,
-                          server, server_size) != NULL)
+            const struct sockaddr* Address = Dns->Address.lpSockaddr;
+            if (Address != NULL && Address->sa_family == AF_INET &&
+                inet_ntop(AF_INET, &((const struct sockaddr_in*)Address)->sin_addr,
+                          Server, ServerSize) != NULL)
             {
                 break;
             }
-            server[0] = '\0';
+            Server[0] = '\0';
         }
-        if (server[0] != '\0' && adapter->DnsSuffix != NULL &&
-            WideCharToMultiByte(CP_UTF8, 0, adapter->DnsSuffix, -1, domain,
-                                (int)domain_size, NULL, NULL) == 0)
+        if (Server[0] != '\0' && Adapter->DnsSuffix != NULL &&
+            WideCharToMultiByte(CP_UTF8, 0, Adapter->DnsSuffix, -1, Domain,
+                                (int)DomainSize, NULL, NULL) == 0)
         {
-            domain[0] = '\0';
+            Domain[0] = '\0';
         }
     }
-    free(adapters);
-    if (server[0] != '\0' && domain[0] == '\0')
+    free(Adapters);
+    if (Server[0] != '\0' && Domain[0] == '\0')
     {
-        FIXED_INFO* params = NULL;
-        ULONG length = 0;
-        if (GetNetworkParams(NULL, &length) == ERROR_BUFFER_OVERFLOW &&
-            (params = malloc(length)) != NULL &&
-            GetNetworkParams(params, &length) == NO_ERROR &&
-            strlen(params->DomainName) < domain_size)
+        FIXED_INFO* Params = NULL;
+        ULONG Length = 0;
+        if (GetNetworkParams(NULL, &Length) == ERROR_BUFFER_OVERFLOW &&
+            (Params = malloc(Length)) != NULL &&
+            GetNetworkParams(Params, &Length) == NO_ERROR &&
+            strlen(Params->DomainName) < DomainSize)
         {
-            memcpy(domain, params->DomainName, strlen(params->DomainName) + 1);
+            memcpy(Domain, Params->DomainName, strlen(Params->DomainName) + 1);
         }
-        free(params);
+        free(Params);
     }
 #else
-    FILE* file = fopen("/etc/resolv.conf", "r");
-    if (file == NULL)
+    FILE* File = fopen("/etc/resolv.conf", "r");
+    if (File == NULL)
     {
         return;
     }
-    char text[16 * 1024];
-    const size_t length = fread(text, 1, sizeof(text) - 1, file);
-    fclose(file);
-    text[length] = '\0';
-    NmosDns_ReadResolvConf(text, server, server_size, domain, domain_size);
+    char Text[16 * 1024];
+    const size_t Length = fread(Text, 1, sizeof(Text) - 1, File);
+    fclose(File);
+    Text[Length] = '\0';
+    NmosDns_ReadResolvConf(Text, Server, ServerSize, Domain, DomainSize);
 #endif
 }
