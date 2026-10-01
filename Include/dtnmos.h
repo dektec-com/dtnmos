@@ -32,7 +32,7 @@ extern "C"
 
 #define DTNMOS_VERSION_MAJOR 0
 #define DTNMOS_VERSION_MINOR 1
-#define DTNMOS_VERSION_PATCH 0
+#define DTNMOS_VERSION_PATCH 1
 
 // Returns the version of the library the program runs with; each pointer may be null.
 DTNMOS_API void dtnmos_version(int* major, int* minor, int* patch);

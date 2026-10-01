@@ -16,6 +16,20 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# The version dtnmos_version() reports is that of the macros of dtnmos.h, which a program
+# compiles against as well; they must be the project's, or a release reports another.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/Include/dtnmos.h" _dtnmos_version_lines
+     REGEX "^#define DTNMOS_VERSION_(MAJOR|MINOR|PATCH) ")
+foreach(_part IN ITEMS MAJOR MINOR PATCH)
+  string(REGEX MATCH "DTNMOS_VERSION_${_part} ([0-9]+)" _match "${_dtnmos_version_lines}")
+  if(NOT CMAKE_MATCH_1 STREQUAL PROJECT_VERSION_${_part})
+    message(
+      FATAL_ERROR
+        "DTNMOS_VERSION_${_part} in Include/dtnmos.h is '${CMAKE_MATCH_1}', and the "
+        "project's version is ${PROJECT_VERSION}; give both the same version.")
+  endif()
+endforeach()
+
 include(GNUInstallDirs)
 
 option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
