@@ -171,7 +171,17 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* Node)
     const int Ipv6 = strchr(Node->ApiHost, ':') != NULL;
     snprintf(Ports, sizeof(Ports), "%s%s%s:%u", Ipv6 ? "[" : "", Node->ApiHost,
              Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
-    const char* Options[] = {"listening_ports", Ports, "num_threads", "4", NULL};
+    // civetweb answers a browser's preflight itself, before the node sees it, and by
+    // default allows only the method that was asked for. The node allows all of them.
+    const char* Options[] = {"listening_ports",
+                             Ports,
+                             "num_threads",
+                             "4",
+                             "access_control_allow_methods",
+                             "GET, PUT, POST, PATCH, HEAD, OPTIONS, DELETE",
+                             "access_control_allow_headers",
+                             "Content-Type, Accept",
+                             NULL};
     mg_init_library(0);
     struct mg_callbacks Callbacks;
     memset(&Callbacks, 0, sizeof(Callbacks));
