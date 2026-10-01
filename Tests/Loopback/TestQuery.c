@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "check.h"
 #include "NmosJson.h"
+#include "check.h"
 #include "tests.h"
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- json_reads_values_and_escapes -.-.-.-.-.-.-.-.-.-.-.-.-.-.

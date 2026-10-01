@@ -1,5 +1,11 @@
+# Normalize line endings: LF in the repository and in the working tree, but for the
+# scripts Windows runs, which keep CRLF.
 * text=auto eol=lf
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.sh text eol=lf
+
+# Hooks are shell scripts without an extension, so name them explicitly. CRLF here makes
+# git refuse to run them with a "bad interpreter" error.
+Scripts/hooks/* text eol=lf

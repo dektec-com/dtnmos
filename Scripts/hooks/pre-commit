@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* pre-commit *#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
+#
+# dtnmos - Runs the style checks before a commit is created
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Installed by Scripts/install_hooks.sh. This is a convenience so that mistakes come back
+# in seconds rather than after a push; CI runs the same checks and is the binding gate.
+#
+# Set DTNMOS_SKIP_HOOK=1 to bypass it for one commit.
+
+set -uo pipefail
+
+if [ "${DTNMOS_SKIP_HOOK:-0}" = "1" ]; then
+    echo "pre-commit: skipped (DTNMOS_SKIP_HOOK=1)"
+    exit 0
+fi
+
+RepoRoot="$(git rev-parse --show-toplevel)"
+cd "$RepoRoot"
+
+# Only the files the commit touches; CI checks the whole tree.
+if ! Scripts/check_style.sh --staged; then
+    cat <<'MSG'
+
+pre-commit: style checks failed, commit aborted.
+
+  Fix the formatting:   clang-format -i <file>
+  Re-run the checks:    Scripts/build.sh --lint-only
+  Bypass this once:     DTNMOS_SKIP_HOOK=1 git commit ...
+MSG
+    exit 1
+fi
+
+exit 0

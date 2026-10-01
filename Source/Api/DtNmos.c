@@ -9,8 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "dtnmos/sdp.h"
 #include "NmosInternal.h"
+#include "dtnmos/sdp.h"
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_version -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //

@@ -10,9 +10,9 @@
 
 #include <stdint.h>
 
-#include "dtnmos/node.h"
 #include "NmosInternal.h"
 #include "NmosOs.h"
+#include "dtnmos/node.h"
 
 typedef struct node_device
 {

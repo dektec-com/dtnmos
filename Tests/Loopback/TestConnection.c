@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "NmosJson.h"
 #include "check.h"
 #include "dtnmos/node.h"
-#include "NmosJson.h"
 #include "tests.h"
 
 #define NODE_ID "bbbbbbbb-0000-4000-8000-000000000001"

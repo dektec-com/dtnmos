@@ -8,8 +8,8 @@
 
 #include <string.h>
 
-#include "dtnmos/sdp.h"
 #include "NmosInternal.h"
+#include "dtnmos/sdp.h"
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv6 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "dtnmos",
+  "version-semver": "0.1.1",
+  "description": "The dependencies of dtnmos's own build with the presets windows-full and linux-full; a program takes dtnmos from the port in DekTec's vcpkg registry",
+  "homepage": "https://github.com/dektec-com/dtnmos",
+  "license": "BSD-3-Clause",
+  "features": {
+    "curl": {
+      "description": "HTTP and WebSockets on libcurl, for talking to registries",
+      "dependencies": [
+        {
+          "name": "curl",
+          "default-features": false,
+          "features": [ "ssl", "websockets" ]
+        }
+      ]
+    },
+    "server": {
+      "description": "The HTTP server of a node, on civetweb, for its Node and Connection APIs",
+      "dependencies": [
+        {
+          "name": "civetweb",
+          "default-features": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+# Checks that formatting cannot catch, for running clang-tidy by hand: no build step and
+# no CI job runs it. Coding rules 4 and 6 are handled by .clang-format; rule 5 and the
+# "no historical comments" half of rule 2 by Scripts/check_style.sh.
+---
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  misc-*,
+  performance-*,
+  readability-*,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-braces-around-statements,
+  -bugprone-easily-swappable-parameters
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(Source|Include|Tests)/.*\.h$'
+FormatStyle: file

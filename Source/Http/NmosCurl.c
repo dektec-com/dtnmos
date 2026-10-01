@@ -6,8 +6,8 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include "dtnmos/http.h"
 #include "NmosInternal.h"
+#include "dtnmos/http.h"
 
 #ifdef DTNMOS_WITH_CURL
 

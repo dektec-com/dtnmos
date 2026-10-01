@@ -11,10 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "check.h"
 #include "NmosInternal.h"
 #include "NmosJson.h"
 #include "NmosOs.h"
+#include "check.h"
 #include "tests.h"
 
 // A request the fake registry received.

@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "check.h"
 #include "NmosJson.h"
+#include "check.h"
 #include "tests.h"
 
 #define BASE "http://registry.test/x-nmos/query/v1.3/"

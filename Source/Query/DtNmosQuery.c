@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dtnmos/subscription.h"
 #include "NmosInternal.h"
 #include "NmosJson.h"
 #include "NmosQuery.h"
+#include "dtnmos/subscription.h"
 
 // The most pages a list follows, which bounds a registry whose paging never ends.
 #define DTNMOS_MAX_PAGES 1000

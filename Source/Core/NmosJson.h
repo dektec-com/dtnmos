@@ -10,8 +10,8 @@
 
 #include <stddef.h>
 
-#include "dtnmos/dtnmos.h"
 #include "NmosInternal.h"
+#include "dtnmos/dtnmos.h"
 
 typedef enum dtnmos_json_type
 {

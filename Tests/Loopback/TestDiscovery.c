@@ -11,9 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "check.h"
 #include "NmosDns.h"
 #include "NmosOs.h"
+#include "check.h"
 #include "tests.h"
 
 // A DNS message the test builds.

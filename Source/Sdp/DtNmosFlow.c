@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dtnmos/sdp.h"
 #include "NmosInternal.h"
+#include "dtnmos/sdp.h"
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //

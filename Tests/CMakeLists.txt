@@ -70,7 +70,9 @@ if(DTNMOS_INSTALL)
       "-DVCPKG_MANIFEST_MODE=OFF")
   endif()
   # The consumer is configured afresh on every run, as a toolchain takes effect only in
-  # the first configuration of a build directory.
+  # the first configuration of a build directory. Under a generator of several
+  # configurations it has only the one installed, as the package holds no other, and is
+  # built in it.
   add_test(NAME dtnmos.package.clean COMMAND "${CMAKE_COMMAND}" -E rm -rf
                                             "${_package_dir}/build")
   add_test(NAME dtnmos.package.install
@@ -79,9 +81,11 @@ if(DTNMOS_INSTALL)
   add_test(
     NAME dtnmos.package.find-package
     COMMAND
-      "${CMAKE_CTEST_COMMAND}" --build-and-test "${CMAKE_CURRENT_SOURCE_DIR}/Package"
+      "${CMAKE_CTEST_COMMAND}" -C "$<CONFIG>" --build-and-test
+      "${CMAKE_CURRENT_SOURCE_DIR}/Package"
       "${_package_dir}/build" --build-generator "${CMAKE_GENERATOR}" --build-options
-      "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
+      "-DCMAKE_BUILD_TYPE=$<CONFIG>" "-DCMAKE_CONFIGURATION_TYPES=$<CONFIG>"
+      "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
       "-DCMAKE_PREFIX_PATH=${_package_prefix_path}"
       "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
       "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" ${_package_vcpkg_options}

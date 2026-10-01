@@ -1,0 +1,98 @@
+# #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* ci.yml *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
+#
+# dtnmos - Build, test and style gate
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Everything here runs on the runner alone: the tests talk to responders of their own on
+# the loopback interface. Tests against a real registry, such as the test bed of
+# Scripts/nmos_testbed.sh, are run by hand.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  style:
+    name: Style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The exact version, not just the program: builds of the same major version
+      # differ in what they format, and a distribution ships whichever it ships.
+      - name: Install clang-format
+        run: |
+          python3 -m pip install --user --break-system-packages clang-format==18.1.8
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # The binding gate. The pre-commit hook runs the same script, but a contributor
+      # without it installed has to be stopped here.
+      - name: Coding rules
+        run: Scripts/check_style.sh
+
+  build:
+    name: Build ${{ matrix.preset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # The full presets build with libcurl and civetweb from vcpkg, which the runners
+      # carry; the binary cache keeps them from being built again on every run.
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux-debug
+          - os: ubuntu-latest
+            preset: linux-release
+          - os: ubuntu-latest
+            preset: linux-asan
+          - os: ubuntu-latest
+            preset: linux-full
+            vcpkg: true
+          - os: windows-latest
+            preset: windows-debug
+          - os: windows-latest
+            preset: windows-release
+          - os: windows-latest
+            preset: windows-full
+            vcpkg: true
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Ninja
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Use the runner's vcpkg
+        if: matrix.vcpkg
+        shell: bash
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
+      - name: Restore the vcpkg binary cache
+        if: matrix.vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: vcpkg-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.preset }}-
+
+      - name: Show the tools
+        if: runner.os == 'Linux'
+        run: cmake --version && gcc --version
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
