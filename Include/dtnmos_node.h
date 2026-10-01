@@ -90,7 +90,9 @@ typedef struct DtNmosSenderConfig
     DtNmosId DeviceId;
     const char* Label;
     const char* Description;
-    const DtNmosFlow* Flow; // what it sends, video or audio, written as its SDP; copied
+    // What it sends, video or audio, written as its SDP; copied. A reference clock of
+    // localmac is written with the MAC address of the interface SourceIp is on.
+    const DtNmosFlow* Flow;
     // The address it sends from, that of the network port of the card; required. Its
     // source_ip "auto" stands for it, and its SDP gives it as origin and source-filter.
     const char* SourceIp;

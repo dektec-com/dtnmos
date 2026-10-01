@@ -6,6 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -821,6 +822,29 @@ DtNmosResult NmosNode_WriteTransportFile(const NmosNodeSender* Sender, NmosBuffe
     snprintf(Session.OriginIp, sizeof(Session.OriginIp), "%s", Sender->ActiveSourceIp);
     DtNmosFlow Flow = Sender->Flow;
     snprintf(Flow.SourceIp, sizeof(Flow.SourceIp), "%s", Sender->ActiveSourceIp);
+    // A reference clock of localmac is that of the interface the sender sends from,
+    // whose MAC address IS-04 gives as the port_id of its binding.
+    if (Flow.RefClock.Kind == DTNMOS_REFCLOCK_LOCALMAC)
+    {
+        size_t Count = 0;
+        NmosInterface* List = NmosOs_Interfaces(&Count);
+        for (size_t i = 0; i < Count; ++i)
+        {
+            if (strcmp(List[i].Address, Sender->ActiveSourceIp) == 0)
+            {
+                for (size_t c = 0;
+                     c < sizeof(Flow.RefClock.LocalMac) - 1 && List[i].PortId[c] != '\0';
+                     ++c)
+                {
+                    Flow.RefClock.LocalMac[c] =
+                        (char)toupper((unsigned char)List[i].PortId[c]);
+                    Flow.RefClock.LocalMac[c + 1] = '\0';
+                }
+                break;
+            }
+        }
+        free(List);
+    }
     return NmosSdp_Write(&Session, &Flow, 1, Text);
 }
 
