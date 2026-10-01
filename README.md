@@ -268,8 +268,9 @@ if (DtNmos_Discover(&config, &list) == DTNMOS_OK)
 ```
 
 A search takes about a second, `TimeoutMs` of the config, and finding nothing is no
-failure. The URL of a Query API goes into `DtNmosQueryConfig.RegistryUrl`, and that of a
-Registration API into `DtNmosNodeConfig.RegistrationUrl`.
+failure. The URL of a Query API goes into `DtNmosQueryConfig.RegistryUrl`. A node needs
+no search of the program's: without a `RegistrationUrl` it searches for its registry
+itself, as the next section says.
 
 ## Being a node
 
@@ -286,7 +287,7 @@ DtNmosNodeConfig config = {0};
 config.Size = sizeof(config);
 DtNmosId_FromName(&my_namespace, "my node", &config.Id);
 config.Label = "my node";
-config.RegistrationUrl = "http://registry.local";
+config.RegistrationUrl = NULL;  // the node searches; or e.g. "http://registry.local"
 config.Http = DtNmos_CurlHttp;
 DtNmosNode* node = DtNmosNode_Alloc();
 if (DtNmosNode_Open(node, &config) == DTNMOS_OK)
@@ -295,7 +296,9 @@ if (DtNmosNode_Open(node, &config) == DTNMOS_OK)
   DtNmosId_FromName(&config.Id, "card 1", &device.Id);
   device.Label = "card 1";
   DtNmosNode_AddDevice(node, &device);
-  // DtNmosNode_AddSender() with the flow it sends, DtNmosNode_AddReceiver() ...
+  // DtNmosNode_AddSender() with the flow it sends and SourceIp, the address of the
+  // network port it sends from; DtNmosNode_AddReceiver() with InterfaceIp, that of the
+  // port it receives on ...
   DtNmosNode_Serve(node);
   // ... until the program ends, which deletes what the node registered:
   DtNmosNode_Close(node);
@@ -309,10 +312,22 @@ keeping the handle a program has handed on; a function that needs it open fails 
 `DTNMOS_E_STATE` on one that is not. `_Free()` closes an open object first, and
 `_Freep()` also sets the pointer to null.
 
-A node can move to another registry when its own fails: `RegistryFailed` of the config
-is called on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when
-0), and returns the URL of the next registry, e.g. the next of a `DtNmos_Discover()` for
-`DTNMOS_SERVICE_REGISTRATION`, which the node then registers with from the start.
+A sender and a receiver need the address of the network port they send from or receive
+on, which the node lists as an interface of IS-04 and binds them to: the interface of
+the host that has the address, a port of a DekTec card among them. A sender's SDP gives
+the address as origin and source filter, and the MAC address of the interface as a
+reference clock of `localmac`.
+
+A node without a `RegistrationUrl` finds its registry itself, as IS-04 asks. It searches
+with DNS-SD on a thread of its own, as `Discovery` of the config says, or as
+`DtNmos_Discover()` does by default; registers with the most preferred usable registry;
+and when that fails, moves on at once to the next one it found, with a heartbeat first,
+going down the list and starting over from the top when all have failed. A node given
+its registry can move to another when it fails: `RegistryFailed` of the config is called
+on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when 0), and
+returns the URL of the next registry, which the node then registers with from the
+start. A registry that answers a first registration with 200 holds an old node of the
+same ID, which the node deletes before it registers again.
 
 ## Being connected
 
@@ -334,5 +349,14 @@ static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
 }
 ```
 
-Immediate activation is supported; a scheduled activation and the bulk interface are
-answered with 501.
+An immediate activation calls the function while the controller waits for the answer. A
+scheduled one, absolute or relative, is answered with 202 and called from
+`DtNmosNode_Poll()` when its time comes, never before it; until then the staged
+parameters take only a PATCH that cancels it. The bulk interface applies each of its
+patches as a PATCH of its own would. The active parameters hold no `"auto"`: a sender's
+`source_ip` is its `SourceIp`, a receiver's `interface_ip` its `InterfaceIp`, and a
+receiver given a transport file takes the group, source and port of its flow.
+
+The AMWA NMOS Testing Tool passes the node in IS-04-01, IS-05-01 and IS-05-02 without a
+failure; the interop tests (`DTNMOS_INTEROP_TESTS`, run with `ctest -L interop`) run
+them against it.
