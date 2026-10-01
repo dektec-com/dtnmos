@@ -4,7 +4,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-prefix=@CMAKE_INSTALL_PREFIX@
+# The prefix is found from where the file is, so that an install to any prefix works.
+prefix=${pcfiledir}/@DTNMOS_PC_PREFIX_FROM_PCDIR@
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 

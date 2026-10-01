@@ -1,0 +1,113 @@
+THIRD-PARTY NOTICES
+
+dtnmos itself holds no code of others: its JSON, SHA-1 and DNS are its own. A build with
+-DDTNMOS_WITH_CURL=ON or -DDTNMOS_WITH_SERVER=ON links the libraries below, and so does a
+program that takes the features curl or server of the vcpkg port. Which ones, by the
+platform, as vcpkg builds them:
+
+    libcurl    with DTNMOS_WITH_CURL, for HTTP, HTTPS and WebSockets     all platforms
+    zlib       with libcurl                                               all platforms
+    OpenSSL    with libcurl, for HTTPS; Windows uses its own Schannel     Linux, macOS
+    civetweb   with DTNMOS_WITH_SERVER, for the server of a node         all platforms
+
+A program that ships such a build ships these notices with it. The versions the preset
+linux-full was last built with are curl 8.21.0, zlib 1.3.2, OpenSSL 3.6.3 and
+civetweb 1.16.
+
+================================================================================
+libcurl
+https://curl.se
+================================================================================
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright (c) 1996 - 2026, Daniel Stenberg, <daniel@haxx.se>, and many
+contributors, see the THANKS file.
+
+All rights reserved.
+
+Permission to use, copy, modify, and distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright
+notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall not
+be used in advertising or otherwise to promote the sale, use or other dealings
+in this Software without prior written authorization of the copyright holder.
+
+The copyright file of curl names further notices of parts of it, such as
+inet_ntop.c and inet_pton.c; vcpkg installs it as share/curl/copyright.
+
+================================================================================
+zlib
+https://zlib.net
+================================================================================
+
+ (C) 1995-2026 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+
+================================================================================
+OpenSSL
+https://www.openssl.org
+================================================================================
+
+OpenSSL 3 is licensed under the Apache License, Version 2.0, by the OpenSSL
+Project Authors. A copy of the License is at
+https://www.apache.org/licenses/LICENSE-2.0, and vcpkg installs it as
+share/openssl/copyright.
+
+================================================================================
+CivetWeb
+https://github.com/civetweb/civetweb
+================================================================================
+
+Copyright (c) 2013-2021 The CivetWeb developers
+Copyright (c) 2004-2013 Sergey Lyubka
+Copyright (c) 2013 No Face Press, LLC (Thomas Davis)
+Copyright (c) 2013 F-Secure Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+The copyright file of civetweb holds the licences of features that dtnmos does
+not build, which vcpkg leaves out with default-features false.

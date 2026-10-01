@@ -15,7 +15,13 @@ projects as well, such as CDTAPI and FFmpeg.
 - No dependencies. HTTP goes through a function the caller passes in; with
   `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `DtNmos_CurlHttp()`, and with
   `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `DtNmosNode_Serve()`.
-- BSD-3-Clause.
+- BSD-3-Clause. A build with libcurl or civetweb links them and what they need;
+  `THIRD-PARTY-NOTICES` has their licences.
+
+[`Docs/getting-started.md`](Docs/getting-started.md) takes a program from nothing to
+reading an SDP and talking to a registry, and [`Examples/`](Examples/README.md) has
+programs that read an SDP, list the senders of a registry, connect a receiver and
+register a node.
 
 ## Building
 

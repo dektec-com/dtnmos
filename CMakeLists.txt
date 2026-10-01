@@ -24,6 +24,7 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Include/dtnmos_version.h.in"
 include(GNUInstallDirs)
 
 option(DTNMOS_BUILD_TESTS "Build the dtnmos tests" ${PROJECT_IS_TOP_LEVEL})
+option(DTNMOS_BUILD_EXAMPLES "Build the example programs" ${PROJECT_IS_TOP_LEVEL})
 option(
   DTNMOS_INSTALL
   "Install the dtnmos library, headers, CMake package and pkg-config file"
@@ -189,6 +190,11 @@ if(DTNMOS_INSTALL)
   else()
     set(DTNMOS_PC_LIBS_PRIVATE "-lpthread")
   endif()
+  # The way from the directory of the file up to the prefix, "../.." for lib/pkgconfig;
+  # the prefix of the configuration is not where every install goes.
+  file(RELATIVE_PATH DTNMOS_PC_PREFIX_FROM_PCDIR "/prefix/${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+       "/prefix")
+  string(REGEX REPLACE "/$" "" DTNMOS_PC_PREFIX_FROM_PCDIR "${DTNMOS_PC_PREFIX_FROM_PCDIR}")
   configure_file(dtnmos.pc.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc" @ONLY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc"
           DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
@@ -197,4 +203,8 @@ endif()
 if(DTNMOS_BUILD_TESTS)
   enable_testing()
   add_subdirectory(Tests)
+endif()
+
+if(DTNMOS_BUILD_EXAMPLES)
+  add_subdirectory(Examples)
 endif()
