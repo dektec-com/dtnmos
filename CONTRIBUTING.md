@@ -54,8 +54,9 @@ about structs is added.
     A field added to a struct goes at its end, and the code that reads it checks first
     that `Size` reaches it.
 
-Rules 10 and 11 describe where the code is going. The renames of plan 0001 bring the
-existing code to them, a step at a time.
+`Scripts/check_style.sh` checks rule 11 in the public headers. In a `.c` file the
+functions keep the order in which each is defined before its first use, and a new one
+goes in its alphabetical place where that order allows it.
 
 ### File header
 

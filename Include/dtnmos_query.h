@@ -55,60 +55,6 @@ typedef struct DtNmosSenderInfo
 // single sender returns a list of that one, at index 0.
 typedef struct DtNmosSenderList DtNmosSenderList;
 
-DTNMOS_API size_t DtNmosSenderList_Count(const DtNmosSenderList* List);
-DTNMOS_API const DtNmosSenderInfo* DtNmosSenderList_At(const DtNmosSenderList* List,
-                                                       size_t Index);
-DTNMOS_API void DtNmosSenderList_Free(DtNmosSenderList* List);
-
-// Allocates a query, closed. Returns null when the memory ran out.
-DTNMOS_API DtNmosQuery* DtNmosQuery_Alloc(void);
-
-// Opens query on the registry of config, whose strings it copies. Fails with
-// DTNMOS_E_INVALID_ARGUMENT without a registry URL or HTTP function, or with another
-// API version than v1.3, and with DTNMOS_E_STATE when the query is open. A query closed
-// can be opened again, on another registry, keeping its handle.
-DTNMOS_API DtNmosResult DtNmosQuery_Open(DtNmosQuery* Query,
-                                         const DtNmosQueryConfig* Config);
-
-// Forgets the registry, leaving the query closed. Fails with DTNMOS_E_STATE when the
-// query is not open. A subscription made with it must be closed first.
-DTNMOS_API DtNmosResult DtNmosQuery_Close(DtNmosQuery* Query);
-
-// Closes the query when it is open, and frees it. Null is allowed.
-DTNMOS_API void DtNmosQuery_Free(DtNmosQuery* Query);
-
-// Frees *Query as DtNmosQuery_Free() does and sets *Query to null. Null is allowed.
-DTNMOS_API void DtNmosQuery_Freep(DtNmosQuery** Query);
-
-// The functions of a query below, and those of the controller, need an open query, and
-// fail with DTNMOS_E_STATE on another.
-
-// Lists the senders of the registry, following its paging, each with the media of its
-// flow.
-DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* Query, DtNmosSenderList** List);
-
-// Finds the sender whose ID is id_or_label when it is a UUID, or else whose label it
-// is, and returns it in a list of one, which the caller frees. Fails with
-// DTNMOS_E_NOT_FOUND, or DTNMOS_E_AMBIGUOUS when senders share the label, the message
-// listing their IDs.
-DTNMOS_API DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* Query, const char* IdOrLabel,
-                                               DtNmosSenderList** Found);
-
-// Fetches the SDP of sender from its manifest_href into the caller's buffer of *Size
-// bytes, with a terminating null; *Size is then its length. Its size is known only once
-// it is fetched, so a buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *Size then
-// giving the bytes needed, and a second call fetches it again; DtNmosQuery_SenderSdp()
-// fetches and parses it at once. Fails with DTNMOS_E_NOT_FOUND when the sender has no
-// manifest.
-DTNMOS_API DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* Query,
-                                                   const DtNmosSenderInfo* Sender,
-                                                   char* Buffer, size_t* Size);
-
-// Fetches the SDP of sender and parses it as DtNmosSdp_Parse() does.
-DTNMOS_API DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* Query,
-                                              const DtNmosSenderInfo* Sender,
-                                              DtNmosSdp** Sdp);
-
 // A receiver as the registry lists it. Its strings belong to the list it is in and stay
 // valid until that list is freed; one the registry leaves out is empty, never null.
 typedef struct DtNmosReceiverInfo
@@ -127,20 +73,84 @@ typedef struct DtNmosReceiverInfo
 // receiver returns a list of that one, at index 0.
 typedef struct DtNmosReceiverList DtNmosReceiverList;
 
-DTNMOS_API size_t DtNmosReceiverList_Count(const DtNmosReceiverList* List);
-DTNMOS_API const DtNmosReceiverInfo* DtNmosReceiverList_At(const DtNmosReceiverList* List,
-                                                           size_t Index);
-DTNMOS_API void DtNmosReceiverList_Free(DtNmosReceiverList* List);
+// A function of a query other than _Alloc(), _Open(), _Free() and _Freep(), and one of
+// the controller, needs an open query, and fails with DTNMOS_E_STATE on another.
+
+// Allocates a query, closed. Returns null when the memory ran out.
+DTNMOS_API DtNmosQuery* DtNmosQuery_Alloc(void);
+
+// Forgets the registry, leaving the query closed. Fails with DTNMOS_E_STATE when the
+// query is not open. A subscription made with it must be closed first.
+DTNMOS_API DtNmosResult DtNmosQuery_Close(DtNmosQuery* Query);
+
+// Finds the receiver whose ID is IdOrLabel when it is a UUID, or else whose label it
+// is, as DtNmosQuery_FindSender() finds a sender, with the same errors.
+DTNMOS_API DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* Query,
+                                                 const char* IdOrLabel,
+                                                 DtNmosReceiverList** Found);
+
+// Finds the sender whose ID is IdOrLabel when it is a UUID, or else whose label it
+// is, and returns it in a list of one, which the caller frees. Fails with
+// DTNMOS_E_NOT_FOUND, or DTNMOS_E_AMBIGUOUS when senders share the label, the message
+// listing their IDs.
+DTNMOS_API DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* Query, const char* IdOrLabel,
+                                               DtNmosSenderList** Found);
+
+// Closes the query when it is open, and frees it. Null is allowed.
+DTNMOS_API void DtNmosQuery_Free(DtNmosQuery* Query);
+
+// Frees *Query as DtNmosQuery_Free() does and sets *Query to null. Null is allowed.
+DTNMOS_API void DtNmosQuery_Freep(DtNmosQuery** Query);
+
+// Opens query on the registry of config, whose strings it copies. Fails with
+// DTNMOS_E_INVALID_ARGUMENT without a registry URL or HTTP function, or with another
+// API version than v1.3, and with DTNMOS_E_STATE when the query is open. A query closed
+// can be opened again, on another registry, keeping its handle.
+DTNMOS_API DtNmosResult DtNmosQuery_Open(DtNmosQuery* Query,
+                                         const DtNmosQueryConfig* Config);
 
 // Lists the receivers of the registry, following its paging.
 DTNMOS_API DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* Query,
                                               DtNmosReceiverList** List);
 
-// Finds the receiver whose ID is id_or_label when it is a UUID, or else whose label it
-// is, as DtNmosQuery_FindSender() finds a sender, with the same errors.
-DTNMOS_API DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* Query,
-                                                 const char* IdOrLabel,
-                                                 DtNmosReceiverList** Found);
+// Fetches the SDP of sender from its manifest_href into the caller's buffer of *Size
+// bytes, with a terminating null; *Size is then its length. Its size is known only once
+// it is fetched, so a buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *Size then
+// giving the bytes needed, and a second call fetches it again; DtNmosQuery_SenderSdp()
+// fetches and parses it at once. Fails with DTNMOS_E_NOT_FOUND when the sender has no
+// manifest.
+DTNMOS_API DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* Query,
+                                                   const DtNmosSenderInfo* Sender,
+                                                   char* Buffer, size_t* Size);
+
+// Lists the senders of the registry, following its paging, each with the media of its
+// flow.
+DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* Query, DtNmosSenderList** List);
+
+// Fetches the SDP of sender and parses it as DtNmosSdp_Parse() does.
+DTNMOS_API DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* Query,
+                                              const DtNmosSenderInfo* Sender,
+                                              DtNmosSdp** Sdp);
+
+// Returns the receiver at Index, from 0, or null past the end of the list.
+DTNMOS_API const DtNmosReceiverInfo* DtNmosReceiverList_At(const DtNmosReceiverList* List,
+                                                           size_t Index);
+
+// Returns the number of receivers in the list; 0 for null.
+DTNMOS_API size_t DtNmosReceiverList_Count(const DtNmosReceiverList* List);
+
+// Frees the list and the strings of its receivers. Null is allowed.
+DTNMOS_API void DtNmosReceiverList_Free(DtNmosReceiverList* List);
+
+// Returns the sender at Index, from 0, or null past the end of the list.
+DTNMOS_API const DtNmosSenderInfo* DtNmosSenderList_At(const DtNmosSenderList* List,
+                                                       size_t Index);
+
+// Returns the number of senders in the list; 0 for null.
+DTNMOS_API size_t DtNmosSenderList_Count(const DtNmosSenderList* List);
+
+// Frees the list and the strings of its senders. Null is allowed.
+DTNMOS_API void DtNmosSenderList_Free(DtNmosSenderList* List);
 
 // +=+=+=+=+=+=+=+=+= A controller that connects receivers (IS-05 v1.1) +=+=+=+=+=+=+=+=+=
 
@@ -149,10 +159,17 @@ DTNMOS_API DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* Query,
 // its functions return stays valid until DtNmosConnection_Free().
 typedef struct DtNmosConnection DtNmosConnection;
 
+// Frees the connection and what it holds. Null is allowed.
 DTNMOS_API void DtNmosConnection_Free(DtNmosConnection* Connection);
+
+// Returns the receiver that was connected.
 DTNMOS_API const DtNmosReceiverInfo*
 DtNmosConnection_Receiver(const DtNmosConnection* Connection);
+
+// Returns the SDP of the sender, which the receiver was given as its transport file.
 DTNMOS_API const char* DtNmosConnection_Sdp(const DtNmosConnection* Connection);
+
+// Returns the sender the receiver was connected to.
 DTNMOS_API const DtNmosSenderInfo*
 DtNmosConnection_Sender(const DtNmosConnection* Connection);
 
@@ -180,8 +197,8 @@ DTNMOS_API DtNmosResult DtNmosQuery_Connect(DtNmosQuery* Query, const char* Rece
 DTNMOS_API DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* Query, const char* Receiver,
                                                DtNmosReceiverList** Disconnected);
 
-// Moves a sender of the registry of query, given by its ID or label, to destination_ip
-// and destination_port, as a controller of IS-05 does: through the Connection API of the
+// Moves a sender of the registry of query, given by its ID or label, to DestinationIp
+// and DestinationPort, as a controller of IS-05 does: through the Connection API of the
 // sender, found as DtNmosQuery_Connect() finds that of a receiver, it activates at once
 // the staged parameters of its leg with the new destination. moved, when not null,
 // receives the sender as the registry lists it, in a list of one which the caller frees.
@@ -202,9 +219,6 @@ typedef enum DtNmosChangeKind
     DTNMOS_CHANGE_MODIFIED = 2,
     DTNMOS_CHANGE_REMOVED = 3
 } DtNmosChangeKind;
-
-// Returns the name of a kind, e.g. "added"; a static string.
-DTNMOS_API const char* DtNmosChangeKind_Name(DtNmosChangeKind Kind);
 
 // A change of one resource, valid during the call it is passed to: its ID, and its JSON
 // before and after, each null when the resource was not there.
@@ -233,30 +247,17 @@ typedef struct DtNmosSubscriptionConfig
 
 typedef struct DtNmosSubscription DtNmosSubscription;
 
+// Returns the name of a kind, e.g. "added"; a static string.
+DTNMOS_API const char* DtNmosChangeKind_Name(DtNmosChangeKind Kind);
+
+// Reads the JSON of a sender, as a change gives it, into a list of one, which the caller
+// frees. Its media stays DTNMOS_MEDIA_OTHER: it is a property of its flow. Fails with
+// DTNMOS_E_PARSE for what is no JSON object.
+DTNMOS_API DtNmosResult DtNmosSenderInfo_Parse(const char* Json, size_t Length,
+                                               DtNmosSenderList** Sender);
+
 // Allocates a subscription, closed. Returns null when the memory ran out.
 DTNMOS_API DtNmosSubscription* DtNmosSubscription_Alloc(void);
-
-// Opens subscription: asks the registry of query, which is open, for a subscription to
-// the resources at Config->ResourcePath, through the HTTP function of the query, and
-// connects to its WebSocket, with the timeout of the query. The query must stay open
-// while the subscription is. Fails with DTNMOS_E_STATE when the subscription is open or
-// the query is not, as the requests of the query do, with DTNMOS_E_PARSE when the answer
-// names no WebSocket, and as the connect of the WebSocket does.
-DTNMOS_API DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* Subscription,
-                                                DtNmosQuery* Query,
-                                                const DtNmosSubscriptionConfig* Config);
-
-// Waits at most timeout_ms for a message, and calls on_change for each change in it, on
-// the thread of the caller. The first message holds every resource as it is, each a
-// DTNMOS_CHANGE_PRESENT. Fails with DTNMOS_E_TIMEOUT when no message came, with
-// DTNMOS_E_PARSE for a message it cannot read, after which it can be polled again, and
-// with DTNMOS_E_NETWORK when the WebSocket closed or failed, after which a new
-// subscription starts again from the first message.
-DTNMOS_API DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* Subscription,
-                                                uint32_t TimeoutMs);
-
-// The URL of the WebSocket of the subscription.
-DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* Subscription);
 
 // Closes the WebSocket, leaving the subscription closed; the registry drops a
 // subscription that is not persistent when its last WebSocket closes. Fails with
@@ -270,11 +271,27 @@ DTNMOS_API void DtNmosSubscription_Free(DtNmosSubscription* Subscription);
 // Null is allowed.
 DTNMOS_API void DtNmosSubscription_Freep(DtNmosSubscription** Subscription);
 
-// Reads the JSON of a sender, as a change gives it, into a list of one, which the caller
-// frees. Its media stays DTNMOS_MEDIA_OTHER: it is a property of its flow. Fails with
-// DTNMOS_E_PARSE for what is no JSON object.
-DTNMOS_API DtNmosResult DtNmosSenderInfo_Parse(const char* Json, size_t Length,
-                                               DtNmosSenderList** Sender);
+// Opens subscription: asks the registry of query, which is open, for a subscription to
+// the resources at Config->ResourcePath, through the HTTP function of the query, and
+// connects to its WebSocket, with the timeout of the query. The query must stay open
+// while the subscription is. Fails with DTNMOS_E_STATE when the subscription is open or
+// the query is not, as the requests of the query do, with DTNMOS_E_PARSE when the answer
+// names no WebSocket, and as the connect of the WebSocket does.
+DTNMOS_API DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* Subscription,
+                                                DtNmosQuery* Query,
+                                                const DtNmosSubscriptionConfig* Config);
+
+// Waits at most TimeoutMs for a message, and calls OnChange for each change in it, on
+// the thread of the caller. The first message holds every resource as it is, each a
+// DTNMOS_CHANGE_PRESENT. Fails with DTNMOS_E_TIMEOUT when no message came, with
+// DTNMOS_E_PARSE for a message it cannot read, after which it can be polled again, and
+// with DTNMOS_E_NETWORK when the WebSocket closed or failed, after which a new
+// subscription starts again from the first message.
+DTNMOS_API DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* Subscription,
+                                                uint32_t TimeoutMs);
+
+// The URL of the WebSocket of the subscription.
+DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* Subscription);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+= Finding registries through DNS-SD +=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -348,11 +365,6 @@ typedef struct DtNmosRegistryInfo
 // those of the same priority, which is for the caller.
 typedef struct DtNmosRegistryList DtNmosRegistryList;
 
-DTNMOS_API size_t DtNmosRegistryList_Count(const DtNmosRegistryList* List);
-DTNMOS_API const DtNmosRegistryInfo* DtNmosRegistryList_At(const DtNmosRegistryList* List,
-                                                           size_t Index);
-DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* List);
-
 // Searches for the registries of Config->Service, through multicast DNS and the DNS
 // server at the same time, from one socket: sends the query three times within the
 // timeout, the one to the DNS server until it answers, collects the answers until it
@@ -363,6 +375,16 @@ DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* List);
 // DNS cannot be sent; a DNS server that cannot be reached is only logged.
 DTNMOS_API DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
                                         DtNmosRegistryList** List);
+
+// Returns the registry at Index, from 0, or null past the end of the list.
+DTNMOS_API const DtNmosRegistryInfo* DtNmosRegistryList_At(const DtNmosRegistryList* List,
+                                                           size_t Index);
+
+// Returns the number of registries in the list; 0 for null.
+DTNMOS_API size_t DtNmosRegistryList_Count(const DtNmosRegistryList* List);
+
+// Frees the list and the strings of its registries. Null is allowed.
+DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* List);
 
 #ifdef __cplusplus
 }

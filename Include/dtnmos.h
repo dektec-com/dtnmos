@@ -32,10 +32,6 @@ extern "C"
 {
 #endif
 
-// Returns the version of the library the program runs with, which may differ from the
-// DTNMOS_VERSION of dtnmos_version.h it was built against; each pointer may be null.
-DTNMOS_API void DtNmos_Version(int* Major, int* Minor, int* Patch);
-
 typedef enum DtNmosResult
 {
     DTNMOS_OK = 0,
@@ -56,8 +52,23 @@ typedef enum DtNmosResult
     DTNMOS_E_BUFFER_TOO_SMALL = DTNMOS_E + 11 // a text does not fit the caller's buffer
 } DtNmosResult;
 
-// Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.
-DTNMOS_API const char* DtNmosResult_Name(DtNmosResult Result);
+// An NMOS resource ID: a UUID in its text form, lower case, e.g.
+// "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01".
+typedef struct DtNmosId
+{
+    char Text[37];
+} DtNmosId;
+
+// Where log messages go.
+typedef enum DtNmosLogLevel
+{
+    DTNMOS_LOG_DEBUG = 0,
+    DTNMOS_LOG_INFO = 1,
+    DTNMOS_LOG_WARNING = 2,
+    DTNMOS_LOG_ERROR = 3
+} DtNmosLogLevel;
+
+typedef void (*DtNmosLogFunc)(void* User, DtNmosLogLevel Level, const char* Message);
 
 // Returns the message of the last failure of a call on this thread, in English, naming
 // what failed and why; "" when none failed yet. A call that fails sets it, and one that
@@ -71,30 +82,19 @@ DTNMOS_API const char* DtNmos_GetLastError(void);
 // passes the message on, as the answer of the node to a controller for one.
 DTNMOS_API DtNmosResult DtNmos_SetLastError(DtNmosResult Result, const char* Message);
 
-// An NMOS resource ID: a UUID in its text form, lower case, e.g.
-// "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01".
-typedef struct DtNmosId
-{
-    char Text[37];
-} DtNmosId;
+// Returns the version of the library the program runs with, which may differ from the
+// DTNMOS_VERSION of dtnmos_version.h it was built against; each pointer may be null.
+DTNMOS_API void DtNmos_Version(int* Major, int* Minor, int* Patch);
 
 // Writes the name-based UUID (version 5, RFC 9562) of name in the namespace
-// namespace_id, so that a node, a device, a sender or a receiver keeps its ID across
+// NamespaceId, so that a node, a device, a sender or a receiver keeps its ID across
 // restarts, e.g. from the serial number of a card, its port and the label of an
-// element. Fails with DTNMOS_E_INVALID_ARGUMENT when namespace_id is no UUID.
+// element. Fails with DTNMOS_E_INVALID_ARGUMENT when NamespaceId is no UUID.
 DTNMOS_API DtNmosResult DtNmosId_FromName(const DtNmosId* NamespaceId, const char* Name,
                                           DtNmosId* Id);
 
-// Where log messages go.
-typedef enum DtNmosLogLevel
-{
-    DTNMOS_LOG_DEBUG = 0,
-    DTNMOS_LOG_INFO = 1,
-    DTNMOS_LOG_WARNING = 2,
-    DTNMOS_LOG_ERROR = 3
-} DtNmosLogLevel;
-
-typedef void (*DtNmosLogFunc)(void* User, DtNmosLogLevel Level, const char* Message);
+// Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.
+DTNMOS_API const char* DtNmosResult_Name(DtNmosResult Result);
 
 #ifdef __cplusplus
 }

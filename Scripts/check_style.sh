@@ -14,6 +14,7 @@
 #   Rule 5  Every source file starts with a header naming the file.
 #   Rule 8  Every header guards itself with #pragma once, right after the file header.
 #   Rule 9  No goto.
+#   Rule 11 The public headers declare each section's functions in alphabetical order.
 #
 # It also fails when a design document, under Documentation/ or Docs/Plans/, or the
 # internal notes, CLAUDE.md and CLAUDE.local.md, are tracked: both belong outside this
@@ -154,6 +155,34 @@ while IFS= read -r File; do
         Fail "$File:${Hit%%:*}: goto"
     done < <(grep -nE '^[^/]*\bgoto\b' "$File")
 done < <(OwnFiles)
+
+# .-.-.-.-.-.-.-.-.- Rule 11: public functions in alphabetical order -.-.-.-.-.-.-.-.-.-.-
+#
+# In each section of a public header, from one banner to the next, the functions come in
+# alphabetical order, ignoring case; the types between them are not looked at. A
+# declaration that clang-format breaks before its name is read up to its parenthesis.
+#
+echo "Rule 11: public functions in alphabetical order"
+while IFS= read -r File; do
+    while IFS= read -r Hit; do
+        Fail "$Hit"
+    done < <(LC_ALL=C awk -v f="$File" '
+        /^\/\/ (\+=|\.-)/ { Last = ""; next }
+        /^DTNMOS_API/ { Declaration = $0; Line = NR; Open = 1 }
+        Open && NR > Line { Declaration = Declaration " " $0 }
+        Open && Declaration ~ /\(/ {
+            Open = 0
+            Name = Declaration
+            sub(/\(.*/, "", Name)
+            match(Name, /[A-Za-z0-9_]+$/)
+            Name = substr(Name, RSTART, RLENGTH)
+            Key = tolower(Name)
+            if (Last != "" && Key < Last)
+                printf "%s:%d: %s after %s\n", f, Line, Name, LastName
+            Last = Key
+            LastName = Name
+        }' "$File")
+done < <(OwnFiles | grep '^Include/')
 
 # .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Rules 4 and 6: format -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 

@@ -25,17 +25,19 @@ typedef enum DtNmosMedia
     DTNMOS_MEDIA_OTHER = 99            // anything else, with its encoding and raw fmtp
 } DtNmosMedia;
 
-// Returns the name of a media, e.g. "video"; a static string.
-DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia Media);
-
 // The sizes of the strings of a flow, each the longest value the standards allow and its
 // terminating null, with room. The parser refuses a value that does not fit.
-#define DTNMOS_MAX_SHORT_SIZE 16     // PM, TP, TM, an audio encoding
-#define DTNMOS_MAX_VALUE_SIZE 32     // sampling, colorimetry, TCS, RANGE, SSN, JPEG XS
+#define DTNMOS_MAX_SHORT_SIZE 16 // PM, TP, TM, an audio encoding
+
+#define DTNMOS_MAX_VALUE_SIZE 32 // sampling, colorimetry, TCS, RANGE, SSN, JPEG XS
+
 #define DTNMOS_MAX_ENCODING_SIZE 128 // a media subtype name, as RFC 6838 bounds it
-#define DTNMOS_MAX_ADDRESS_SIZE 256  // an IP address or a fully qualified domain name
-#define DTNMOS_MAX_EUI64_SIZE 24     // "39-A7-94-FF-FE-07-CB-D0"
-#define DTNMOS_MAX_EUI48_SIZE 18     // "00-14-F4-01-02-03"
+
+#define DTNMOS_MAX_ADDRESS_SIZE 256 // an IP address or a fully qualified domain name
+
+#define DTNMOS_MAX_EUI64_SIZE 24 // "39-A7-94-FF-FE-07-CB-D0"
+
+#define DTNMOS_MAX_EUI48_SIZE 18 // "00-14-F4-01-02-03"
 
 // An uncompressed video format as the a=fmtp of ST 2110-20 states it. The strings keep
 // the text of the SDP, e.g. Sampling "YCbCr-4:2:2", Colorimetry "BT709", Tcs "SDR",
@@ -189,6 +191,19 @@ typedef struct DtNmosSession
 // A parsed SDP: its session and its flows, which it owns with their strings.
 typedef struct DtNmosSdp DtNmosSdp;
 
+// Returns the name of a media, e.g. "video"; a static string.
+DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia Media);
+
+// Returns the flow at Index, in the order of the media sections, or null past them;
+// valid, with its strings, until the SDP is freed.
+DTNMOS_API const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* Sdp, size_t Index);
+
+// Returns the number of flows of the SDP, one per media section.
+DTNMOS_API size_t DtNmosSdp_FlowCount(const DtNmosSdp* Sdp);
+
+// Frees sdp and what it holds; null does nothing.
+DTNMOS_API void DtNmosSdp_Free(DtNmosSdp* Sdp);
+
 // Parses the SDP of length bytes of text. Fails with DTNMOS_E_PARSE, naming the line,
 // on a malformed description or a value longer than its field, and with
 // DTNMOS_E_INVALID_ARGUMENT on one without media sections.
@@ -196,15 +211,6 @@ DTNMOS_API DtNmosResult DtNmosSdp_Parse(const char* Text, size_t Length, DtNmosS
 
 // Returns the session of sdp; valid until sdp is freed.
 DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* Sdp);
-
-// Returns the number of flows of sdp, one per media section, and the flow at index in
-// the order of the sections, or null past them; valid, with its strings, until sdp is
-// freed.
-DTNMOS_API size_t DtNmosSdp_FlowCount(const DtNmosSdp* Sdp);
-DTNMOS_API const DtNmosFlow* DtNmosSdp_Flow(const DtNmosSdp* Sdp, size_t Index);
-
-// Frees sdp and what it holds; null does nothing.
-DTNMOS_API void DtNmosSdp_Free(DtNmosSdp* Sdp);
 
 // Writes the SDP of session with the count flows of flows into buffer, which holds
 // *Size bytes, with a terminating null. A flow of leg 1 is the second path of the flow

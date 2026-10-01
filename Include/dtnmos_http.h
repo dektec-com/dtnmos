@@ -43,34 +43,32 @@ typedef struct DtNmosHttpRequest
 // A response: its status, headers and body, which it owns.
 typedef struct DtNmosHttpResponse DtNmosHttpResponse;
 
-// Allocates an empty response, with status 0, for a caller that answers requests of its
-// own with the library; returns null when out of memory.
-DTNMOS_API DtNmosHttpResponse* DtNmosHttpResponse_Alloc(void);
+// Performs a client request and fills response, which is empty. Returns DTNMOS_OK when
+// an answer came, whatever its status; DTNMOS_E_TIMEOUT when none came in time, and
+// DTNMOS_E_HTTP when the server could not be reached or the exchange failed, its message
+// set with DtNmos_SetLastError(). Called on the thread of the caller of the library.
+typedef DtNmosResult (*DtNmosHttpFunc)(void* User, const DtNmosHttpRequest* Request,
+                                       DtNmosHttpResponse* Response);
 
-// Frees response. Null is allowed.
-DTNMOS_API void DtNmosHttpResponse_Free(DtNmosHttpResponse* Response);
+// A DtNmosHttpFunc on libcurl, for HTTP and HTTPS; user is unused. Without libcurl it
+// fails with DTNMOS_E_STATE.
+DTNMOS_API DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
+                                        DtNmosHttpResponse* Response);
 
-// Frees *Response as DtNmosHttpResponse_Free() does and sets *Response to null. Null is
-// allowed.
-DTNMOS_API void DtNmosHttpResponse_Freep(DtNmosHttpResponse** Response);
-
-DTNMOS_API void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* Response, int Status);
-
-// Makes the body length bytes of body, which it copies, of content_type, which may be
-// null.
-DTNMOS_API DtNmosResult DtNmosHttpResponse_SetBody(DtNmosHttpResponse* Response,
-                                                   const char* ContentType,
-                                                   const char* Body, size_t Length);
-
-// Appends length bytes of body, which it copies, as a transport receives it in pieces.
-DTNMOS_API DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* Response,
-                                                      const char* Body, size_t Length);
+// Whether the library was built with the transport on libcurl.
+DTNMOS_API int DtNmos_HasCurl(void);
 
 // Adds a header, whose name and value it copies.
 DTNMOS_API DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* Response,
                                                      const char* Name, const char* Value);
 
-DTNMOS_API int DtNmosHttpResponse_Status(const DtNmosHttpResponse* Response);
+// Allocates an empty response, with status 0, for a caller that answers requests of its
+// own with the library; returns null when out of memory.
+DTNMOS_API DtNmosHttpResponse* DtNmosHttpResponse_Alloc(void);
+
+// Appends length bytes of body, which it copies, as a transport receives it in pieces.
+DTNMOS_API DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* Response,
+                                                      const char* Body, size_t Length);
 
 // Returns the body, ending in a null character, and its length when length is not null.
 DTNMOS_API const char* DtNmosHttpResponse_Body(const DtNmosHttpResponse* Response,
@@ -79,31 +77,37 @@ DTNMOS_API const char* DtNmosHttpResponse_Body(const DtNmosHttpResponse* Respons
 // Returns the content type of the body; "" when it has none.
 DTNMOS_API const char* DtNmosHttpResponse_ContentType(const DtNmosHttpResponse* Response);
 
-// Returns the number of headers, and the header at index, whose strings the response
-// owns.
-DTNMOS_API size_t DtNmosHttpResponse_HeaderCount(const DtNmosHttpResponse* Response);
-DTNMOS_API DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* Response,
-                                                      size_t Index);
-
 // Returns the value of the first header called name, compared without regard to case,
 // or null when there is none.
 DTNMOS_API const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* Response,
                                                      const char* Name);
 
-// Performs a client request and fills response, which is empty. Returns DTNMOS_OK when
-// an answer came, whatever its status; DTNMOS_E_TIMEOUT when none came in time, and
-// DTNMOS_E_HTTP when the server could not be reached or the exchange failed, its message
-// set with DtNmos_SetLastError(). Called on the thread of the caller of the library.
-typedef DtNmosResult (*DtNmosHttpFunc)(void* User, const DtNmosHttpRequest* Request,
-                                       DtNmosHttpResponse* Response);
+// Frees response. Null is allowed.
+DTNMOS_API void DtNmosHttpResponse_Free(DtNmosHttpResponse* Response);
 
-// Whether the library was built with the transport on libcurl.
-DTNMOS_API int DtNmos_HasCurl(void);
+// Frees *Response as DtNmosHttpResponse_Free() does and sets *Response to null. Null is
+// allowed.
+DTNMOS_API void DtNmosHttpResponse_Freep(DtNmosHttpResponse** Response);
 
-// A DtNmosHttpFunc on libcurl, for HTTP and HTTPS; user is unused. Without libcurl it
-// fails with DTNMOS_E_STATE.
-DTNMOS_API DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
-                                        DtNmosHttpResponse* Response);
+// Returns the header at Index, from 0, whose strings the response owns; one of null
+// strings past the last.
+DTNMOS_API DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* Response,
+                                                      size_t Index);
+
+// Returns the number of headers.
+DTNMOS_API size_t DtNmosHttpResponse_HeaderCount(const DtNmosHttpResponse* Response);
+
+// Makes the body length bytes of body, which it copies, of ContentType, which may be
+// null.
+DTNMOS_API DtNmosResult DtNmosHttpResponse_SetBody(DtNmosHttpResponse* Response,
+                                                   const char* ContentType,
+                                                   const char* Body, size_t Length);
+
+// Sets the status of the response, e.g. 200.
+DTNMOS_API void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* Response, int Status);
+
+// Returns the status of the response; 0 before one is set.
+DTNMOS_API int DtNmosHttpResponse_Status(const DtNmosHttpResponse* Response);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The WebSocket of a client +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -115,12 +119,12 @@ typedef struct DtNmosWebSocketTransport
     size_t Size; // sizeof(DtNmosWebSocketTransport)
     void* User;
 
-    // Connects to url, "ws://" or "wss://", within timeout_ms, and sets *Connection to
+    // Connects to url, "ws://" or "wss://", within TimeoutMs, and sets *Connection to
     // what the other functions get. Fails with DTNMOS_E_TIMEOUT or DTNMOS_E_NETWORK.
     DtNmosResult (*Connect)(void* User, const char* Url, uint32_t TimeoutMs,
                             void** Connection);
 
-    // Waits at most timeout_ms for a whole text message and sets *Message to it, ending
+    // Waits at most TimeoutMs for a whole text message and sets *Message to it, ending
     // in a null character, and *Length to its length. The message belongs to connection
     // and stays valid until the next Receive or Close of it. Fails with DTNMOS_E_TIMEOUT
     // when none came, keeping a part that did for the next call, and with
@@ -132,13 +136,13 @@ typedef struct DtNmosWebSocketTransport
     void (*Close)(void* User, void* Connection);
 } DtNmosWebSocketTransport;
 
-// Whether the library was built with the WebSocket on libcurl, and the libcurl it runs
-// with carries WebSockets.
-DTNMOS_API int DtNmos_HasCurlWebSocket(void);
-
 // The WebSocket on libcurl, for ws:// and wss://; it answers the pings of the server
 // itself. Without it, its connect fails with DTNMOS_E_STATE.
 DTNMOS_API const DtNmosWebSocketTransport* DtNmos_CurlWebSocket(void);
+
+// Whether the library was built with the WebSocket on libcurl, and the libcurl it runs
+// with carries WebSockets.
+DTNMOS_API int DtNmos_HasCurlWebSocket(void);
 
 #ifdef __cplusplus
 }
