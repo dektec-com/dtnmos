@@ -63,7 +63,7 @@ typedef struct gathered
 typedef struct search
 {
     int active;
-    dtnmos_search kind;
+    DtNmosSearch kind;
     char address[64];
     uint16_t port;
     uint16_t flags;                     // of its queries
@@ -72,33 +72,33 @@ typedef struct search
     gathered found;
 } search;
 
-struct dtnmos_registry_list
+struct DtNmosRegistryList
 {
-    dtnmos_registry_info* registries;
+    DtNmosRegistryInfo* registries;
     size_t count;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_info_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryInfo_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_registry_info_clear(dtnmos_registry_info* registry)
+void DtNmosRegistryInfo_Clear(DtNmosRegistryInfo* registry)
 {
     if (registry == NULL)
     {
         return;
     }
-    dtnmos_string_clear(&registry->instance);
-    dtnmos_string_clear(&registry->host);
-    dtnmos_string_clear(&registry->address);
-    dtnmos_string_clear(&registry->url);
-    dtnmos_string_clear(&registry->api_proto);
-    dtnmos_string_clear(&registry->api_versions);
+    DtNmosString_Clear(&registry->Instance);
+    DtNmosString_Clear(&registry->Host);
+    DtNmosString_Clear(&registry->Address);
+    DtNmosString_Clear(&registry->Url);
+    DtNmosString_Clear(&registry->ApiProto);
+    DtNmosString_Clear(&registry->ApiVersions);
     memset(registry, 0, sizeof(*registry));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_info_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryInfo_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_registry_info_copy(dtnmos_registry_info* target,
-                                        const dtnmos_registry_info* source)
+DtNmosResult DtNmosRegistryInfo_Copy(DtNmosRegistryInfo* target,
+                                     const DtNmosRegistryInfo* source)
 {
     if (target == NULL || source == NULL)
     {
@@ -108,47 +108,47 @@ dtnmos_result dtnmos_registry_info_copy(dtnmos_registry_info* target,
     {
         return DTNMOS_OK;
     }
-    dtnmos_registry_info copy;
+    DtNmosRegistryInfo copy;
     memset(&copy, 0, sizeof(copy));
-    copy.service = source->service;
-    copy.port = source->port;
-    copy.priority = source->priority;
-    copy.auth = source->auth;
-    copy.usable = source->usable;
-    copy.found_by = source->found_by;
-    if (dtnmos_string_copy(&copy.instance, &source->instance) != DTNMOS_OK ||
-        dtnmos_string_copy(&copy.host, &source->host) != DTNMOS_OK ||
-        dtnmos_string_copy(&copy.address, &source->address) != DTNMOS_OK ||
-        dtnmos_string_copy(&copy.url, &source->url) != DTNMOS_OK ||
-        dtnmos_string_copy(&copy.api_proto, &source->api_proto) != DTNMOS_OK ||
-        dtnmos_string_copy(&copy.api_versions, &source->api_versions) != DTNMOS_OK)
+    copy.Service = source->Service;
+    copy.Port = source->Port;
+    copy.Priority = source->Priority;
+    copy.Auth = source->Auth;
+    copy.Usable = source->Usable;
+    copy.FoundBy = source->FoundBy;
+    if (DtNmosString_Copy(&copy.Instance, &source->Instance) != DTNMOS_OK ||
+        DtNmosString_Copy(&copy.Host, &source->Host) != DTNMOS_OK ||
+        DtNmosString_Copy(&copy.Address, &source->Address) != DTNMOS_OK ||
+        DtNmosString_Copy(&copy.Url, &source->Url) != DTNMOS_OK ||
+        DtNmosString_Copy(&copy.ApiProto, &source->ApiProto) != DTNMOS_OK ||
+        DtNmosString_Copy(&copy.ApiVersions, &source->ApiVersions) != DTNMOS_OK)
     {
-        dtnmos_registry_info_clear(&copy);
+        DtNmosRegistryInfo_Clear(&copy);
         return DTNMOS_E_NO_MEMORY;
     }
-    dtnmos_registry_info_clear(target);
+    DtNmosRegistryInfo_Clear(target);
     *target = copy;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryList_Count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-size_t dtnmos_registry_list_count(const dtnmos_registry_list* list)
+size_t DtNmosRegistryList_Count(const DtNmosRegistryList* list)
 {
     return list == NULL ? 0 : list->count;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_at -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryList_At -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const dtnmos_registry_info* dtnmos_registry_list_at(const dtnmos_registry_list* list,
-                                                    size_t index)
+const DtNmosRegistryInfo* DtNmosRegistryList_At(const DtNmosRegistryList* list,
+                                                size_t index)
 {
     return list == NULL || index >= list->count ? NULL : &list->registries[index];
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_registry_list_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryList_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_registry_list_free(dtnmos_registry_list* list)
+void DtNmosRegistryList_Free(DtNmosRegistryList* list)
 {
     if (list == NULL)
     {
@@ -156,21 +156,21 @@ void dtnmos_registry_list_free(dtnmos_registry_list* list)
     }
     for (size_t i = 0; i < list->count; ++i)
     {
-        dtnmos_registry_info_clear(&list->registries[i]);
+        DtNmosRegistryInfo_Clear(&list->registries[i]);
     }
     free(list->registries);
     free(list);
 }
 
-static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level level,
+static void log_message(const DtNmosDiscoveryConfig* config, DtNmosLogLevel level,
                         const char* format, ...) DTNMOS_PRINTF(3, 4);
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- log_message -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level level,
+static void log_message(const DtNmosDiscoveryConfig* config, DtNmosLogLevel level,
                         const char* format, ...)
 {
-    if (config->log == NULL)
+    if (config->Log == NULL)
     {
         return;
     }
@@ -179,7 +179,7 @@ static void log_message(const dtnmos_discovery_config* config, dtnmos_log_level 
     va_start(arguments, format);
     vsnprintf(message, sizeof(message), format, arguments);
     va_end(arguments);
-    config->log(config->log_user, level, message);
+    config->Log(config->LogUser, level, message);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_instance_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -308,7 +308,7 @@ static void take_record(void* user, const dtnmos_dns_record* record)
 // answer: that of the DNS server when they come from it with the ID of the query, and
 // that of multicast DNS otherwise.
 //
-static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
+static void collect(const DtNmosDiscoveryConfig* config, dtnmos_udp* udp,
                     search* searches, uint16_t id, uint8_t* buffer, uint64_t deadline_ms)
 {
     search* unicast = &searches[1];
@@ -375,7 +375,7 @@ static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
 // Asks one search for the records its answers left out: multicast DNS in one query, and
 // the DNS server one question per query, as it answers no more. Returns whether it asked.
 //
-static int ask_missing(const dtnmos_discovery_config* config, dtnmos_udp* udp,
+static int ask_missing(const DtNmosDiscoveryConfig* config, dtnmos_udp* udp,
                        const search* one, uint16_t id)
 {
     const gathered* found = &one->found;
@@ -465,44 +465,43 @@ static int has_version(const char* versions, const char* version)
 //
 static int compare_registries(const void* a, const void* b)
 {
-    const dtnmos_registry_info* left = a;
-    const dtnmos_registry_info* right = b;
-    if (left->usable != right->usable)
+    const DtNmosRegistryInfo* left = a;
+    const DtNmosRegistryInfo* right = b;
+    if (left->Usable != right->Usable)
     {
-        return left->usable ? -1 : 1;
+        return left->Usable ? -1 : 1;
     }
-    if ((left->priority < 0) != (right->priority < 0))
+    if ((left->Priority < 0) != (right->Priority < 0))
     {
-        return left->priority < 0 ? 1 : -1;
+        return left->Priority < 0 ? 1 : -1;
     }
-    if (left->priority != right->priority)
+    if (left->Priority != right->Priority)
     {
-        return left->priority < right->priority ? -1 : 1;
+        return left->Priority < right->Priority ? -1 : 1;
     }
-    if (left->found_by != right->found_by)
+    if (left->FoundBy != right->FoundBy)
     {
-        return left->found_by == DTNMOS_SEARCH_UNICAST ? -1 : 1;
+        return left->FoundBy == DTNMOS_SEARCH_UNICAST ? -1 : 1;
     }
-    return strcmp(dtnmos_string_get(&left->instance),
-                  dtnmos_string_get(&right->instance));
+    return strcmp(DtNmosString_Get(&left->Instance), DtNmosString_Get(&right->Instance));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- describe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Fills registry from a complete instance; returns 0 when out of memory.
 //
-static int describe(const gathered* found, const instance* service, dtnmos_service kind,
-                    dtnmos_registry_info* registry)
+static int describe(const gathered* found, const instance* service, DtNmosService kind,
+                    DtNmosRegistryInfo* registry)
 {
     memset(registry, 0, sizeof(*registry));
-    registry->service = kind;
-    registry->port = service->port;
-    registry->priority = service->priority;
-    registry->auth = service->auth;
+    registry->Service = kind;
+    registry->Port = service->port;
+    registry->Priority = service->priority;
+    registry->Auth = service->auth;
     // IS-04 made api_proto required with v1.1; an announcement without it offers http.
     const char* proto = service->proto[0] != '\0' ? service->proto : "http";
     const int https = strcmp(proto, "https") == 0;
-    registry->usable = (https || strcmp(proto, "http") == 0) && !service->auth &&
+    registry->Usable = (https || strcmp(proto, "http") == 0) && !service->auth &&
                        has_version(service->versions, "v1.3");
 
     char label[DTNMOS_DNS_NAME_SIZE];
@@ -518,13 +517,12 @@ static int describe(const gathered* found, const instance* service, dtnmos_servi
     char url[DTNMOS_DNS_NAME_SIZE + 32];
     snprintf(url, sizeof(url), "%s://%s:%u", proto,
              address[0] != '\0' && !https ? address : service->host, service->port);
-    return dtnmos_string_set_text(&registry->instance, label) == DTNMOS_OK &&
-           dtnmos_string_set_text(&registry->host, service->host) == DTNMOS_OK &&
-           dtnmos_string_set_text(&registry->address, address) == DTNMOS_OK &&
-           dtnmos_string_set_text(&registry->url, url) == DTNMOS_OK &&
-           dtnmos_string_set_text(&registry->api_proto, proto) == DTNMOS_OK &&
-           dtnmos_string_set_text(&registry->api_versions, service->versions) ==
-               DTNMOS_OK;
+    return DtNmosString_SetText(&registry->Instance, label) == DTNMOS_OK &&
+           DtNmosString_SetText(&registry->Host, service->host) == DTNMOS_OK &&
+           DtNmosString_SetText(&registry->Address, address) == DTNMOS_OK &&
+           DtNmosString_SetText(&registry->Url, url) == DTNMOS_OK &&
+           DtNmosString_SetText(&registry->ApiProto, proto) == DTNMOS_OK &&
+           DtNmosString_SetText(&registry->ApiVersions, service->versions) == DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -578,38 +576,38 @@ static int read_destination(const char* text, char* address, size_t size, uint16
 // Sets up the search of the DNS server, of the config or of the host; leaves it inactive
 // when there is no server or no domain. Fails for a malformed server or domain.
 //
-static dtnmos_result prepare_unicast(const dtnmos_discovery_config* config,
-                                     const char* service_type, search* unicast,
-                                     dtnmos_error* error)
+static DtNmosResult prepare_unicast(const DtNmosDiscoveryConfig* config,
+                                    const char* service_type, search* unicast,
+                                    DtNmosError* error)
 {
     unicast->kind = DTNMOS_SEARCH_UNICAST;
     unicast->flags = DTNMOS_DNS_RECURSION_DESIRED;
     unicast->port = dns_port;
-    if (config->dns_server != NULL &&
-        !read_destination(config->dns_server, unicast->address, sizeof(unicast->address),
+    if (config->DnsServer != NULL &&
+        !read_destination(config->DnsServer, unicast->address, sizeof(unicast->address),
                           &unicast->port))
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                            "The DNS server %s is no <IPv4 address>:<port>.",
-                           config->dns_server);
+                           config->DnsServer);
     }
-    if (config->searches != 0 && (config->searches & DTNMOS_SEARCH_UNICAST) == 0)
+    if (config->Searches != 0 && (config->Searches & DTNMOS_SEARCH_UNICAST) == 0)
     {
         return DTNMOS_OK;
     }
     char system_server[64] = "";
     char domain[DTNMOS_DNS_NAME_SIZE] = "";
-    if (config->dns_server == NULL || config->dns_domain == NULL)
+    if (config->DnsServer == NULL || config->DnsDomain == NULL)
     {
         dtnmos_system_dns(system_server, sizeof(system_server), domain, sizeof(domain));
-        if (config->dns_server == NULL)
+        if (config->DnsServer == NULL)
         {
             snprintf(unicast->address, sizeof(unicast->address), "%s", system_server);
         }
     }
-    if (config->dns_domain != NULL)
+    if (config->DnsDomain != NULL)
     {
-        snprintf(domain, sizeof(domain), "%s", config->dns_domain);
+        snprintf(domain, sizeof(domain), "%s", config->DnsDomain);
     }
     size_t length = strlen(domain);
     if (length > 1 && domain[length - 1] == '.')
@@ -644,13 +642,13 @@ static dtnmos_result prepare_unicast(const dtnmos_discovery_config* config,
 //
 // Makes the list of the complete instances that both searches found, sorted.
 //
-static dtnmos_result list_registries(const dtnmos_discovery_config* config,
-                                     const search* searches, dtnmos_registry_list** list,
-                                     dtnmos_error* error)
+static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
+                                    const search* searches, DtNmosRegistryList** list,
+                                    DtNmosError* error)
 {
     const size_t total =
         searches[0].found.instance_count + searches[1].found.instance_count;
-    dtnmos_registry_list* result_list = calloc(1, sizeof(*result_list));
+    DtNmosRegistryList* result_list = calloc(1, sizeof(*result_list));
     if (result_list == NULL ||
         (total > 0 && (result_list->registries =
                            calloc(total, sizeof(*result_list->registries))) == NULL))
@@ -670,14 +668,14 @@ static dtnmos_result list_registries(const dtnmos_discovery_config* config,
                             service->name);
                 continue;
             }
-            dtnmos_registry_info* registry = &result_list->registries[result_list->count];
-            if (!describe(found, service, config->service, registry))
+            DtNmosRegistryInfo* registry = &result_list->registries[result_list->count];
+            if (!describe(found, service, config->Service, registry))
             {
-                dtnmos_registry_info_clear(registry);
-                dtnmos_registry_list_free(result_list);
+                DtNmosRegistryInfo_Clear(registry);
+                DtNmosRegistryList_Free(result_list);
                 return dtnmos_fail_memory(error);
             }
-            registry->found_by = searches[s].kind;
+            registry->FoundBy = searches[s].kind;
             ++result_list->count;
         }
     }
@@ -691,29 +689,28 @@ static dtnmos_result list_registries(const dtnmos_discovery_config* config,
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_Discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
-                              dtnmos_registry_list** list, dtnmos_error* error)
+DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
+                             DtNmosRegistryList** list, DtNmosError* error)
 {
     if (list != NULL)
     {
         *list = NULL;
     }
-    if (config == NULL || list == NULL ||
-        config->size < sizeof(dtnmos_discovery_config) ||
-        (config->service != DTNMOS_SERVICE_QUERY &&
-         config->service != DTNMOS_SERVICE_REGISTRATION))
+    if (config == NULL || list == NULL || config->Size < sizeof(DtNmosDiscoveryConfig) ||
+        (config->Service != DTNMOS_SERVICE_QUERY &&
+         config->Service != DTNMOS_SERVICE_REGISTRATION))
     {
         return dtnmos_fail(
             error, DTNMOS_E_INVALID_ARGUMENT,
-            "dtnmos_discover() needs a config of a known service and a list.");
+            "DtNmos_Discover() needs a config of a known service and a list.");
     }
-    if (config->interface_address != NULL && !is_ipv4(config->interface_address))
+    if (config->InterfaceAddress != NULL && !is_ipv4(config->InterfaceAddress))
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                            "The interface address %s is no IPv4 address.",
-                           config->interface_address);
+                           config->InterfaceAddress);
     }
     search* searches = calloc(2, sizeof(*searches));
     uint8_t* buffer = malloc(max_message);
@@ -723,27 +720,27 @@ dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
         free(buffer);
         return dtnmos_fail_memory(error);
     }
-    const char* service_type = config->service == DTNMOS_SERVICE_QUERY
+    const char* service_type = config->Service == DTNMOS_SERVICE_QUERY
                                    ? "_nmos-query._tcp"
                                    : "_nmos-register._tcp";
-    dtnmos_result result = DTNMOS_OK;
+    DtNmosResult result = DTNMOS_OK;
 
     // The search of multicast DNS, in the domain local.
     search* multicast = &searches[0];
     multicast->kind = DTNMOS_SEARCH_MULTICAST;
     multicast->active =
-        config->searches == 0 || (config->searches & DTNMOS_SEARCH_MULTICAST) != 0;
+        config->Searches == 0 || (config->Searches & DTNMOS_SEARCH_MULTICAST) != 0;
     multicast->port = mdns_port;
     snprintf(multicast->address, sizeof(multicast->address), "%s", mdns_address);
     snprintf(multicast->service, sizeof(multicast->service), "%s.local", service_type);
     multicast->found.service = multicast->service;
-    if (config->destination != NULL &&
-        !read_destination(config->destination, multicast->address,
+    if (config->Destination != NULL &&
+        !read_destination(config->Destination, multicast->address,
                           sizeof(multicast->address), &multicast->port))
     {
         result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                              "The destination %s is no <IPv4 address>:<port>.",
-                             config->destination);
+                             config->Destination);
     }
     if (result == DTNMOS_OK)
     {
@@ -751,15 +748,15 @@ dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
     }
     dtnmos_udp* udp = NULL;
     if (result == DTNMOS_OK &&
-        (udp = dtnmos_udp_open(NULL, config->interface_address)) == NULL)
+        (udp = dtnmos_udp_open(NULL, config->InterfaceAddress)) == NULL)
     {
         result = dtnmos_fail(
             error, DTNMOS_E_NETWORK, "No socket for multicast DNS could be opened%s%s.",
-            config->interface_address != NULL ? " on " : "",
-            config->interface_address != NULL ? config->interface_address : "");
+            config->InterfaceAddress != NULL ? " on " : "",
+            config->InterfaceAddress != NULL ? config->InterfaceAddress : "");
     }
     const uint32_t timeout =
-        config->timeout_ms != 0 ? config->timeout_ms : default_timeout_ms;
+        config->TimeoutMs != 0 ? config->TimeoutMs : default_timeout_ms;
     const uint16_t id = (uint16_t)(dtnmos_monotonic_ms() | 1u);
 
     // The first query, three times within the timeout; to a DNS server till it answers.
@@ -826,7 +823,7 @@ dtnmos_result dtnmos_discover(const dtnmos_discovery_config* config,
     if (result == DTNMOS_OK)
     {
         log_message(config, DTNMOS_LOG_INFO, "Found %zu instances of %s.",
-                    dtnmos_registry_list_count(*list), service_type);
+                    DtNmosRegistryList_Count(*list), service_type);
     }
     free(searches);
     free(buffer);

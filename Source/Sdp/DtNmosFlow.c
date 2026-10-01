@@ -14,79 +14,79 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void clear_video(dtnmos_video_format* video)
+static void clear_video(DtNmosVideoFormat* video)
 {
-    dtnmos_string_clear(&video->sampling);
-    dtnmos_string_clear(&video->colorimetry);
-    dtnmos_string_clear(&video->tcs);
-    dtnmos_string_clear(&video->range);
-    dtnmos_string_clear(&video->packing_mode);
-    dtnmos_string_clear(&video->ssn);
-    dtnmos_string_clear(&video->transmitter_type);
+    DtNmosString_Clear(&video->Sampling);
+    DtNmosString_Clear(&video->Colorimetry);
+    DtNmosString_Clear(&video->Tcs);
+    DtNmosString_Clear(&video->Range);
+    DtNmosString_Clear(&video->PackingMode);
+    DtNmosString_Clear(&video->Ssn);
+    DtNmosString_Clear(&video->TransmitterType);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void clear_compressed(dtnmos_compressed_video_format* video)
+static void clear_compressed(DtNmosCompressedVideoFormat* video)
 {
-    dtnmos_string_clear(&video->encoding);
-    dtnmos_string_clear(&video->sampling);
-    dtnmos_string_clear(&video->colorimetry);
-    dtnmos_string_clear(&video->tcs);
-    dtnmos_string_clear(&video->range);
-    dtnmos_string_clear(&video->ssn);
-    dtnmos_string_clear(&video->transmitter_type);
-    dtnmos_string_clear(&video->profile);
-    dtnmos_string_clear(&video->level);
-    dtnmos_string_clear(&video->sublevel);
+    DtNmosString_Clear(&video->Encoding);
+    DtNmosString_Clear(&video->Sampling);
+    DtNmosString_Clear(&video->Colorimetry);
+    DtNmosString_Clear(&video->Tcs);
+    DtNmosString_Clear(&video->Range);
+    DtNmosString_Clear(&video->Ssn);
+    DtNmosString_Clear(&video->TransmitterType);
+    DtNmosString_Clear(&video->Profile);
+    DtNmosString_Clear(&video->Level);
+    DtNmosString_Clear(&video->Sublevel);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosFlow_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_flow_clear(dtnmos_flow* flow)
+void DtNmosFlow_Clear(DtNmosFlow* flow)
 {
     if (flow == NULL)
     {
         return;
     }
-    dtnmos_string_clear(&flow->destination_ip);
-    dtnmos_string_clear(&flow->source_ip);
-    dtnmos_string_clear(&flow->ts_refclk);
-    switch (flow->media)
+    DtNmosString_Clear(&flow->DestinationIp);
+    DtNmosString_Clear(&flow->SourceIp);
+    DtNmosString_Clear(&flow->TsRefclk);
+    switch (flow->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
-        clear_video(&flow->format.video);
+        clear_video(&flow->Format.Video);
         break;
     case DTNMOS_MEDIA_AUDIO:
-        dtnmos_string_clear(&flow->format.audio.encoding);
-        dtnmos_string_clear(&flow->format.audio.channel_order);
+        DtNmosString_Clear(&flow->Format.Audio.Encoding);
+        DtNmosString_Clear(&flow->Format.Audio.ChannelOrder);
         break;
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
-        clear_compressed(&flow->format.compressed_video);
+        clear_compressed(&flow->Format.CompressedVideo);
         break;
     case DTNMOS_MEDIA_ANC:
-        free((void*)flow->format.anc.did_sdid);
-        dtnmos_string_clear(&flow->format.anc.transmission_model);
-        dtnmos_string_clear(&flow->format.anc.ssn);
+        free((void*)flow->Format.Anc.DidSdid);
+        DtNmosString_Clear(&flow->Format.Anc.TransmissionModel);
+        DtNmosString_Clear(&flow->Format.Anc.Ssn);
         break;
     case DTNMOS_MEDIA_OTHER:
-        dtnmos_string_clear(&flow->format.other.encoding);
-        dtnmos_string_clear(&flow->format.other.fmtp);
+        DtNmosString_Clear(&flow->Format.Other.Encoding);
+        DtNmosString_Clear(&flow->Format.Other.Fmtp);
         break;
     }
     memset(flow, 0, sizeof(*flow));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_set_did_sdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosFlow_SetDidSdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow, const dtnmos_did_sdid* pairs,
-                                       size_t count)
+DtNmosResult DtNmosFlow_SetDidSdid(DtNmosFlow* flow, const DtNmosDidSdid* pairs,
+                                   size_t count)
 {
-    if (flow == NULL || (pairs == NULL && count > 0) || flow->media != DTNMOS_MEDIA_ANC)
+    if (flow == NULL || (pairs == NULL && count > 0) || flow->Media != DTNMOS_MEDIA_ANC)
     {
         return DTNMOS_E_INVALID_ARGUMENT;
     }
-    dtnmos_did_sdid* copy = NULL;
+    DtNmosDidSdid* copy = NULL;
     if (count > 0)
     {
         copy = malloc(count * sizeof(*copy));
@@ -96,9 +96,9 @@ dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow, const dtnmos_did_sdid*
         }
         memcpy(copy, pairs, count * sizeof(*copy));
     }
-    free((void*)flow->format.anc.did_sdid);
-    flow->format.anc.did_sdid = copy;
-    flow->format.anc.did_sdid_count = count;
+    free((void*)flow->Format.Anc.DidSdid);
+    flow->Format.Anc.DidSdid = copy;
+    flow->Format.Anc.DidSdidCount = count;
     return DTNMOS_OK;
 }
 
@@ -106,12 +106,12 @@ dtnmos_result dtnmos_flow_set_did_sdid(dtnmos_flow* flow, const dtnmos_did_sdid*
 //
 // Copies each string of the pairs in target and source; returns the first failure.
 //
-static dtnmos_result copy_strings(dtnmos_string* const* targets,
-                                  const dtnmos_string* const* sources, size_t count)
+static DtNmosResult copy_strings(DtNmosString* const* targets,
+                                 const DtNmosString* const* sources, size_t count)
 {
     for (size_t i = 0; i < count; ++i)
     {
-        const dtnmos_result result = dtnmos_string_copy(targets[i], sources[i]);
+        const DtNmosResult result = DtNmosString_Copy(targets[i], sources[i]);
         if (result != DTNMOS_OK)
         {
             return result;
@@ -124,62 +124,61 @@ static dtnmos_result copy_strings(dtnmos_string* const* targets,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_format -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static dtnmos_result copy_format(dtnmos_flow* target, const dtnmos_flow* source)
+static DtNmosResult copy_format(DtNmosFlow* target, const DtNmosFlow* source)
 {
-    switch (source->media)
+    switch (source->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
     {
-        dtnmos_video_format* t = &target->format.video;
-        const dtnmos_video_format* s = &source->format.video;
-        dtnmos_string* const targets[] = {&t->sampling,        &t->colorimetry,  &t->tcs,
-                                          &t->range,           &t->packing_mode, &t->ssn,
-                                          &t->transmitter_type};
-        const dtnmos_string* const sources[] = {
-            &s->sampling, &s->colorimetry,     &s->tcs, &s->range, &s->packing_mode,
-            &s->ssn,      &s->transmitter_type};
+        DtNmosVideoFormat* t = &target->Format.Video;
+        const DtNmosVideoFormat* s = &source->Format.Video;
+        DtNmosString* const targets[] = {&t->Sampling,       &t->Colorimetry, &t->Tcs,
+                                         &t->Range,          &t->PackingMode, &t->Ssn,
+                                         &t->TransmitterType};
+        const DtNmosString* const sources[] = {
+            &s->Sampling, &s->Colorimetry,    &s->Tcs, &s->Range, &s->PackingMode,
+            &s->Ssn,      &s->TransmitterType};
         return copy_strings(targets, sources, DTNMOS_COUNT(targets));
     }
     case DTNMOS_MEDIA_AUDIO:
     {
-        dtnmos_audio_format* t = &target->format.audio;
-        const dtnmos_audio_format* s = &source->format.audio;
-        dtnmos_string* const targets[] = {&t->encoding, &t->channel_order};
-        const dtnmos_string* const sources[] = {&s->encoding, &s->channel_order};
+        DtNmosAudioFormat* t = &target->Format.Audio;
+        const DtNmosAudioFormat* s = &source->Format.Audio;
+        DtNmosString* const targets[] = {&t->Encoding, &t->ChannelOrder};
+        const DtNmosString* const sources[] = {&s->Encoding, &s->ChannelOrder};
         return copy_strings(targets, sources, DTNMOS_COUNT(targets));
     }
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
     {
-        dtnmos_compressed_video_format* t = &target->format.compressed_video;
-        const dtnmos_compressed_video_format* s = &source->format.compressed_video;
-        dtnmos_string* const targets[] = {
-            &t->encoding, &t->sampling,         &t->colorimetry, &t->tcs,   &t->range,
-            &t->ssn,      &t->transmitter_type, &t->profile,     &t->level, &t->sublevel};
-        const dtnmos_string* const sources[] = {
-            &s->encoding, &s->sampling,         &s->colorimetry, &s->tcs,   &s->range,
-            &s->ssn,      &s->transmitter_type, &s->profile,     &s->level, &s->sublevel};
+        DtNmosCompressedVideoFormat* t = &target->Format.CompressedVideo;
+        const DtNmosCompressedVideoFormat* s = &source->Format.CompressedVideo;
+        DtNmosString* const targets[] = {
+            &t->Encoding, &t->Sampling,        &t->Colorimetry, &t->Tcs,   &t->Range,
+            &t->Ssn,      &t->TransmitterType, &t->Profile,     &t->Level, &t->Sublevel};
+        const DtNmosString* const sources[] = {
+            &s->Encoding, &s->Sampling,        &s->Colorimetry, &s->Tcs,   &s->Range,
+            &s->Ssn,      &s->TransmitterType, &s->Profile,     &s->Level, &s->Sublevel};
         return copy_strings(targets, sources, DTNMOS_COUNT(targets));
     }
     case DTNMOS_MEDIA_ANC:
     {
-        dtnmos_anc_format* t = &target->format.anc;
-        const dtnmos_anc_format* s = &source->format.anc;
-        dtnmos_string* const targets[] = {&t->transmission_model, &t->ssn};
-        const dtnmos_string* const sources[] = {&s->transmission_model, &s->ssn};
-        const dtnmos_result result =
-            copy_strings(targets, sources, DTNMOS_COUNT(targets));
+        DtNmosAncFormat* t = &target->Format.Anc;
+        const DtNmosAncFormat* s = &source->Format.Anc;
+        DtNmosString* const targets[] = {&t->TransmissionModel, &t->Ssn};
+        const DtNmosString* const sources[] = {&s->TransmissionModel, &s->Ssn};
+        const DtNmosResult result = copy_strings(targets, sources, DTNMOS_COUNT(targets));
         if (result != DTNMOS_OK)
         {
             return result;
         }
-        return dtnmos_flow_set_did_sdid(target, s->did_sdid, s->did_sdid_count);
+        return DtNmosFlow_SetDidSdid(target, s->DidSdid, s->DidSdidCount);
     }
     case DTNMOS_MEDIA_OTHER:
     {
-        dtnmos_other_format* t = &target->format.other;
-        const dtnmos_other_format* s = &source->format.other;
-        dtnmos_string* const targets[] = {&t->encoding, &t->fmtp};
-        const dtnmos_string* const sources[] = {&s->encoding, &s->fmtp};
+        DtNmosOtherFormat* t = &target->Format.Other;
+        const DtNmosOtherFormat* s = &source->Format.Other;
+        DtNmosString* const targets[] = {&t->Encoding, &t->Fmtp};
+        const DtNmosString* const sources[] = {&s->Encoding, &s->Fmtp};
         return copy_strings(targets, sources, DTNMOS_COUNT(targets));
     }
     }
@@ -190,55 +189,55 @@ static dtnmos_result copy_format(dtnmos_flow* target, const dtnmos_flow* source)
 //
 // Copies the numbers of the format of source, which copy_format() leaves alone.
 //
-static void copy_numbers(dtnmos_flow* target, const dtnmos_flow* source)
+static void copy_numbers(DtNmosFlow* target, const DtNmosFlow* source)
 {
-    switch (source->media)
+    switch (source->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
     {
-        const dtnmos_video_format* s = &source->format.video;
-        dtnmos_video_format* t = &target->format.video;
-        t->width = s->width;
-        t->height = s->height;
-        t->rate_numerator = s->rate_numerator;
-        t->rate_denominator = s->rate_denominator;
-        t->interlaced = s->interlaced;
-        t->segmented = s->segmented;
-        t->depth = s->depth;
+        const DtNmosVideoFormat* s = &source->Format.Video;
+        DtNmosVideoFormat* t = &target->Format.Video;
+        t->Width = s->Width;
+        t->Height = s->Height;
+        t->RateNumerator = s->RateNumerator;
+        t->RateDenominator = s->RateDenominator;
+        t->Interlaced = s->Interlaced;
+        t->Segmented = s->Segmented;
+        t->Depth = s->Depth;
         break;
     }
     case DTNMOS_MEDIA_AUDIO:
     {
-        const dtnmos_audio_format* s = &source->format.audio;
-        dtnmos_audio_format* t = &target->format.audio;
-        t->sample_rate = s->sample_rate;
-        t->channels = s->channels;
-        t->packet_time_ns = s->packet_time_ns;
+        const DtNmosAudioFormat* s = &source->Format.Audio;
+        DtNmosAudioFormat* t = &target->Format.Audio;
+        t->SampleRate = s->SampleRate;
+        t->Channels = s->Channels;
+        t->PacketTimeNs = s->PacketTimeNs;
         break;
     }
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
     {
-        const dtnmos_compressed_video_format* s = &source->format.compressed_video;
-        dtnmos_compressed_video_format* t = &target->format.compressed_video;
-        t->width = s->width;
-        t->height = s->height;
-        t->rate_numerator = s->rate_numerator;
-        t->rate_denominator = s->rate_denominator;
-        t->interlaced = s->interlaced;
-        t->segmented = s->segmented;
-        t->depth = s->depth;
-        t->packet_mode = s->packet_mode;
-        t->transmission_mode = s->transmission_mode;
-        t->bandwidth_kbps = s->bandwidth_kbps;
+        const DtNmosCompressedVideoFormat* s = &source->Format.CompressedVideo;
+        DtNmosCompressedVideoFormat* t = &target->Format.CompressedVideo;
+        t->Width = s->Width;
+        t->Height = s->Height;
+        t->RateNumerator = s->RateNumerator;
+        t->RateDenominator = s->RateDenominator;
+        t->Interlaced = s->Interlaced;
+        t->Segmented = s->Segmented;
+        t->Depth = s->Depth;
+        t->PacketMode = s->PacketMode;
+        t->TransmissionMode = s->TransmissionMode;
+        t->BandwidthKbps = s->BandwidthKbps;
         break;
     }
     case DTNMOS_MEDIA_ANC:
     {
-        const dtnmos_anc_format* s = &source->format.anc;
-        dtnmos_anc_format* t = &target->format.anc;
-        t->vpid_code = s->vpid_code;
-        t->rate_numerator = s->rate_numerator;
-        t->rate_denominator = s->rate_denominator;
+        const DtNmosAncFormat* s = &source->Format.Anc;
+        DtNmosAncFormat* t = &target->Format.Anc;
+        t->VpidCode = s->VpidCode;
+        t->RateNumerator = s->RateNumerator;
+        t->RateDenominator = s->RateDenominator;
         break;
     }
     case DTNMOS_MEDIA_OTHER:
@@ -246,9 +245,9 @@ static void copy_numbers(dtnmos_flow* target, const dtnmos_flow* source)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_flow_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosFlow_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_flow_copy(dtnmos_flow* target, const dtnmos_flow* source)
+DtNmosResult DtNmosFlow_Copy(DtNmosFlow* target, const DtNmosFlow* source)
 {
     if (target == NULL || source == NULL)
     {
@@ -259,45 +258,44 @@ dtnmos_result dtnmos_flow_copy(dtnmos_flow* target, const dtnmos_flow* source)
         return DTNMOS_OK;
     }
     // The copy is built apart and moved into target only when all of it was copied.
-    dtnmos_flow copy;
+    DtNmosFlow copy;
     memset(&copy, 0, sizeof(copy));
-    copy.size = source->size;
-    copy.media = source->media;
-    copy.destination_port = source->destination_port;
-    copy.payload_type = source->payload_type;
-    copy.clock_rate = source->clock_rate;
-    copy.media_clock_direct = source->media_clock_direct;
-    copy.media_clock_offset = source->media_clock_offset;
-    copy.leg = source->leg;
+    copy.Size = source->Size;
+    copy.Media = source->Media;
+    copy.DestinationPort = source->DestinationPort;
+    copy.PayloadType = source->PayloadType;
+    copy.ClockRate = source->ClockRate;
+    copy.MediaClockDirect = source->MediaClockDirect;
+    copy.MediaClockOffset = source->MediaClockOffset;
+    copy.Leg = source->Leg;
     copy_numbers(&copy, source);
-    dtnmos_string* const targets[] = {&copy.destination_ip, &copy.source_ip,
-                                      &copy.ts_refclk};
-    const dtnmos_string* const sources[] = {&source->destination_ip, &source->source_ip,
-                                            &source->ts_refclk};
-    dtnmos_result result = copy_strings(targets, sources, DTNMOS_COUNT(targets));
+    DtNmosString* const targets[] = {&copy.DestinationIp, &copy.SourceIp, &copy.TsRefclk};
+    const DtNmosString* const sources[] = {&source->DestinationIp, &source->SourceIp,
+                                           &source->TsRefclk};
+    DtNmosResult result = copy_strings(targets, sources, DTNMOS_COUNT(targets));
     if (result == DTNMOS_OK)
     {
         result = copy_format(&copy, source);
     }
     if (result != DTNMOS_OK)
     {
-        dtnmos_flow_clear(&copy);
+        DtNmosFlow_Clear(&copy);
         return result;
     }
-    dtnmos_flow_clear(target);
+    DtNmosFlow_Clear(target);
     *target = copy;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_session_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSession_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_session_clear(dtnmos_session* session)
+void DtNmosSession_Clear(DtNmosSession* session)
 {
     if (session == NULL)
     {
         return;
     }
-    dtnmos_string_clear(&session->name);
-    dtnmos_string_clear(&session->origin_ip);
+    DtNmosString_Clear(&session->Name);
+    DtNmosString_Clear(&session->OriginIp);
     memset(session, 0, sizeof(*session));
 }

@@ -23,11 +23,11 @@
 
 // Fills error, when it is not null, with code and the message of format, and returns
 // code.
-dtnmos_result dtnmos_fail(dtnmos_error* error, dtnmos_result code, const char* format,
-                          ...) DTNMOS_PRINTF(3, 4);
+DtNmosResult dtnmos_fail(DtNmosError* error, DtNmosResult code, const char* format, ...)
+    DTNMOS_PRINTF(3, 4);
 
 // Fills error with DTNMOS_E_NO_MEMORY and returns it.
-dtnmos_result dtnmos_fail_memory(dtnmos_error* error);
+DtNmosResult dtnmos_fail_memory(DtNmosError* error);
 
 // A text that grows as it is appended to. A failed allocation sets failed and makes every
 // later append do nothing, so that a writer checks once at the end.
@@ -77,7 +77,7 @@ int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds);
 int dtnmos_parse_byte(dtnmos_span span, uint8_t* value);
 
 // Sets string to span.
-dtnmos_result dtnmos_string_set_span(dtnmos_string* string, dtnmos_span span);
+DtNmosResult dtnmos_string_set_span(DtNmosString* string, dtnmos_span span);
 
 // SHA-1 (RFC 3174), for name-based UUIDs only.
 typedef struct dtnmos_sha1

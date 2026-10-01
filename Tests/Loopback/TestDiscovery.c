@@ -499,15 +499,15 @@ static void stop_responder(responder* r)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- config_for -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_discovery_config config_for(const responder* r, uint32_t timeout_ms)
+static DtNmosDiscoveryConfig config_for(const responder* r, uint32_t timeout_ms)
 {
-    dtnmos_discovery_config config;
+    DtNmosDiscoveryConfig config;
     memset(&config, 0, sizeof(config));
-    config.size = sizeof(config);
-    config.service = DTNMOS_SERVICE_QUERY;
-    config.destination = r->destination;
-    config.searches = DTNMOS_SEARCH_MULTICAST;
-    config.timeout_ms = timeout_ms;
+    config.Size = sizeof(config);
+    config.Service = DTNMOS_SERVICE_QUERY;
+    config.Destination = r->destination;
+    config.Searches = DTNMOS_SEARCH_MULTICAST;
+    config.TimeoutMs = timeout_ms;
     return config;
 }
 
@@ -538,41 +538,41 @@ void discovery_finds_registries_by_priority(void)
     };
     responder r;
     REQUIRE(start_responder(&r, instances, 4, 1));
-    const dtnmos_discovery_config config = config_for(&r, 300);
-    dtnmos_registry_list* list = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
-    const dtnmos_result result = dtnmos_discover(&config, &list, &error);
+    const DtNmosDiscoveryConfig config = config_for(&r, 300);
+    DtNmosRegistryList* list = NULL;
+    DtNmosError error = {DTNMOS_OK, ""};
+    const DtNmosResult result = DtNmos_Discover(&config, &list, &error);
     stop_responder(&r);
     REQUIRE(result == DTNMOS_OK);
-    REQUIRE(dtnmos_registry_list_count(list) == 4);
-    const dtnmos_registry_info* first = dtnmos_registry_list_at(list, 0);
-    CHECK_STR(dtnmos_string_get(&first->instance), "Registry A");
+    REQUIRE(DtNmosRegistryList_Count(list) == 4);
+    const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
+    CHECK_STR(DtNmosString_Get(&first->Instance), "Registry A");
     // https keeps the host name, for its certificate.
-    CHECK_STR(dtnmos_string_get(&first->url), "https://registry-a.local:443");
-    CHECK_STR(dtnmos_string_get(&first->address), "127.0.0.3");
-    CHECK_EQ(first->priority, 0);
-    CHECK(first->usable);
-    const dtnmos_registry_info* second = dtnmos_registry_list_at(list, 1);
-    CHECK_STR(dtnmos_string_get(&second->instance), "Registry B");
-    CHECK_STR(dtnmos_string_get(&second->url), "http://127.0.0.2:8080");
-    CHECK_STR(dtnmos_string_get(&second->api_versions), "v1.2,v1.3");
-    CHECK_EQ(second->service, DTNMOS_SERVICE_QUERY);
-    const dtnmos_registry_info* third = dtnmos_registry_list_at(list, 2);
-    CHECK_STR(dtnmos_string_get(&third->instance), "No priority");
-    CHECK_EQ(third->priority, -1);
-    CHECK_STR(dtnmos_string_get(&third->api_proto), "http");
-    CHECK(third->usable);
-    const dtnmos_registry_info* last = dtnmos_registry_list_at(list, 3);
-    CHECK_STR(dtnmos_string_get(&last->instance), "Old");
-    CHECK(!last->usable);
-    CHECK(dtnmos_registry_list_at(list, 4) == NULL);
+    CHECK_STR(DtNmosString_Get(&first->Url), "https://registry-a.local:443");
+    CHECK_STR(DtNmosString_Get(&first->Address), "127.0.0.3");
+    CHECK_EQ(first->Priority, 0);
+    CHECK(first->Usable);
+    const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
+    CHECK_STR(DtNmosString_Get(&second->Instance), "Registry B");
+    CHECK_STR(DtNmosString_Get(&second->Url), "http://127.0.0.2:8080");
+    CHECK_STR(DtNmosString_Get(&second->ApiVersions), "v1.2,v1.3");
+    CHECK_EQ(second->Service, DTNMOS_SERVICE_QUERY);
+    const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
+    CHECK_STR(DtNmosString_Get(&third->Instance), "No priority");
+    CHECK_EQ(third->Priority, -1);
+    CHECK_STR(DtNmosString_Get(&third->ApiProto), "http");
+    CHECK(third->Usable);
+    const DtNmosRegistryInfo* last = DtNmosRegistryList_At(list, 3);
+    CHECK_STR(DtNmosString_Get(&last->Instance), "Old");
+    CHECK(!last->Usable);
+    CHECK(DtNmosRegistryList_At(list, 4) == NULL);
 
-    dtnmos_registry_info copy;
+    DtNmosRegistryInfo copy;
     memset(&copy, 0, sizeof(copy));
-    REQUIRE(dtnmos_registry_info_copy(&copy, second) == DTNMOS_OK);
-    dtnmos_registry_list_free(list);
-    CHECK_STR(dtnmos_string_get(&copy.host), "registry-b.local");
-    dtnmos_registry_info_clear(&copy);
+    REQUIRE(DtNmosRegistryInfo_Copy(&copy, second) == DTNMOS_OK);
+    DtNmosRegistryList_Free(list);
+    CHECK_STR(DtNmosString_Get(&copy.Host), "registry-b.local");
+    DtNmosRegistryInfo_Clear(&copy);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- discovery_asks_again_for_what_is_missing -.-.-.-.-.-.-.-.-.-.-.-
@@ -581,9 +581,9 @@ void discovery_asks_again_for_what_is_missing(void)
 {
     responder r;
     REQUIRE(start_responder(&r, &registry_b, 1, 2));
-    const dtnmos_discovery_config config = config_for(&r, 300);
-    dtnmos_registry_list* list = NULL;
-    const dtnmos_result result = dtnmos_discover(&config, &list, NULL);
+    const DtNmosDiscoveryConfig config = config_for(&r, 300);
+    DtNmosRegistryList* list = NULL;
+    const DtNmosResult result = DtNmos_Discover(&config, &list, NULL);
     dtnmos_mutex_lock(r.mutex);
     const int queries = r.queries;
     const int asked = r.asked_srv_txt;
@@ -592,10 +592,10 @@ void discovery_asks_again_for_what_is_missing(void)
     REQUIRE(result == DTNMOS_OK);
     CHECK_EQ(queries, 4); // three sends of the first query, and the one that asks again
     CHECK(asked);
-    REQUIRE(dtnmos_registry_list_count(list) == 1);
-    CHECK_STR(dtnmos_string_get(&dtnmos_registry_list_at(list, 0)->url),
+    REQUIRE(DtNmosRegistryList_Count(list) == 1);
+    CHECK_STR(DtNmosString_Get(&DtNmosRegistryList_At(list, 0)->Url),
               "http://127.0.0.2:8080");
-    dtnmos_registry_list_free(list);
+    DtNmosRegistryList_Free(list);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- discovery_finds_nothing_in_silence -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -604,34 +604,34 @@ void discovery_finds_nothing_in_silence(void)
 {
     responder r;
     REQUIRE(start_responder(&r, NULL, 0, 0));
-    const dtnmos_discovery_config config = config_for(&r, 200);
-    dtnmos_registry_list* list = NULL;
+    const DtNmosDiscoveryConfig config = config_for(&r, 200);
+    DtNmosRegistryList* list = NULL;
     const uint64_t start = dtnmos_monotonic_ms();
-    const dtnmos_result result = dtnmos_discover(&config, &list, NULL);
+    const DtNmosResult result = DtNmos_Discover(&config, &list, NULL);
     const uint64_t took = dtnmos_monotonic_ms() - start;
     stop_responder(&r);
     REQUIRE(result == DTNMOS_OK);
-    CHECK_EQ(dtnmos_registry_list_count(list), 0);
+    CHECK_EQ(DtNmosRegistryList_Count(list), 0);
     CHECK(took >= 190 && took < 2000);
-    dtnmos_registry_list_free(list);
+    DtNmosRegistryList_Free(list);
 
     // What it refuses.
-    dtnmos_discovery_config wrong = config;
-    wrong.destination = "224.0.0.251";
-    dtnmos_error error = {DTNMOS_OK, ""};
-    CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosDiscoveryConfig wrong = config;
+    wrong.Destination = "224.0.0.251";
+    DtNmosError error = {DTNMOS_OK, ""};
+    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(list == NULL);
-    wrong.destination = "no-address:5353";
-    CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    wrong.destination = "127.0.0.1:0";
-    CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    wrong.Destination = "no-address:5353";
+    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    wrong.Destination = "127.0.0.1:0";
+    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
     wrong = config;
-    wrong.interface_address = "10.0.0";
-    CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    wrong.InterfaceAddress = "10.0.0";
+    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
     // An address that is no interface of this host cannot send.
-    wrong.interface_address = "192.0.2.1";
-    CHECK(dtnmos_discover(&wrong, &list, &error) == DTNMOS_E_NETWORK);
-    CHECK(dtnmos_discover(&config, NULL, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    wrong.InterfaceAddress = "192.0.2.1";
+    CHECK(DtNmos_Discover(&wrong, &list, &error) == DTNMOS_E_NETWORK);
+    CHECK(DtNmos_Discover(&config, NULL, &error) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dns_reads_resolv_conf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -709,13 +709,13 @@ void discovery_asks_a_dns_server_too(void)
     responder dns;
     REQUIRE(start_responder_as(&dns, in_dns, 2, 2, "_nmos-query._tcp.studio.example", 1));
 
-    dtnmos_discovery_config config = config_for(&mdns, 300);
-    config.searches = 0;
-    config.dns_server = dns.destination;
-    config.dns_domain = "studio.example.";
-    dtnmos_registry_list* list = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
-    const dtnmos_result result = dtnmos_discover(&config, &list, &error);
+    DtNmosDiscoveryConfig config = config_for(&mdns, 300);
+    config.Searches = 0;
+    config.DnsServer = dns.destination;
+    config.DnsDomain = "studio.example.";
+    DtNmosRegistryList* list = NULL;
+    DtNmosError error = {DTNMOS_OK, ""};
+    const DtNmosResult result = DtNmos_Discover(&config, &list, &error);
     dtnmos_mutex_lock(dns.mutex);
     const int faults = dns.faults;
     const int asked = dns.asked_srv_txt;
@@ -725,32 +725,32 @@ void discovery_asks_a_dns_server_too(void)
     REQUIRE(result == DTNMOS_OK);
     CHECK_EQ(faults, 0);
     CHECK(asked);
-    REQUIRE(dtnmos_registry_list_count(list) == 3);
-    const dtnmos_registry_info* first = dtnmos_registry_list_at(list, 0);
-    CHECK_STR(dtnmos_string_get(&first->instance), "Studio");
-    CHECK_STR(dtnmos_string_get(&first->url), "http://127.0.0.3:8081");
-    CHECK_EQ(first->found_by, DTNMOS_SEARCH_UNICAST);
-    const dtnmos_registry_info* second = dtnmos_registry_list_at(list, 1);
-    CHECK_STR(dtnmos_string_get(&second->instance), "On link");
-    CHECK_EQ(second->found_by, DTNMOS_SEARCH_MULTICAST);
-    const dtnmos_registry_info* third = dtnmos_registry_list_at(list, 2);
-    CHECK_STR(dtnmos_string_get(&third->instance), "Backup");
-    CHECK_STR(dtnmos_string_get(&third->host), "backup.studio.example");
-    CHECK_EQ(third->found_by, DTNMOS_SEARCH_UNICAST);
-    dtnmos_registry_info copy;
+    REQUIRE(DtNmosRegistryList_Count(list) == 3);
+    const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
+    CHECK_STR(DtNmosString_Get(&first->Instance), "Studio");
+    CHECK_STR(DtNmosString_Get(&first->Url), "http://127.0.0.3:8081");
+    CHECK_EQ(first->FoundBy, DTNMOS_SEARCH_UNICAST);
+    const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
+    CHECK_STR(DtNmosString_Get(&second->Instance), "On link");
+    CHECK_EQ(second->FoundBy, DTNMOS_SEARCH_MULTICAST);
+    const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
+    CHECK_STR(DtNmosString_Get(&third->Instance), "Backup");
+    CHECK_STR(DtNmosString_Get(&third->Host), "backup.studio.example");
+    CHECK_EQ(third->FoundBy, DTNMOS_SEARCH_UNICAST);
+    DtNmosRegistryInfo copy;
     memset(&copy, 0, sizeof(copy));
-    REQUIRE(dtnmos_registry_info_copy(&copy, third) == DTNMOS_OK);
-    CHECK_EQ(copy.found_by, DTNMOS_SEARCH_UNICAST);
-    dtnmos_registry_info_clear(&copy);
-    dtnmos_registry_list_free(list);
+    REQUIRE(DtNmosRegistryInfo_Copy(&copy, third) == DTNMOS_OK);
+    CHECK_EQ(copy.FoundBy, DTNMOS_SEARCH_UNICAST);
+    DtNmosRegistryInfo_Clear(&copy);
+    DtNmosRegistryList_Free(list);
 
     // What it refuses.
-    config.dns_server = "no-address:53";
-    CHECK(dtnmos_discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    config.dns_server = "127.0.0.1:53";
-    config.dns_domain = "studio..example";
-    CHECK(dtnmos_discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(strstr(error.message, "studio..example") != NULL);
+    config.DnsServer = "no-address:53";
+    CHECK(DtNmos_Discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    config.DnsServer = "127.0.0.1:53";
+    config.DnsDomain = "studio..example";
+    CHECK(DtNmos_Discover(&config, &list, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(error.Message, "studio..example") != NULL);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- discovery_takes_only_the_dns_server -.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -765,12 +765,12 @@ void discovery_takes_only_the_dns_server(void)
     responder dns;
     REQUIRE(start_responder_as(&dns, &registry_b, 1, 1, "_nmos-query._tcp.studio.example",
                                1));
-    dtnmos_discovery_config config = config_for(&mdns, 200);
-    config.searches = DTNMOS_SEARCH_UNICAST;
-    config.dns_server = dns.destination;
-    config.dns_domain = "studio.example";
-    dtnmos_registry_list* list = NULL;
-    REQUIRE(dtnmos_discover(&config, &list, NULL) == DTNMOS_OK);
+    DtNmosDiscoveryConfig config = config_for(&mdns, 200);
+    config.Searches = DTNMOS_SEARCH_UNICAST;
+    config.DnsServer = dns.destination;
+    config.DnsDomain = "studio.example";
+    DtNmosRegistryList* list = NULL;
+    REQUIRE(DtNmos_Discover(&config, &list, NULL) == DTNMOS_OK);
     dtnmos_mutex_lock(mdns.mutex);
     const int multicast_queries = mdns.queries;
     dtnmos_mutex_unlock(mdns.mutex);
@@ -780,15 +780,15 @@ void discovery_takes_only_the_dns_server(void)
     CHECK_EQ(multicast_queries, 0);
     // It answered the first query at once, so that was sent once.
     CHECK_EQ(dns_queries, 1);
-    REQUIRE(dtnmos_registry_list_count(list) == 1);
-    CHECK_EQ(dtnmos_registry_list_at(list, 0)->found_by, DTNMOS_SEARCH_UNICAST);
-    dtnmos_registry_list_free(list);
+    REQUIRE(DtNmosRegistryList_Count(list) == 1);
+    CHECK_EQ(DtNmosRegistryList_At(list, 0)->FoundBy, DTNMOS_SEARCH_UNICAST);
+    DtNmosRegistryList_Free(list);
 
     // Records of another domain than the one asked for are not taken.
-    config.dns_domain = "elsewhere.example";
-    REQUIRE(dtnmos_discover(&config, &list, NULL) == DTNMOS_OK);
-    CHECK_EQ(dtnmos_registry_list_count(list), 0);
-    dtnmos_registry_list_free(list);
+    config.DnsDomain = "elsewhere.example";
+    REQUIRE(DtNmos_Discover(&config, &list, NULL) == DTNMOS_OK);
+    CHECK_EQ(DtNmosRegistryList_Count(list), 0);
+    DtNmosRegistryList_Free(list);
     stop_responder(&dns);
     stop_responder(&mdns);
 }

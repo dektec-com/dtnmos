@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*# DtNmosString.c *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos - dtnmos_string
+// dtnmos - DtNmosString
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -11,46 +11,46 @@
 
 #include "NmosInternal.h"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_get -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_Get -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const char* dtnmos_string_get(const dtnmos_string* string)
+const char* DtNmosString_Get(const DtNmosString* string)
 {
     if (string == NULL)
     {
         return "";
     }
-    return string->heap != NULL ? string->heap : string->local;
+    return string->Heap != NULL ? string->Heap : string->Local;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_length -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_Length -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-size_t dtnmos_string_length(const dtnmos_string* string)
+size_t DtNmosString_Length(const DtNmosString* string)
 {
-    return string == NULL ? 0 : string->length;
+    return string == NULL ? 0 : string->Length;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_Set -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_string_set(dtnmos_string* string, const char* text, size_t length)
+DtNmosResult DtNmosString_Set(DtNmosString* string, const char* text, size_t length)
 {
     if (string == NULL || (text == NULL && length > 0))
     {
         return DTNMOS_E_INVALID_ARGUMENT;
     }
-    if (length < sizeof(string->local))
+    if (length < sizeof(string->Local))
     {
         // text may lie in the heap string it replaces, so it is copied before that is
         // freed.
-        char local[sizeof(string->local)];
+        char local[sizeof(string->Local)];
         if (length > 0)
         {
             memcpy(local, text, length);
         }
         local[length] = '\0';
-        free(string->heap);
-        string->heap = NULL;
-        memcpy(string->local, local, length + 1);
-        string->length = length;
+        free(string->Heap);
+        string->Heap = NULL;
+        memcpy(string->Local, local, length + 1);
+        string->Length = length;
         return DTNMOS_OK;
     }
     char* heap = malloc(length + 1);
@@ -60,23 +60,23 @@ dtnmos_result dtnmos_string_set(dtnmos_string* string, const char* text, size_t 
     }
     memcpy(heap, text, length);
     heap[length] = '\0';
-    free(string->heap);
-    string->heap = heap;
-    string->local[0] = '\0';
-    string->length = length;
+    free(string->Heap);
+    string->Heap = heap;
+    string->Local[0] = '\0';
+    string->Length = length;
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_SetText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_string_set_text(dtnmos_string* string, const char* text)
+DtNmosResult DtNmosString_SetText(DtNmosString* string, const char* text)
 {
-    return dtnmos_string_set(string, text, text == NULL ? 0 : strlen(text));
+    return DtNmosString_Set(string, text, text == NULL ? 0 : strlen(text));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_string_copy(dtnmos_string* target, const dtnmos_string* source)
+DtNmosResult DtNmosString_Copy(DtNmosString* target, const DtNmosString* source)
 {
     if (target == NULL)
     {
@@ -86,25 +86,25 @@ dtnmos_result dtnmos_string_copy(dtnmos_string* target, const dtnmos_string* sou
     {
         return DTNMOS_OK;
     }
-    return dtnmos_string_set(target, dtnmos_string_get(source),
-                             dtnmos_string_length(source));
+    return DtNmosString_Set(target, DtNmosString_Get(source),
+                            DtNmosString_Length(source));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosString_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_string_clear(dtnmos_string* string)
+void DtNmosString_Clear(DtNmosString* string)
 {
     if (string == NULL)
     {
         return;
     }
-    free(string->heap);
+    free(string->Heap);
     memset(string, 0, sizeof(*string));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_string_set_span -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_string_set_span(dtnmos_string* string, dtnmos_span span)
+DtNmosResult dtnmos_string_set_span(DtNmosString* string, dtnmos_span span)
 {
-    return dtnmos_string_set(string, span.data, span.length);
+    return DtNmosString_Set(string, span.data, span.length);
 }

@@ -19,7 +19,7 @@ typedef struct owned_header
     char* value;
 } owned_header;
 
-struct dtnmos_http_response
+struct DtNmosHttpResponse
 {
     int status;
     dtnmos_buffer body;
@@ -46,16 +46,16 @@ static char* copy_text(const char* text)
     return copy;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_http_response* dtnmos_http_response_create(void)
+DtNmosHttpResponse* DtNmosHttpResponse_Create(void)
 {
-    return calloc(1, sizeof(dtnmos_http_response));
+    return calloc(1, sizeof(DtNmosHttpResponse));
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-void dtnmos_http_response_free(dtnmos_http_response* response)
+void DtNmosHttpResponse_Free(DtNmosHttpResponse* response)
 {
     if (response == NULL)
     {
@@ -72,9 +72,9 @@ void dtnmos_http_response_free(dtnmos_http_response* response)
     free(response);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_set_status -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_SetStatus -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_http_response_set_status(dtnmos_http_response* response, int status)
+void DtNmosHttpResponse_SetStatus(DtNmosHttpResponse* response, int status)
 {
     if (response != NULL)
     {
@@ -82,11 +82,11 @@ void dtnmos_http_response_set_status(dtnmos_http_response* response, int status)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_set_body -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_SetBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_http_response_set_body(dtnmos_http_response* response,
-                                            const char* content_type, const char* body,
-                                            size_t length)
+DtNmosResult DtNmosHttpResponse_SetBody(DtNmosHttpResponse* response,
+                                        const char* content_type, const char* body,
+                                        size_t length)
 {
     if (response == NULL || (body == NULL && length > 0))
     {
@@ -104,13 +104,13 @@ dtnmos_result dtnmos_http_response_set_body(dtnmos_http_response* response,
     free(response->content_type);
     response->content_type = type;
     response->body.length = 0;
-    return dtnmos_http_response_append_body(response, body, length);
+    return DtNmosHttpResponse_AppendBody(response, body, length);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_append_body -.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_AppendBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_http_response_append_body(dtnmos_http_response* response,
-                                               const char* body, size_t length)
+DtNmosResult DtNmosHttpResponse_AppendBody(DtNmosHttpResponse* response, const char* body,
+                                           size_t length)
 {
     if (response == NULL || (body == NULL && length > 0))
     {
@@ -121,10 +121,10 @@ dtnmos_result dtnmos_http_response_append_body(dtnmos_http_response* response,
     return response->body.failed ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_add_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_AddHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_http_response_add_header(dtnmos_http_response* response,
-                                              const char* name, const char* value)
+DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* response, const char* name,
+                                          const char* value)
 {
     if (response == NULL || name == NULL || value == NULL)
     {
@@ -158,17 +158,16 @@ dtnmos_result dtnmos_http_response_add_header(dtnmos_http_response* response,
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_status -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Status -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_http_response_status(const dtnmos_http_response* response)
+int DtNmosHttpResponse_Status(const DtNmosHttpResponse* response)
 {
     return response == NULL ? 0 : response->status;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Body -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* dtnmos_http_response_body(const dtnmos_http_response* response,
-                                      size_t* length)
+const char* DtNmosHttpResponse_Body(const DtNmosHttpResponse* response, size_t* length)
 {
     if (length != NULL)
     {
@@ -177,39 +176,39 @@ const char* dtnmos_http_response_body(const dtnmos_http_response* response,
     return response == NULL || response->body.data == NULL ? "" : response->body.data;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_content_type -.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_ContentType -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const char* dtnmos_http_response_content_type(const dtnmos_http_response* response)
+const char* DtNmosHttpResponse_ContentType(const DtNmosHttpResponse* response)
 {
     return response == NULL || response->content_type == NULL ? ""
                                                               : response->content_type;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_header_count -.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_HeaderCount -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-size_t dtnmos_http_response_header_count(const dtnmos_http_response* response)
+size_t DtNmosHttpResponse_HeaderCount(const DtNmosHttpResponse* response)
 {
     return response == NULL ? 0 : response->header_count;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_Header -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_http_header dtnmos_http_response_header(const dtnmos_http_response* response,
-                                               size_t index)
+DtNmosHttpHeader DtNmosHttpResponse_Header(const DtNmosHttpResponse* response,
+                                           size_t index)
 {
-    dtnmos_http_header header = {NULL, NULL};
+    DtNmosHttpHeader header = {NULL, NULL};
     if (response != NULL && index < response->header_count)
     {
-        header.name = response->headers[index].name;
-        header.value = response->headers[index].value;
+        header.Name = response->headers[index].name;
+        header.Value = response->headers[index].value;
     }
     return header;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_http_response_find_header -.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosHttpResponse_FindHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* dtnmos_http_response_find_header(const dtnmos_http_response* response,
-                                             const char* name)
+const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* response,
+                                          const char* name)
 {
     if (response == NULL || name == NULL)
     {

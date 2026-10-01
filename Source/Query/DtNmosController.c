@@ -18,24 +18,24 @@
 // The type of the control of a device that is the base of its Connection API.
 #define DTNMOS_CONNECTION_CONTROL "urn:x-nmos:control:sr-ctrl/v1.1"
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connection_clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosConnection_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_connection_clear(dtnmos_connection* connection)
+void DtNmosConnection_Clear(DtNmosConnection* connection)
 {
     if (connection == NULL)
     {
         return;
     }
-    dtnmos_receiver_info_clear(&connection->receiver);
-    dtnmos_sender_info_clear(&connection->sender);
-    dtnmos_string_clear(&connection->sdp);
+    DtNmosReceiverInfo_Clear(&connection->Receiver);
+    DtNmosSenderInfo_Clear(&connection->Sender);
+    DtNmosString_Clear(&connection->Sdp);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- kind_of -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Returns the kind of media, as the format of IS-04 names it, or null for another one.
 //
-static const char* kind_of(dtnmos_media media)
+static const char* kind_of(DtNmosMedia media)
 {
     switch (media)
     {
@@ -63,21 +63,21 @@ typedef struct staged_resource
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- receiver_resource -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static staged_resource receiver_resource(const dtnmos_receiver_info* receiver)
+static staged_resource receiver_resource(const DtNmosReceiverInfo* receiver)
 {
-    const staged_resource resource = {"receiver", "receivers", receiver->id.text,
-                                      receiver->device_id.text,
-                                      dtnmos_string_get(&receiver->label)};
+    const staged_resource resource = {"receiver", "receivers", receiver->Id.Text,
+                                      receiver->DeviceId.Text,
+                                      DtNmosString_Get(&receiver->Label)};
     return resource;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- sender_resource -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static staged_resource sender_resource(const dtnmos_sender_info* sender)
+static staged_resource sender_resource(const DtNmosSenderInfo* sender)
 {
-    const staged_resource resource = {"sender", "senders", sender->id.text,
-                                      sender->device_id.text,
-                                      dtnmos_string_get(&sender->label)};
+    const staged_resource resource = {"sender", "senders", sender->Id.Text,
+                                      sender->DeviceId.Text,
+                                      DtNmosString_Get(&sender->Label)};
     return resource;
 }
 
@@ -86,8 +86,8 @@ static staged_resource sender_resource(const dtnmos_sender_info* sender)
 // Writes into url the URL of the staged parameters of resource, from the Connection API
 // that the control of its device names.
 //
-static dtnmos_result staged_url(dtnmos_query* query, const staged_resource* resource,
-                                dtnmos_buffer* url, dtnmos_error* error)
+static DtNmosResult staged_url(DtNmosQuery* query, const staged_resource* resource,
+                               dtnmos_buffer* url, DtNmosError* error)
 {
     const char* label = resource->label;
     if (resource->device_id[0] == '\0')
@@ -107,7 +107,7 @@ static dtnmos_result staged_url(dtnmos_query* query, const staged_resource* reso
         return dtnmos_fail_memory(error);
     }
     dtnmos_json* device = NULL;
-    dtnmos_result result = dtnmos_query_get_json(query, device_url.data, &device, error);
+    DtNmosResult result = dtnmos_query_get_json(query, device_url.data, &device, error);
     dtnmos_buffer_free(&device_url);
     if (result == DTNMOS_E_NOT_FOUND)
     {
@@ -161,18 +161,18 @@ static dtnmos_result staged_url(dtnmos_query* query, const staged_resource* reso
 // Sends body as a PATCH of the staged parameters of resource; fails unless the node
 // answers with 200, naming the error the node gave.
 //
-static dtnmos_result patch(dtnmos_query* query, const staged_resource* resource,
-                           const dtnmos_buffer* body, dtnmos_error* error)
+static DtNmosResult patch(DtNmosQuery* query, const staged_resource* resource,
+                          const dtnmos_buffer* body, DtNmosError* error)
 {
     dtnmos_buffer url;
     memset(&url, 0, sizeof(url));
-    dtnmos_result result = staged_url(query, resource, &url, error);
+    DtNmosResult result = staged_url(query, resource, &url, error);
     if (result != DTNMOS_OK)
     {
         dtnmos_buffer_free(&url);
         return result;
     }
-    dtnmos_http_response* response = dtnmos_http_response_create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
     if (response == NULL)
     {
         dtnmos_buffer_free(&url);
@@ -180,12 +180,12 @@ static dtnmos_result patch(dtnmos_query* query, const staged_resource* resource,
     }
     result = dtnmos_query_request(query, "PATCH", url.data, "application/json",
                                   body->data, body->length, response, error);
-    const int status = dtnmos_http_response_status(response);
+    const int status = DtNmosHttpResponse_Status(response);
     if (result == DTNMOS_OK && status != 200)
     {
         // The Connection API answers an error with {"code", "error", "debug"}.
         size_t length = 0;
-        const char* text = dtnmos_http_response_body(response, &length);
+        const char* text = DtNmosHttpResponse_Body(response, &length);
         dtnmos_json* answer = NULL;
         const char* reason = NULL;
         if (dtnmos_json_parse(text, length, &answer, NULL) == DTNMOS_OK)
@@ -200,64 +200,65 @@ static dtnmos_result patch(dtnmos_query* query, const staged_resource* resource,
                         reason != NULL ? reason : (length > 0 ? text : "no body"));
         dtnmos_json_free(answer);
     }
-    dtnmos_http_response_free(response);
+    DtNmosHttpResponse_Free(response);
     dtnmos_buffer_free(&url);
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_connect(dtnmos_query* query, const char* receiver,
-                             const char* sender, dtnmos_connection* connection,
-                             dtnmos_error* error)
+DtNmosResult DtNmosQuery_Connect(DtNmosQuery* query, const char* receiver,
+                                 const char* sender, DtNmosConnection* connection,
+                                 DtNmosError* error)
 {
     if (query == NULL || receiver == NULL || receiver[0] == '\0' || sender == NULL ||
         sender[0] == '\0')
     {
-        return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_connect() needs a query, a receiver and a sender.");
+        return dtnmos_fail(
+            error, DTNMOS_E_INVALID_ARGUMENT,
+            "DtNmosQuery_Connect() needs a query, a receiver and a sender.");
     }
-    dtnmos_connection_clear(connection);
-    dtnmos_connection found;
+    DtNmosConnection_Clear(connection);
+    DtNmosConnection found;
     memset(&found, 0, sizeof(found));
-    dtnmos_result result =
-        dtnmos_query_find_receiver(query, receiver, &found.receiver, error);
+    DtNmosResult result =
+        DtNmosQuery_FindReceiver(query, receiver, &found.Receiver, error);
     if (result == DTNMOS_OK)
     {
-        result = dtnmos_query_find_sender(query, sender, &found.sender, error);
+        result = DtNmosQuery_FindSender(query, sender, &found.Sender, error);
     }
     if (result == DTNMOS_OK)
     {
         // A kind that is not known on either side is left to the node.
-        const char* takes = kind_of(found.receiver.media);
-        const char* gives = kind_of(found.sender.media);
+        const char* takes = kind_of(found.Receiver.Media);
+        const char* gives = kind_of(found.Sender.Media);
         if (takes != NULL && gives != NULL && strcmp(takes, gives) != 0)
         {
             result = dtnmos_fail(
                 error, DTNMOS_E_INVALID_ARGUMENT,
                 "Sender %s ('%s') sends %s, but receiver %s ('%s') "
                 "takes %s.",
-                found.sender.id.text, dtnmos_string_get(&found.sender.label), gives,
-                found.receiver.id.text, dtnmos_string_get(&found.receiver.label), takes);
+                found.Sender.Id.Text, DtNmosString_Get(&found.Sender.Label), gives,
+                found.Receiver.Id.Text, DtNmosString_Get(&found.Receiver.Label), takes);
         }
     }
     if (result == DTNMOS_OK)
     {
-        result = dtnmos_query_sender_manifest(query, &found.sender, &found.sdp, error);
+        result = DtNmosQuery_SenderManifest(query, &found.Sender, &found.Sdp, error);
     }
     if (result == DTNMOS_OK)
     {
         dtnmos_buffer body;
         memset(&body, 0, sizeof(body));
         DTNMOS_APPEND_LITERAL(&body, "{\"sender_id\": ");
-        dtnmos_json_write_string(&body, found.sender.id.text);
+        dtnmos_json_write_string(&body, found.Sender.Id.Text);
         DTNMOS_APPEND_LITERAL(&body, ", \"master_enable\": true, \"activation\": "
                                      "{\"mode\": \"activate_immediate\"}, "
                                      "\"transport_file\": {\"type\": "
                                      "\"application/sdp\", \"data\": ");
-        dtnmos_json_write_string(&body, dtnmos_string_get(&found.sdp));
+        dtnmos_json_write_string(&body, DtNmosString_Get(&found.Sdp));
         DTNMOS_APPEND_LITERAL(&body, "}}");
-        const staged_resource resource = receiver_resource(&found.receiver);
+        const staged_resource resource = receiver_resource(&found.Receiver);
         result = body.failed ? dtnmos_fail_memory(error)
                              : patch(query, &resource, &body, error);
         dtnmos_buffer_free(&body);
@@ -267,24 +268,24 @@ dtnmos_result dtnmos_connect(dtnmos_query* query, const char* receiver,
         *connection = found;
         return DTNMOS_OK;
     }
-    dtnmos_connection_clear(&found);
+    DtNmosConnection_Clear(&found);
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_disconnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_Disconnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_disconnect(dtnmos_query* query, const char* receiver,
-                                dtnmos_receiver_info* disconnected, dtnmos_error* error)
+DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* query, const char* receiver,
+                                    DtNmosReceiverInfo* disconnected, DtNmosError* error)
 {
     if (query == NULL || receiver == NULL || receiver[0] == '\0')
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_disconnect() needs a query and a receiver.");
+                           "DtNmosQuery_Disconnect() needs a query and a receiver.");
     }
-    dtnmos_receiver_info_clear(disconnected);
-    dtnmos_receiver_info found;
+    DtNmosReceiverInfo_Clear(disconnected);
+    DtNmosReceiverInfo found;
     memset(&found, 0, sizeof(found));
-    dtnmos_result result = dtnmos_query_find_receiver(query, receiver, &found, error);
+    DtNmosResult result = DtNmosQuery_FindReceiver(query, receiver, &found, error);
     if (result == DTNMOS_OK)
     {
         dtnmos_buffer body;
@@ -302,35 +303,35 @@ dtnmos_result dtnmos_disconnect(dtnmos_query* query, const char* receiver,
         *disconnected = found;
         return DTNMOS_OK;
     }
-    dtnmos_receiver_info_clear(&found);
+    DtNmosReceiverInfo_Clear(&found);
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_move_sender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosQuery_MoveSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-dtnmos_result dtnmos_move_sender(dtnmos_query* query, const char* sender,
-                                 const char* destination_ip, uint16_t destination_port,
-                                 dtnmos_sender_info* moved, dtnmos_error* error)
+DtNmosResult DtNmosQuery_MoveSender(DtNmosQuery* query, const char* sender,
+                                    const char* destination_ip, uint16_t destination_port,
+                                    DtNmosSenderInfo* moved, DtNmosError* error)
 {
     if (query == NULL || sender == NULL || sender[0] == '\0' || destination_ip == NULL ||
         destination_ip[0] == '\0' || destination_port == 0)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_move_sender() needs a query, a sender, and an IP "
+                           "DtNmosQuery_MoveSender() needs a query, a sender, and an IP "
                            "address and a UDP port to move it to.");
     }
-    dtnmos_sender_info_clear(moved);
-    dtnmos_sender_info found;
+    DtNmosSenderInfo_Clear(moved);
+    DtNmosSenderInfo found;
     memset(&found, 0, sizeof(found));
-    dtnmos_result result = dtnmos_query_find_sender(query, sender, &found, error);
-    const char* transport = dtnmos_string_get(&found.transport);
+    DtNmosResult result = DtNmosQuery_FindSender(query, sender, &found, error);
+    const char* transport = DtNmosString_Get(&found.Transport);
     if (result == DTNMOS_OK && transport[0] != '\0' &&
         strncmp(transport, "urn:x-nmos:transport:rtp", 24) != 0)
     {
         result = dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                              "Sender %s ('%s') sends over %s, not RTP, so it has no "
                              "destination IP address and port to move.",
-                             found.id.text, dtnmos_string_get(&found.label), transport);
+                             found.Id.Text, DtNmosString_Get(&found.Label), transport);
     }
     if (result == DTNMOS_OK)
     {
@@ -352,6 +353,6 @@ dtnmos_result dtnmos_move_sender(dtnmos_query* query, const char* sender,
         *moved = found;
         return DTNMOS_OK;
     }
-    dtnmos_sender_info_clear(&found);
+    DtNmosSenderInfo_Clear(&found);
     return result;
 }

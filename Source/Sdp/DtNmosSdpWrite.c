@@ -65,14 +65,14 @@ static void separate(fmtp_writer* writer)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_text(fmtp_writer* writer, const char* name, const dtnmos_string* value)
+static void write_text(fmtp_writer* writer, const char* name, const DtNmosString* value)
 {
-    if (dtnmos_string_length(value) == 0)
+    if (DtNmosString_Length(value) == 0)
     {
         return;
     }
     separate(writer);
-    dtnmos_buffer_printf(writer->buffer, "%s=%s", name, dtnmos_string_get(value));
+    dtnmos_buffer_printf(writer->buffer, "%s=%s", name, DtNmosString_Get(value));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -131,58 +131,58 @@ static void end_fmtp(fmtp_writer* writer)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_video(dtnmos_buffer* buffer, const dtnmos_flow* flow)
+static void write_video(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 {
-    const dtnmos_video_format* video = &flow->format.video;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u raw/%u\r\n", (unsigned)flow->payload_type,
-                         (unsigned)flow->clock_rate);
-    fmtp_writer writer = {buffer, flow->payload_type, 0};
-    write_text(&writer, "sampling", &video->sampling);
-    write_number(&writer, "width", video->width);
-    write_number(&writer, "height", video->height);
-    write_rate(&writer, video->rate_numerator, video->rate_denominator);
-    write_number(&writer, "depth", video->depth);
-    write_text(&writer, "TCS", &video->tcs);
-    write_text(&writer, "colorimetry", &video->colorimetry);
-    write_text(&writer, "RANGE", &video->range);
-    write_text(&writer, "PM", &video->packing_mode);
-    write_text(&writer, "SSN", &video->ssn);
-    write_text(&writer, "TP", &video->transmitter_type);
-    write_flag(&writer, "interlace", video->interlaced);
-    write_flag(&writer, "segmented", video->segmented);
+    const DtNmosVideoFormat* video = &flow->Format.Video;
+    dtnmos_buffer_printf(buffer, "a=rtpmap:%u raw/%u\r\n", (unsigned)flow->PayloadType,
+                         (unsigned)flow->ClockRate);
+    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    write_text(&writer, "sampling", &video->Sampling);
+    write_number(&writer, "width", video->Width);
+    write_number(&writer, "height", video->Height);
+    write_rate(&writer, video->RateNumerator, video->RateDenominator);
+    write_number(&writer, "depth", video->Depth);
+    write_text(&writer, "TCS", &video->Tcs);
+    write_text(&writer, "colorimetry", &video->Colorimetry);
+    write_text(&writer, "RANGE", &video->Range);
+    write_text(&writer, "PM", &video->PackingMode);
+    write_text(&writer, "SSN", &video->Ssn);
+    write_text(&writer, "TP", &video->TransmitterType);
+    write_flag(&writer, "interlace", video->Interlaced);
+    write_flag(&writer, "segmented", video->Segmented);
     end_fmtp(&writer);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_compressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_compressed(dtnmos_buffer* buffer, const dtnmos_flow* flow)
+static void write_compressed(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 {
-    const dtnmos_compressed_video_format* video = &flow->format.compressed_video;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->payload_type,
-                         dtnmos_string_get(&video->encoding), (unsigned)flow->clock_rate);
-    fmtp_writer writer = {buffer, flow->payload_type, 0};
+    const DtNmosCompressedVideoFormat* video = &flow->Format.CompressedVideo;
+    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
+                         DtNmosString_Get(&video->Encoding), (unsigned)flow->ClockRate);
+    fmtp_writer writer = {buffer, flow->PayloadType, 0};
     separate(&writer);
-    dtnmos_buffer_printf(buffer, "packetmode=%u", (unsigned)video->packet_mode);
-    write_text(&writer, "profile", &video->profile);
-    write_text(&writer, "level", &video->level);
-    write_text(&writer, "sublevel", &video->sublevel);
-    write_text(&writer, "sampling", &video->sampling);
-    write_number(&writer, "width", video->width);
-    write_number(&writer, "height", video->height);
-    write_rate(&writer, video->rate_numerator, video->rate_denominator);
-    write_number(&writer, "depth", video->depth);
-    write_text(&writer, "TCS", &video->tcs);
-    write_text(&writer, "colorimetry", &video->colorimetry);
-    write_text(&writer, "RANGE", &video->range);
-    write_text(&writer, "SSN", &video->ssn);
-    write_text(&writer, "TP", &video->transmitter_type);
-    if (video->transmission_mode != 1)
+    dtnmos_buffer_printf(buffer, "packetmode=%u", (unsigned)video->PacketMode);
+    write_text(&writer, "profile", &video->Profile);
+    write_text(&writer, "level", &video->Level);
+    write_text(&writer, "sublevel", &video->Sublevel);
+    write_text(&writer, "sampling", &video->Sampling);
+    write_number(&writer, "width", video->Width);
+    write_number(&writer, "height", video->Height);
+    write_rate(&writer, video->RateNumerator, video->RateDenominator);
+    write_number(&writer, "depth", video->Depth);
+    write_text(&writer, "TCS", &video->Tcs);
+    write_text(&writer, "colorimetry", &video->Colorimetry);
+    write_text(&writer, "RANGE", &video->Range);
+    write_text(&writer, "SSN", &video->Ssn);
+    write_text(&writer, "TP", &video->TransmitterType);
+    if (video->TransmissionMode != 1)
     {
         separate(&writer);
-        dtnmos_buffer_printf(buffer, "transmode=%u", (unsigned)video->transmission_mode);
+        dtnmos_buffer_printf(buffer, "transmode=%u", (unsigned)video->TransmissionMode);
     }
-    write_flag(&writer, "interlace", video->interlaced);
-    write_flag(&writer, "segmented", video->segmented);
+    write_flag(&writer, "interlace", video->Interlaced);
+    write_flag(&writer, "segmented", video->Segmented);
     end_fmtp(&writer);
 }
 
@@ -210,88 +210,88 @@ static void write_milliseconds(dtnmos_buffer* buffer, uint32_t nanoseconds)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_audio(dtnmos_buffer* buffer, const dtnmos_flow* flow)
+static void write_audio(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 {
-    const dtnmos_audio_format* audio = &flow->format.audio;
-    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u/%u\r\n", (unsigned)flow->payload_type,
-                         dtnmos_string_get(&audio->encoding),
-                         (unsigned)audio->sample_rate, (unsigned)audio->channels);
-    fmtp_writer writer = {buffer, flow->payload_type, 0};
-    write_text(&writer, "channel-order", &audio->channel_order);
+    const DtNmosAudioFormat* audio = &flow->Format.Audio;
+    dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u/%u\r\n", (unsigned)flow->PayloadType,
+                         DtNmosString_Get(&audio->Encoding), (unsigned)audio->SampleRate,
+                         (unsigned)audio->Channels);
+    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    write_text(&writer, "channel-order", &audio->ChannelOrder);
     end_fmtp(&writer);
-    if (audio->packet_time_ns != 0)
+    if (audio->PacketTimeNs != 0)
     {
         DTNMOS_APPEND_LITERAL(buffer, "a=ptime:");
-        write_milliseconds(buffer, audio->packet_time_ns);
+        write_milliseconds(buffer, audio->PacketTimeNs);
         DTNMOS_APPEND_LITERAL(buffer, "\r\n");
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_anc(dtnmos_buffer* buffer, const dtnmos_flow* flow)
+static void write_anc(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 {
-    const dtnmos_anc_format* anc = &flow->format.anc;
+    const DtNmosAncFormat* anc = &flow->Format.Anc;
     dtnmos_buffer_printf(buffer, "a=rtpmap:%u smpte291/%u\r\n",
-                         (unsigned)flow->payload_type, (unsigned)flow->clock_rate);
-    fmtp_writer writer = {buffer, flow->payload_type, 0};
-    for (size_t i = 0; i < anc->did_sdid_count; ++i)
+                         (unsigned)flow->PayloadType, (unsigned)flow->ClockRate);
+    fmtp_writer writer = {buffer, flow->PayloadType, 0};
+    for (size_t i = 0; i < anc->DidSdidCount; ++i)
     {
         separate(&writer);
         dtnmos_buffer_printf(buffer, "DID_SDID={0x%02X,0x%02X}",
-                             (unsigned)anc->did_sdid[i].did,
-                             (unsigned)anc->did_sdid[i].sdid);
+                             (unsigned)anc->DidSdid[i].Did,
+                             (unsigned)anc->DidSdid[i].Sdid);
     }
-    write_number(&writer, "VPID_Code", anc->vpid_code);
-    write_rate(&writer, anc->rate_numerator, anc->rate_denominator);
-    write_text(&writer, "TM", &anc->transmission_model);
-    write_text(&writer, "SSN", &anc->ssn);
+    write_number(&writer, "VPID_Code", anc->VpidCode);
+    write_rate(&writer, anc->RateNumerator, anc->RateDenominator);
+    write_text(&writer, "TM", &anc->TransmissionModel);
+    write_text(&writer, "SSN", &anc->Ssn);
     end_fmtp(&writer);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_other -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void write_other(dtnmos_buffer* buffer, const dtnmos_flow* flow)
+static void write_other(dtnmos_buffer* buffer, const DtNmosFlow* flow)
 {
-    const dtnmos_other_format* other = &flow->format.other;
-    if (dtnmos_string_length(&other->encoding) > 0)
+    const DtNmosOtherFormat* other = &flow->Format.Other;
+    if (DtNmosString_Length(&other->Encoding) > 0)
     {
-        dtnmos_buffer_printf(
-            buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->payload_type,
-            dtnmos_string_get(&other->encoding), (unsigned)flow->clock_rate);
+        dtnmos_buffer_printf(buffer, "a=rtpmap:%u %s/%u\r\n", (unsigned)flow->PayloadType,
+                             DtNmosString_Get(&other->Encoding),
+                             (unsigned)flow->ClockRate);
     }
-    if (dtnmos_string_length(&other->fmtp) > 0)
+    if (DtNmosString_Length(&other->Fmtp) > 0)
     {
-        dtnmos_buffer_printf(buffer, "a=fmtp:%u %s\r\n", (unsigned)flow->payload_type,
-                             dtnmos_string_get(&other->fmtp));
+        dtnmos_buffer_printf(buffer, "a=fmtp:%u %s\r\n", (unsigned)flow->PayloadType,
+                             DtNmosString_Get(&other->Fmtp));
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- write_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void write_flow(dtnmos_buffer* buffer, const dtnmos_flow* flow, size_t index,
+static void write_flow(dtnmos_buffer* buffer, const DtNmosFlow* flow, size_t index,
                        int with_mid)
 {
-    const char* destination = dtnmos_string_get(&flow->destination_ip);
+    const char* destination = DtNmosString_Get(&flow->DestinationIp);
     dtnmos_buffer_printf(buffer, "m=%s %u RTP/AVP %u\r\n",
-                         flow->media == DTNMOS_MEDIA_AUDIO ? "audio" : "video",
-                         (unsigned)flow->destination_port, (unsigned)flow->payload_type);
+                         flow->Media == DTNMOS_MEDIA_AUDIO ? "audio" : "video",
+                         (unsigned)flow->DestinationPort, (unsigned)flow->PayloadType);
     dtnmos_buffer_printf(buffer, "c=IN %s %s%s\r\n", address_type(destination),
                          destination, is_ipv4_multicast(destination) ? "/64" : "");
-    if (flow->media == DTNMOS_MEDIA_COMPRESSED_VIDEO &&
-        flow->format.compressed_video.bandwidth_kbps != 0)
+    if (flow->Media == DTNMOS_MEDIA_COMPRESSED_VIDEO &&
+        flow->Format.CompressedVideo.BandwidthKbps != 0)
     {
         dtnmos_buffer_printf(
             buffer, "b=AS:%llu\r\n",
-            (unsigned long long)flow->format.compressed_video.bandwidth_kbps);
+            (unsigned long long)flow->Format.CompressedVideo.BandwidthKbps);
     }
-    if (dtnmos_string_length(&flow->source_ip) > 0)
+    if (DtNmosString_Length(&flow->SourceIp) > 0)
     {
         dtnmos_buffer_printf(buffer, "a=source-filter: incl IN %s %s %s\r\n",
                              address_type(destination), destination,
-                             dtnmos_string_get(&flow->source_ip));
+                             DtNmosString_Get(&flow->SourceIp));
     }
-    switch (flow->media)
+    switch (flow->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
         write_video(buffer, flow);
@@ -309,39 +309,39 @@ static void write_flow(dtnmos_buffer* buffer, const dtnmos_flow* flow, size_t in
         write_other(buffer, flow);
         break;
     }
-    if (dtnmos_string_length(&flow->ts_refclk) > 0)
+    if (DtNmosString_Length(&flow->TsRefclk) > 0)
     {
         dtnmos_buffer_printf(buffer, "a=ts-refclk:%s\r\n",
-                             dtnmos_string_get(&flow->ts_refclk));
+                             DtNmosString_Get(&flow->TsRefclk));
     }
-    if (flow->media_clock_direct)
+    if (flow->MediaClockDirect)
     {
         dtnmos_buffer_printf(buffer, "a=mediaclk:direct=%u\r\n",
-                             (unsigned)flow->media_clock_offset);
+                             (unsigned)flow->MediaClockOffset);
     }
     if (with_mid)
     {
         dtnmos_buffer_printf(buffer, "a=mid:%s%zu\r\n",
-                             flow->leg == 1 ? "secondary" : "primary", index);
+                             flow->Leg == 1 ? "secondary" : "primary", index);
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_sdp_write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSdp_Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow* flows,
-                               size_t count, dtnmos_string* text, dtnmos_error* error)
+DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flows,
+                             size_t count, DtNmosString* text, DtNmosError* error)
 {
     if (session == NULL || (flows == NULL && count > 0) || text == NULL)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_sdp_write() needs a session, its flows and a text.");
+                           "DtNmosSdp_Write() needs a session, its flows and a text.");
     }
     if (count == 0)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                            "An SDP needs at least one flow.");
     }
-    if (dtnmos_string_length(&session->origin_ip) == 0)
+    if (DtNmosString_Length(&session->OriginIp) == 0)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
                            "An SDP needs the address of its sender in origin_ip.");
@@ -349,16 +349,16 @@ dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow*
     int with_mid = 0;
     for (size_t i = 0; i < count; ++i)
     {
-        if (dtnmos_string_length(&flows[i].destination_ip) == 0 ||
-            flows[i].destination_port == 0)
+        if (DtNmosString_Length(&flows[i].DestinationIp) == 0 ||
+            flows[i].DestinationPort == 0)
         {
             return dtnmos_fail(
                 error, DTNMOS_E_INVALID_ARGUMENT,
                 "Flow %zu of the SDP needs a destination address and port.", i);
         }
-        if (flows[i].leg == 1)
+        if (flows[i].Leg == 1)
         {
-            if (i == 0 || flows[i - 1].leg != 0)
+            if (i == 0 || flows[i - 1].Leg != 0)
             {
                 return dtnmos_fail(
                     error, DTNMOS_E_INVALID_ARGUMENT,
@@ -370,20 +370,19 @@ dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow*
 
     dtnmos_buffer buffer;
     memset(&buffer, 0, sizeof(buffer));
-    const char* origin = dtnmos_string_get(&session->origin_ip);
+    const char* origin = DtNmosString_Get(&session->OriginIp);
     DTNMOS_APPEND_LITERAL(&buffer, "v=0\r\n");
     dtnmos_buffer_printf(
-        &buffer, "o=- %llu %llu IN %s %s\r\n", (unsigned long long)session->session_id,
-        (unsigned long long)session->session_version, address_type(origin), origin);
+        &buffer, "o=- %llu %llu IN %s %s\r\n", (unsigned long long)session->SessionId,
+        (unsigned long long)session->SessionVersion, address_type(origin), origin);
     // RFC 8866 asks for a single space when a session has no name.
-    dtnmos_buffer_printf(&buffer, "s=%s\r\n",
-                         dtnmos_string_length(&session->name) > 0
-                             ? dtnmos_string_get(&session->name)
-                             : " ");
+    dtnmos_buffer_printf(
+        &buffer, "s=%s\r\n",
+        DtNmosString_Length(&session->Name) > 0 ? DtNmosString_Get(&session->Name) : " ");
     DTNMOS_APPEND_LITERAL(&buffer, "t=0 0\r\n");
     for (size_t i = 0; with_mid && i < count; ++i)
     {
-        if (flows[i].leg == 1)
+        if (flows[i].Leg == 1)
         {
             // Flow i is named primary<i> or secondary<i>; the first path is the flow
             // before.
@@ -400,7 +399,7 @@ dtnmos_result dtnmos_sdp_write(const dtnmos_session* session, const dtnmos_flow*
         dtnmos_buffer_free(&buffer);
         return dtnmos_fail_memory(error);
     }
-    const dtnmos_result result = dtnmos_string_set(text, buffer.data, buffer.length);
+    const DtNmosResult result = DtNmosString_Set(text, buffer.data, buffer.length);
     dtnmos_buffer_free(&buffer);
     if (result != DTNMOS_OK)
     {

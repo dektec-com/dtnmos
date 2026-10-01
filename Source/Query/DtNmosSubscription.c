@@ -15,19 +15,19 @@
 #include "NmosJson.h"
 #include "NmosQuery.h"
 
-struct dtnmos_subscription
+struct DtNmosSubscription
 {
-    dtnmos_websocket_transport websocket;
+    DtNmosWebSocketTransport websocket;
     void* connection;
     char* url; // of the WebSocket
-    dtnmos_change_fn on_change;
+    DtNmosChangeFunc on_change;
     void* on_change_user;
-    dtnmos_string message;
+    DtNmosString message;
 };
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_change_kind_name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosChangeKind_Name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-const char* dtnmos_change_kind_name(dtnmos_change_kind kind)
+const char* DtNmosChangeKind_Name(DtNmosChangeKind kind)
 {
     switch (kind)
     {
@@ -43,15 +43,15 @@ const char* dtnmos_change_kind_name(dtnmos_change_kind kind)
     return "unknown";
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_subscription_create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Create -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
-                                         const dtnmos_subscription_config* config,
-                                         dtnmos_subscription** subscription,
-                                         dtnmos_error* error)
+DtNmosResult DtNmosSubscription_Create(DtNmosQuery* query,
+                                       const DtNmosSubscriptionConfig* config,
+                                       DtNmosSubscription** subscription,
+                                       DtNmosError* error)
 {
-    if (query == NULL || config == NULL || config->resource_path == NULL ||
-        config->resource_path[0] != '/' || config->on_change == NULL ||
+    if (query == NULL || config == NULL || config->ResourcePath == NULL ||
+        config->ResourcePath[0] != '/' || config->OnChange == NULL ||
         subscription == NULL)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
@@ -60,8 +60,8 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
                            "itself.");
     }
     *subscription = NULL;
-    const dtnmos_websocket_transport* websocket =
-        config->websocket != NULL ? config->websocket : dtnmos_curl_websocket();
+    const DtNmosWebSocketTransport* websocket =
+        config->WebSocket != NULL ? config->WebSocket : DtNmos_CurlWebSocket();
     const char* base = dtnmos_query_base(query);
 
     // Ask for the subscription: not persistent, so that it goes with its WebSocket, and
@@ -70,15 +70,15 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
     memset(&body, 0, sizeof(body));
     dtnmos_buffer_printf(
         &body, "{\"max_update_rate_ms\": %u, \"resource_path\": ",
-        (unsigned)(config->max_update_rate_ms == 0 ? 100 : config->max_update_rate_ms));
-    dtnmos_json_write_string(&body, config->resource_path);
+        (unsigned)(config->MaxUpdateRateMs == 0 ? 100 : config->MaxUpdateRateMs));
+    dtnmos_json_write_string(&body, config->ResourcePath);
     dtnmos_buffer_printf(&body, ", \"params\": {}, \"persist\": false, \"secure\": %s}",
                          strncmp(base, "https:", 6) == 0 ? "true" : "false");
     dtnmos_buffer url;
     memset(&url, 0, sizeof(url));
     dtnmos_buffer_printf(&url, "%ssubscriptions", base);
-    dtnmos_http_response* response = dtnmos_http_response_create();
-    dtnmos_result result = DTNMOS_OK;
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosResult result = DTNMOS_OK;
     if (body.failed || url.failed || response == NULL)
     {
         result = dtnmos_fail_memory(error);
@@ -91,14 +91,14 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
     dtnmos_json* answer = NULL;
     if (result == DTNMOS_OK)
     {
-        const int status = dtnmos_http_response_status(response);
+        const int status = DtNmosHttpResponse_Status(response);
         size_t length = 0;
-        const char* text = dtnmos_http_response_body(response, &length);
+        const char* text = DtNmosHttpResponse_Body(response, &length);
         if (status != 200 && status != 201)
         {
             result = dtnmos_fail(error, DTNMOS_E_HTTP,
                                  "The registry answered the subscription to %s with %d.",
-                                 config->resource_path, status);
+                                 config->ResourcePath, status);
         }
         else if (dtnmos_json_parse(text, length, &answer, NULL) != DTNMOS_OK ||
                  dtnmos_json_member_text(answer, "ws_href") == NULL)
@@ -106,10 +106,10 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
             result = dtnmos_fail(error, DTNMOS_E_PARSE,
                                  "The registry answered the subscription to %s without "
                                  "the ws_href of its WebSocket.",
-                                 config->resource_path);
+                                 config->ResourcePath);
         }
     }
-    dtnmos_subscription* made = NULL;
+    DtNmosSubscription* made = NULL;
     if (result == DTNMOS_OK)
     {
         const char* href = dtnmos_json_member_text(answer, "ws_href");
@@ -123,15 +123,15 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
         {
             memcpy(made->url, href, length + 1);
             made->websocket = *websocket;
-            made->on_change = config->on_change;
-            made->on_change_user = config->on_change_user;
+            made->on_change = config->OnChange;
+            made->on_change_user = config->OnChangeUser;
             result =
-                websocket->connect(websocket->user, made->url,
+                websocket->Connect(websocket->User, made->url,
                                    dtnmos_query_timeout(query), &made->connection, error);
         }
     }
     dtnmos_json_free(answer);
-    dtnmos_http_response_free(response);
+    DtNmosHttpResponse_Free(response);
     dtnmos_buffer_free(&url);
     dtnmos_buffer_free(&body);
     if (result != DTNMOS_OK)
@@ -152,8 +152,8 @@ dtnmos_result dtnmos_subscription_create(dtnmos_query* query,
 // Reports one item of the data of a grain, {"path", "pre", "post"}; an item with neither
 // is skipped.
 //
-static dtnmos_result report_change(dtnmos_subscription* subscription,
-                                   const dtnmos_json* item, dtnmos_error* error)
+static DtNmosResult report_change(DtNmosSubscription* subscription,
+                                  const dtnmos_json* item, DtNmosError* error)
 {
     const dtnmos_json* pre = dtnmos_json_member(item, "pre");
     const dtnmos_json* post = dtnmos_json_member(item, "post");
@@ -181,25 +181,25 @@ static dtnmos_result report_change(dtnmos_subscription* subscription,
         dtnmos_buffer_free(&after);
         return dtnmos_fail_memory(error);
     }
-    dtnmos_change change;
+    DtNmosChange change;
     memset(&change, 0, sizeof(change));
     const char* path = dtnmos_json_member_text(item, "path");
-    change.id = path != NULL ? path : "";
-    change.pre = has_pre ? before.data : NULL;
-    change.pre_length = has_pre ? before.length : 0;
-    change.post = has_post ? after.data : NULL;
-    change.post_length = has_post ? after.length : 0;
+    change.Id = path != NULL ? path : "";
+    change.Pre = has_pre ? before.data : NULL;
+    change.PreLength = has_pre ? before.length : 0;
+    change.Post = has_post ? after.data : NULL;
+    change.PostLength = has_post ? after.length : 0;
     if (has_pre && has_post)
     {
         // The first message gives each resource as it is, before and after the same.
-        change.kind = before.length == after.length &&
+        change.Kind = before.length == after.length &&
                               memcmp(before.data, after.data, before.length) == 0
                           ? DTNMOS_CHANGE_PRESENT
                           : DTNMOS_CHANGE_MODIFIED;
     }
     else
     {
-        change.kind = has_post ? DTNMOS_CHANGE_ADDED : DTNMOS_CHANGE_REMOVED;
+        change.Kind = has_post ? DTNMOS_CHANGE_ADDED : DTNMOS_CHANGE_REMOVED;
     }
     subscription->on_change(subscription->on_change_user, &change);
     dtnmos_buffer_free(&before);
@@ -207,18 +207,18 @@ static dtnmos_result report_change(dtnmos_subscription* subscription,
     return DTNMOS_OK;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_subscription_poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_subscription_poll(dtnmos_subscription* subscription,
-                                       uint32_t timeout_ms, dtnmos_error* error)
+DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
+                                     uint32_t timeout_ms, DtNmosError* error)
 {
     if (subscription == NULL)
     {
         return dtnmos_fail(error, DTNMOS_E_INVALID_ARGUMENT,
-                           "dtnmos_subscription_poll() needs a subscription.");
+                           "DtNmosSubscription_Poll() needs a subscription.");
     }
-    dtnmos_result result = subscription->websocket.receive(
-        subscription->websocket.user, subscription->connection, timeout_ms,
+    DtNmosResult result = subscription->websocket.Receive(
+        subscription->websocket.User, subscription->connection, timeout_ms,
         &subscription->message, error);
     if (result != DTNMOS_OK)
     {
@@ -228,8 +228,8 @@ dtnmos_result dtnmos_subscription_poll(dtnmos_subscription* subscription,
     // "data": [{"path": ..., "pre": ..., "post": ...}]}}.
     dtnmos_json* json = NULL;
     const dtnmos_json* data = NULL;
-    if (dtnmos_json_parse(dtnmos_string_get(&subscription->message),
-                          dtnmos_string_length(&subscription->message), &json,
+    if (dtnmos_json_parse(DtNmosString_Get(&subscription->message),
+                          DtNmosString_Length(&subscription->message), &json,
                           NULL) == DTNMOS_OK)
     {
         data = dtnmos_json_member(dtnmos_json_member(json, "grain"), "data");
@@ -249,23 +249,23 @@ dtnmos_result dtnmos_subscription_poll(dtnmos_subscription* subscription,
     return result;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_subscription_url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Url -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const char* dtnmos_subscription_url(const dtnmos_subscription* subscription)
+const char* DtNmosSubscription_Url(const DtNmosSubscription* subscription)
 {
     return subscription == NULL ? "" : subscription->url;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_subscription_destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosSubscription_Destroy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void dtnmos_subscription_destroy(dtnmos_subscription* subscription)
+void DtNmosSubscription_Destroy(DtNmosSubscription* subscription)
 {
     if (subscription == NULL)
     {
         return;
     }
-    subscription->websocket.close(subscription->websocket.user, subscription->connection);
-    dtnmos_string_clear(&subscription->message);
+    subscription->websocket.Close(subscription->websocket.User, subscription->connection);
+    DtNmosString_Clear(&subscription->message);
     free(subscription->url);
     free(subscription);
 }

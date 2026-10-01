@@ -20,12 +20,12 @@ typedef struct reader
     const char* text;
     size_t length;
     size_t position;
-    dtnmos_error* error;
+    DtNmosError* error;
 } reader;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fail -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result fail(reader* r, const char* what)
+static DtNmosResult fail(reader* r, const char* what)
 {
     return dtnmos_fail(r->error, DTNMOS_E_PARSE, "JSON at offset %zu: %s.", r->position,
                        what);
@@ -146,7 +146,7 @@ static void append_utf8(dtnmos_buffer* buffer, unsigned code)
 //
 // Reads a string after its opening quote into a text of its own.
 //
-static dtnmos_result read_string(reader* r, char** text, size_t* length)
+static DtNmosResult read_string(reader* r, char** text, size_t* length)
 {
     dtnmos_buffer buffer;
     memset(&buffer, 0, sizeof(buffer));
@@ -242,7 +242,7 @@ static dtnmos_result read_string(reader* r, char** text, size_t* length)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_number -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static dtnmos_result read_number(reader* r, dtnmos_json* value)
+static DtNmosResult read_number(reader* r, dtnmos_json* value)
 {
     const size_t start = r->position;
     if (next_is(r, '-'))
@@ -277,7 +277,7 @@ static dtnmos_result read_number(reader* r, dtnmos_json* value)
     return DTNMOS_OK;
 }
 
-static dtnmos_result read_value(reader* r, dtnmos_json* value, int depth);
+static DtNmosResult read_value(reader* r, dtnmos_json* value, int depth);
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- add_item -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
@@ -317,7 +317,7 @@ static dtnmos_json* add_item(dtnmos_json* value, char* key, size_t* capacity)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_container -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, char close)
+static DtNmosResult read_container(reader* r, dtnmos_json* value, int depth, char close)
 {
     const int object = close == '}';
     value->type = object ? DTNMOS_JSON_OBJECT : DTNMOS_JSON_ARRAY;
@@ -340,7 +340,7 @@ static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, ch
             }
             ++r->position;
             size_t key_length = 0;
-            dtnmos_result result = read_string(r, &key, &key_length);
+            DtNmosResult result = read_string(r, &key, &key_length);
             if (result != DTNMOS_OK)
             {
                 return result;
@@ -359,7 +359,7 @@ static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, ch
             free(key);
             return dtnmos_fail_memory(r->error);
         }
-        dtnmos_result result = read_value(r, item, depth + 1);
+        DtNmosResult result = read_value(r, item, depth + 1);
         if (result != DTNMOS_OK)
         {
             return result;
@@ -381,7 +381,7 @@ static dtnmos_result read_container(reader* r, dtnmos_json* value, int depth, ch
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result read_value(reader* r, dtnmos_json* value, int depth)
+static DtNmosResult read_value(reader* r, dtnmos_json* value, int depth)
 {
     if (depth > DTNMOS_JSON_MAX_DEPTH)
     {
@@ -441,8 +441,8 @@ static void clear_value(dtnmos_json* value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_json_parse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-dtnmos_result dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
-                                dtnmos_error* error)
+DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
+                               DtNmosError* error)
 {
     if (value == NULL || (text == NULL && length > 0))
     {
@@ -456,7 +456,7 @@ dtnmos_result dtnmos_json_parse(const char* text, size_t length, dtnmos_json** v
         return dtnmos_fail_memory(error);
     }
     reader r = {text, length, 0, error};
-    dtnmos_result result = read_value(&r, root, 0);
+    DtNmosResult result = read_value(&r, root, 0);
     if (result == DTNMOS_OK)
     {
         skip_space(&r);

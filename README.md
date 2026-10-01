@@ -13,8 +13,8 @@ projects as well, such as CDTAPI and FFmpeg.
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
 - No dependencies. HTTP goes through a function the caller passes in; with
-  `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `dtnmos_curl_http()`, and with
-  `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `dtnmos_node_serve()`.
+  `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `DtNmos_CurlHttp()`, and with
+  `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `DtNmosNode_Serve()`.
 - BSD-3-Clause.
 
 ## Building
@@ -34,9 +34,9 @@ its headers `dtnmos.h` and `dtnmos_*.h`, a CMake package (`find_package(dtnmos)`
 
 ## Using it
 
-Every function that can fail returns a `dtnmos_result` and fills an optional
-`dtnmos_error` with a message that says what failed. Strings the library hands out are
-`dtnmos_string`: read them with `dtnmos_string_get()`, and free a struct that holds them
+Every function that can fail returns a `DtNmosResult` and fills an optional
+`DtNmosError` with a message that says what failed. Strings the library hands out are
+`DtNmosString`: read them with `DtNmosString_Get()`, and free a struct that holds them
 with its `_clear()`. A struct set to zero is valid and empty, and must not be copied with
 `=`: use its `_copy()`.
 
@@ -49,27 +49,27 @@ Reading an SDP gives a handle that owns its flows:
 
 int print_flows(const char* text)
 {
-  dtnmos_sdp* sdp = NULL;
-  dtnmos_error error = {0};
-  if (dtnmos_sdp_parse(text, strlen(text), &sdp, &error) != DTNMOS_OK)
+  DtNmosSdp* sdp = NULL;
+  DtNmosError error = {0};
+  if (DtNmosSdp_Parse(text, strlen(text), &sdp, &error) != DTNMOS_OK)
   {
-    fprintf(stderr, "%s\n", error.message);
+    fprintf(stderr, "%s\n", error.Message);
     return 1;
   }
-  for (size_t i = 0; i < dtnmos_sdp_flow_count(sdp); ++i)
+  for (size_t i = 0; i < DtNmosSdp_FlowCount(sdp); ++i)
   {
-    const dtnmos_flow* flow = dtnmos_sdp_flow(sdp, i);
-    printf("%s to %s:%u", dtnmos_media_name(flow->media),
-           dtnmos_string_get(&flow->destination_ip), (unsigned)flow->destination_port);
-    if (flow->media == DTNMOS_MEDIA_VIDEO)
+    const DtNmosFlow* flow = DtNmosSdp_Flow(sdp, i);
+    printf("%s to %s:%u", DtNmosMedia_Name(flow->Media),
+           DtNmosString_Get(&flow->DestinationIp), (unsigned)flow->DestinationPort);
+    if (flow->Media == DTNMOS_MEDIA_VIDEO)
     {
-      printf(", %ux%u at %u/%u", (unsigned)flow->format.video.width,
-             (unsigned)flow->format.video.height, (unsigned)flow->format.video.rate_numerator,
-             (unsigned)flow->format.video.rate_denominator);
+      printf(", %ux%u at %u/%u", (unsigned)flow->Format.Video.Width,
+             (unsigned)flow->Format.Video.Height, (unsigned)flow->Format.Video.RateNumerator,
+             (unsigned)flow->Format.Video.RateDenominator);
     }
     printf("\n");
   }
-  dtnmos_sdp_free(sdp);
+  DtNmosSdp_Free(sdp);
   return 0;
 }
 ```
@@ -77,37 +77,37 @@ int print_flows(const char* text)
 Writing one takes the session and flows the caller fills:
 
 ```c
-dtnmos_session session = {0};
-session.size = sizeof(session);
-dtnmos_string_set_text(&session.origin_ip, "192.168.1.10");
-dtnmos_flow flow = {0};
-flow.size = sizeof(flow);
-flow.media = DTNMOS_MEDIA_AUDIO;
-dtnmos_string_set_text(&flow.destination_ip, "239.0.0.2");
-flow.destination_port = 5004;
-flow.payload_type = 97;
-flow.clock_rate = 48000;
-dtnmos_string_set_text(&flow.format.audio.encoding, "L24");
-flow.format.audio.sample_rate = 48000;
-flow.format.audio.channels = 2;
-flow.format.audio.packet_time_ns = 1000000;
+DtNmosSession session = {0};
+session.Size = sizeof(session);
+DtNmosString_SetText(&session.OriginIp, "192.168.1.10");
+DtNmosFlow flow = {0};
+flow.Size = sizeof(flow);
+flow.Media = DTNMOS_MEDIA_AUDIO;
+DtNmosString_SetText(&flow.DestinationIp, "239.0.0.2");
+flow.DestinationPort = 5004;
+flow.PayloadType = 97;
+flow.ClockRate = 48000;
+DtNmosString_SetText(&flow.Format.Audio.Encoding, "L24");
+flow.Format.Audio.SampleRate = 48000;
+flow.Format.Audio.Channels = 2;
+flow.Format.Audio.PacketTimeNs = 1000000;
 
-dtnmos_string text = {0};
-if (dtnmos_sdp_write(&session, &flow, 1, &text, NULL) == DTNMOS_OK)
+DtNmosString text = {0};
+if (DtNmosSdp_Write(&session, &flow, 1, &text, NULL) == DTNMOS_OK)
 {
-  puts(dtnmos_string_get(&text));
+  puts(DtNmosString_Get(&text));
 }
-dtnmos_string_clear(&text);
-dtnmos_flow_clear(&flow);
-dtnmos_session_clear(&session);
+DtNmosString_Clear(&text);
+DtNmosFlow_Clear(&flow);
+DtNmosSession_Clear(&session);
 ```
 
 The parser reports what a description says and judges no format: a receiver decides
 whether it can carry a flow. A media it does not know comes back as `DTNMOS_MEDIA_OTHER`
 with its encoding and the text of its `a=fmtp`, and both paths of ST 2022-7 come back as
-flows, the second with `leg` 1.
+flows, the second with `Leg` 1.
 
-`dtnmos_id_from_name()` makes the name-based UUIDs (version 5) that NMOS resources keep
+`DtNmosId_FromName()` makes the name-based UUIDs (version 5) that NMOS resources keep
 across restarts.
 
 ## Asking a registry
@@ -118,32 +118,32 @@ HTTP goes through the function in its config, which fills a response:
 ```c
 #include <dtnmos_query.h>
 
-dtnmos_query_config config = {0};
-config.size = sizeof(config);
-config.registry_url = "http://registry.local";
-config.http = dtnmos_curl_http;  // or a function on the HTTP stack of the program
-dtnmos_query* query = NULL;
-dtnmos_error error = {0};
-if (dtnmos_query_create(&config, &query, &error) == DTNMOS_OK)
+DtNmosQueryConfig config = {0};
+config.Size = sizeof(config);
+config.RegistryUrl = "http://registry.local";
+config.Http = DtNmos_CurlHttp;  // or a function on the HTTP stack of the program
+DtNmosQuery* query = NULL;
+DtNmosError error = {0};
+if (DtNmosQuery_Create(&config, &query, &error) == DTNMOS_OK)
 {
-  dtnmos_sender_info sender = {0};
-  dtnmos_sdp* sdp = NULL;
-  if (dtnmos_query_find_sender(query, "camera 1", &sender, &error) == DTNMOS_OK &&
-      dtnmos_query_sender_sdp(query, &sender, &sdp, &error) == DTNMOS_OK)
+  DtNmosSenderInfo sender = {0};
+  DtNmosSdp* sdp = NULL;
+  if (DtNmosQuery_FindSender(query, "camera 1", &sender, &error) == DTNMOS_OK &&
+      DtNmosQuery_SenderSdp(query, &sender, &sdp, &error) == DTNMOS_OK)
   {
-    // The flows of the sender, as dtnmos_sdp_parse() gives them.
-    dtnmos_sdp_free(sdp);
+    // The flows of the sender, as DtNmosSdp_Parse() gives them.
+    DtNmosSdp_Free(sdp);
   }
-  dtnmos_sender_info_clear(&sender);
-  dtnmos_query_destroy(query);
+  DtNmosSenderInfo_Clear(&sender);
+  DtNmosQuery_Destroy(query);
 }
 ```
 
-An HTTP function of its own receives a `dtnmos_http_request` and fills the response with
-`dtnmos_http_response_set_status()`, `_add_header()` and `_set_body()`; it returns
+An HTTP function of its own receives a `DtNmosHttpRequest` and fills the response with
+`DtNmosHttpResponse_SetStatus()`, `_add_header()` and `_set_body()`; it returns
 `DTNMOS_OK` whenever the server answered, whatever the status.
 
-`dtnmos_query_receivers()` and `dtnmos_query_find_receiver()` list and find the receivers
+`DtNmosQuery_Receivers()` and `DtNmosQuery_FindReceiver()` list and find the receivers
 of a registry the same way, each with the sender it is subscribed to.
 
 ## Connecting a receiver
@@ -156,24 +156,24 @@ requests to the node go through the HTTP function of the query:
 
 ```c
 
-dtnmos_connection connection = {0};
-if (dtnmos_connect(query, "monitor", "camera 1", &connection, &error) == DTNMOS_OK)
+DtNmosConnection connection = {0};
+if (DtNmosQuery_Connect(query, "monitor", "camera 1", &connection, &error) == DTNMOS_OK)
 {
-  // connection.receiver and connection.sender as the registry lists them, and
-  // connection.sdp, the transport file the receiver was given.
-  dtnmos_connection_clear(&connection);
+  // connection.Receiver and connection.Sender as the registry lists them, and
+  // connection.Sdp, the transport file the receiver was given.
+  DtNmosConnection_Clear(&connection);
 }
-dtnmos_disconnect(query, "monitor", NULL, &error);
+DtNmosQuery_Disconnect(query, "monitor", NULL, &error);
 ```
 
 A sender of another kind of media than the receiver, video, audio or data, is refused
 before the node is asked; what the node refuses comes back with the error it gave.
 
-`dtnmos_move_sender()` moves a sender to another destination the same way, through the
+`DtNmosQuery_MoveSender()` moves a sender to another destination the same way, through the
 Connection API of the sender:
 
 ```c
-dtnmos_move_sender(query, "camera 1", "239.10.1.2", 5004, NULL, &error);
+DtNmosQuery_MoveSender(query, "camera 1", "239.10.1.2", 5004, NULL, &error);
 ```
 
 ## Following a registry
@@ -182,31 +182,31 @@ A subscription of the Query API tells what changes in the registry as it happens
 (`dtnmos_query.h`): first every resource of its path as it is, then each one that
 is added, modified or removed, with its JSON before and after. The messages come over a
 WebSocket, which, as HTTP, goes through functions the caller passes in; with
-`-DDTNMOS_WITH_CURL=ON` and a libcurl with WebSockets, `dtnmos_curl_websocket()` is one.
+`-DDTNMOS_WITH_CURL=ON` and a libcurl with WebSockets, `DtNmos_CurlWebSocket()` is one.
 dtnmos starts no thread: the caller polls.
 
 ```c
 
-static void on_change(void* user, const dtnmos_change* change)
+static void on_change(void* user, const DtNmosChange* change)
 {
-  // change->kind, change->id, and change->pre and change->post, the JSON of the
-  // resource, which dtnmos_sender_info_parse() reads for a sender.
+  // change->Kind, change->Id, and change->Pre and change->Post, the JSON of the
+  // resource, which DtNmosSenderInfo_Parse() reads for a sender.
 }
 
-dtnmos_subscription_config config = {0};
-config.size = sizeof(config);
-config.resource_path = "/senders";
-config.on_change = on_change;  // websocket left null: dtnmos_curl_websocket()
-dtnmos_subscription* subscription = NULL;
-if (dtnmos_subscription_create(query, &config, &subscription, &error) == DTNMOS_OK)
+DtNmosSubscriptionConfig config = {0};
+config.Size = sizeof(config);
+config.ResourcePath = "/senders";
+config.OnChange = on_change;  // websocket left null: DtNmos_CurlWebSocket()
+DtNmosSubscription* subscription = NULL;
+if (DtNmosSubscription_Create(query, &config, &subscription, &error) == DTNMOS_OK)
 {
-  dtnmos_result result = DTNMOS_OK;
+  DtNmosResult result = DTNMOS_OK;
   while (result == DTNMOS_OK || result == DTNMOS_E_TIMEOUT)
   {
-    result = dtnmos_subscription_poll(subscription, 1000, &error);
+    result = DtNmosSubscription_Poll(subscription, 1000, &error);
   }
   // DTNMOS_E_NETWORK: the WebSocket closed; a new subscription starts again.
-  dtnmos_subscription_destroy(subscription);
+  DtNmosSubscription_Destroy(subscription);
 }
 ```
 
@@ -227,87 +227,87 @@ as IS-04 does with DNS-SD, in two ways at once from one socket of the library it
   with a gateway. The server is asked one question per query, with recursion desired;
   a host without a server or domain asks multicast DNS alone.
 
-Each registry tells which search found it (`found_by`); of equal priority, those of the DNS
-server come first. `searches`, `dns_server` and `dns_domain` of the config choose the
+Each registry tells which search found it (`FoundBy`); of equal priority, those of the DNS
+server come first. `Searches`, `DnsServer` and `DnsDomain` of the config choose the
 searches and give a server and domain of their own. IPv4 only, and DNS over UDP only.
 
 ```c
 
-dtnmos_discovery_config config = {0};
-config.size = sizeof(config);
-config.service = DTNMOS_SERVICE_QUERY;  // or DTNMOS_SERVICE_REGISTRATION
-config.interface_address = NULL;        // or the IPv4 address of the interface to ask on
-dtnmos_registry_list* list = NULL;
-dtnmos_error error = {0};
-if (dtnmos_discover(&config, &list, &error) == DTNMOS_OK)
+DtNmosDiscoveryConfig config = {0};
+config.Size = sizeof(config);
+config.Service = DTNMOS_SERVICE_QUERY;  // or DTNMOS_SERVICE_REGISTRATION
+config.InterfaceAddress = NULL;        // or the IPv4 address of the interface to ask on
+DtNmosRegistryList* list = NULL;
+DtNmosError error = {0};
+if (DtNmos_Discover(&config, &list, &error) == DTNMOS_OK)
 {
   // Usable ones first, by priority: take the first, and the next when it fails.
-  for (size_t i = 0; i < dtnmos_registry_list_count(list); ++i)
+  for (size_t i = 0; i < DtNmosRegistryList_Count(list); ++i)
   {
-    const dtnmos_registry_info* registry = dtnmos_registry_list_at(list, i);
-    // dtnmos_string_get(&registry->url), e.g. "http://192.168.1.5:8080"
+    const DtNmosRegistryInfo* registry = DtNmosRegistryList_At(list, i);
+    // DtNmosString_Get(&registry->Url), e.g. "http://192.168.1.5:8080"
   }
-  dtnmos_registry_list_free(list);
+  DtNmosRegistryList_Free(list);
 }
 ```
 
-A search takes about a second, `timeout_ms` of the config, and finding nothing is no
-failure. The URL of a Query API goes into `dtnmos_query_config.registry_url`, and that of a
-Registration API into `dtnmos_node_config.registration_url`.
+A search takes about a second, `TimeoutMs` of the config, and finding nothing is no
+failure. The URL of a Query API goes into `DtNmosQueryConfig.RegistryUrl`, and that of a
+Registration API into `DtNmosNodeConfig.RegistrationUrl`.
 
 ## Being a node
 
-A node holds devices, and senders and receivers on them. `dtnmos_node_poll()` registers
-what is new, deletes what was removed and sends heartbeats; `dtnmos_node_handle()` answers
+A node holds devices, and senders and receivers on them. `DtNmosNode_Poll()` registers
+what is new, deletes what was removed and sends heartbeats; `DtNmosNode_Handle()` answers
 a request to the Node API or the transport file of a sender. A program with a loop and an
-HTTP server of its own calls both; with the server of the library, `dtnmos_node_serve()`
+HTTP server of its own calls both; with the server of the library, `DtNmosNode_Serve()`
 does both on threads of its own:
 
 ```c
 #include <dtnmos_node.h>
 
-dtnmos_node_config config = {0};
-config.size = sizeof(config);
-dtnmos_id_from_name(&my_namespace, "my node", &config.id, NULL);
-config.label = "my node";
-config.registration_url = "http://registry.local";
-config.http = dtnmos_curl_http;
-dtnmos_node* node = NULL;
-if (dtnmos_node_create(&config, &node, NULL) == DTNMOS_OK)
+DtNmosNodeConfig config = {0};
+config.Size = sizeof(config);
+DtNmosId_FromName(&my_namespace, "my node", &config.Id, NULL);
+config.Label = "my node";
+config.RegistrationUrl = "http://registry.local";
+config.Http = DtNmos_CurlHttp;
+DtNmosNode* node = NULL;
+if (DtNmosNode_Create(&config, &node, NULL) == DTNMOS_OK)
 {
-  dtnmos_device_config device = {sizeof(device)};
-  dtnmos_id_from_name(&config.id, "card 1", &device.id, NULL);
-  device.label = "card 1";
-  dtnmos_node_add_device(node, &device, NULL);
-  // dtnmos_node_add_sender() with the flow it sends, dtnmos_node_add_receiver() ...
-  dtnmos_node_serve(node, NULL);
+  DtNmosDeviceConfig device = {sizeof(device)};
+  DtNmosId_FromName(&config.Id, "card 1", &device.Id, NULL);
+  device.Label = "card 1";
+  DtNmosNode_AddDevice(node, &device, NULL);
+  // DtNmosNode_AddSender() with the flow it sends, DtNmosNode_AddReceiver() ...
+  DtNmosNode_Serve(node, NULL);
   // ... until the program ends, which deletes what the node registered:
-  dtnmos_node_destroy(node);
+  DtNmosNode_Destroy(node);
 }
 ```
 
-A node can move to another registry when its own fails: `registry_failed` of the config
-is called on the poll thread after `failures_before_switch` polls in a row failed (3 when
-0), and returns the URL of the next registry, e.g. the next of a `dtnmos_discover()` for
+A node can move to another registry when its own fails: `RegistryFailed` of the config
+is called on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when
+0), and returns the URL of the next registry, e.g. the next of a `DtNmos_Discover()` for
 `DTNMOS_SERVICE_REGISTRATION`, which the node then registers with from the start.
 
 ## Being connected
 
-The node answers the Connection API of IS-05 in `dtnmos_node_handle()` as well. When a
+The node answers the Connection API of IS-05 in `DtNmosNode_Handle()` as well. When a
 controller activates a sender or receiver, the node calls the function given to
-`dtnmos_node_add_sender()` or `dtnmos_node_add_receiver()`, without its lock, and makes the
+`DtNmosNode_AddSender()` or `DtNmosNode_AddReceiver()`, without its lock, and makes the
 staged parameters the active ones only when that function succeeds:
 
 ```c
-static dtnmos_result connect_receiver(void* user, const dtnmos_id* receiver,
-                                      const dtnmos_receiver_activation* activation,
-                                      dtnmos_error* error)
+static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
+                                      const DtNmosReceiverActivation* activation,
+                                      DtNmosError* error)
 {
-  if (activation->has_flow)
+  if (activation->HasFlow)
   {
-    // Receive activation->flow, e.g. dtnmos_string_get(&activation->flow.destination_ip).
+    // Receive activation->Flow, e.g. DtNmosString_Get(&activation->Flow.DestinationIp).
   }
-  // Receive, or stop receiving, as activation->master_enable says.
+  // Receive, or stop receiving, as activation->MasterEnable says.
   return DTNMOS_OK;
 }
 ```

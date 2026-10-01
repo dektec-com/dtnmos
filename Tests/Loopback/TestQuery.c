@@ -23,7 +23,7 @@ void json_reads_values_and_escapes(void)
         "{\"id\": \"abc\", \"n\": -12.5e1, \"list\": [true, false, null, [], {}], "
         "\"text\": \"a\\\"b\\\\c\\/d\\n\\u00e9\\ud83d\\ude00\"}";
     dtnmos_json* json = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
+    DtNmosError error = {DTNMOS_OK, ""};
     REQUIRE(dtnmos_json_parse(text, strlen(text), &json, &error) == DTNMOS_OK);
     CHECK_EQ(json->type, DTNMOS_JSON_OBJECT);
     CHECK_STR(dtnmos_json_member_text(json, "id"), "abc");
@@ -53,8 +53,8 @@ void json_refuses_what_is_malformed(void)
     for (size_t i = 0; i < sizeof(texts) / sizeof(texts[0]); ++i)
     {
         dtnmos_json* json = (dtnmos_json*)&json;
-        dtnmos_error error = {DTNMOS_OK, ""};
-        const dtnmos_result result =
+        DtNmosError error = {DTNMOS_OK, ""};
+        const DtNmosResult result =
             dtnmos_json_parse(texts[i], strlen(texts[i]), &json, &error);
         if (result != DTNMOS_E_PARSE)
         {
@@ -62,7 +62,7 @@ void json_refuses_what_is_malformed(void)
         }
         CHECK(result == DTNMOS_E_PARSE);
         CHECK(json == NULL);
-        CHECK(strstr(error.message, "JSON at offset") != NULL);
+        CHECK(strstr(error.Message, "JSON at offset") != NULL);
     }
     // Nesting deeper than the limit fails rather than overflowing the stack.
     char deep[200];
@@ -88,27 +88,27 @@ void json_writes_escaped_strings(void)
 //
 void http_response_owns_what_it_holds(void)
 {
-    dtnmos_http_response* response = dtnmos_http_response_create();
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
     REQUIRE(response != NULL);
-    CHECK_STR(dtnmos_http_response_body(response, NULL), "");
-    dtnmos_http_response_set_status(response, 200);
+    CHECK_STR(DtNmosHttpResponse_Body(response, NULL), "");
+    DtNmosHttpResponse_SetStatus(response, 200);
     char body[] = "{\"a\": 1}";
-    REQUIRE(dtnmos_http_response_set_body(response, "application/json", body,
-                                          strlen(body)) == DTNMOS_OK);
+    REQUIRE(DtNmosHttpResponse_SetBody(response, "application/json", body,
+                                       strlen(body)) == DTNMOS_OK);
     body[0] = 'X';
-    REQUIRE(dtnmos_http_response_append_body(response, " ", 1) == DTNMOS_OK);
+    REQUIRE(DtNmosHttpResponse_AppendBody(response, " ", 1) == DTNMOS_OK);
     size_t length = 0;
-    CHECK_STR(dtnmos_http_response_body(response, &length), "{\"a\": 1} ");
+    CHECK_STR(DtNmosHttpResponse_Body(response, &length), "{\"a\": 1} ");
     CHECK_EQ(length, 9);
-    REQUIRE(dtnmos_http_response_add_header(response, "Link", "<x>; rel=\"next\"") ==
+    REQUIRE(DtNmosHttpResponse_AddHeader(response, "Link", "<x>; rel=\"next\"") ==
             DTNMOS_OK);
-    CHECK_STR(dtnmos_http_response_find_header(response, "link"), "<x>; rel=\"next\"");
-    CHECK(dtnmos_http_response_find_header(response, "Location") == NULL);
-    CHECK_EQ(dtnmos_http_response_header_count(response), 1);
-    CHECK_STR(dtnmos_http_response_header(response, 0).name, "Link");
-    CHECK_STR(dtnmos_http_response_content_type(response), "application/json");
-    CHECK_EQ(dtnmos_http_response_status(response), 200);
-    dtnmos_http_response_free(response);
+    CHECK_STR(DtNmosHttpResponse_FindHeader(response, "link"), "<x>; rel=\"next\"");
+    CHECK(DtNmosHttpResponse_FindHeader(response, "Location") == NULL);
+    CHECK_EQ(DtNmosHttpResponse_HeaderCount(response), 1);
+    CHECK_STR(DtNmosHttpResponse_Header(response, 0).Name, "Link");
+    CHECK_STR(DtNmosHttpResponse_ContentType(response), "application/json");
+    CHECK_EQ(DtNmosHttpResponse_Status(response), 200);
+    DtNmosHttpResponse_Free(response);
 }
 
 // A registry that the test answers for: each route an URL and what it gives.
@@ -130,37 +130,36 @@ typedef struct fake_registry
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_http -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static dtnmos_result fake_http(void* user, const dtnmos_http_request* request,
-                               dtnmos_http_response* response, dtnmos_error* error)
+static DtNmosResult fake_http(void* user, const DtNmosHttpRequest* request,
+                              DtNmosHttpResponse* response, DtNmosError* error)
 {
     fake_registry* registry = user;
     ++registry->requests;
     if (registry->unreachable)
     {
-        snprintf(error->message, sizeof(error->message), "connection refused");
-        error->code = DTNMOS_E_HTTP;
+        snprintf(error->Message, sizeof(error->Message), "connection refused");
+        error->Code = DTNMOS_E_HTTP;
         return DTNMOS_E_HTTP;
     }
-    CHECK_STR(request->method, "GET");
-    CHECK_EQ(request->timeout_ms, 2000);
+    CHECK_STR(request->Method, "GET");
+    CHECK_EQ(request->TimeoutMs, 2000);
     for (size_t i = 0; i < registry->count; ++i)
     {
-        if (strcmp(registry->routes[i].url, request->url) == 0)
+        if (strcmp(registry->routes[i].url, request->Url) == 0)
         {
-            dtnmos_http_response_set_status(response, registry->routes[i].status);
-            dtnmos_http_response_set_body(response, "application/json",
-                                          registry->routes[i].body,
-                                          strlen(registry->routes[i].body));
+            DtNmosHttpResponse_SetStatus(response, registry->routes[i].status);
+            DtNmosHttpResponse_SetBody(response, "application/json",
+                                       registry->routes[i].body,
+                                       strlen(registry->routes[i].body));
             if (registry->routes[i].link != NULL)
             {
-                dtnmos_http_response_add_header(response, "Link",
-                                                registry->routes[i].link);
+                DtNmosHttpResponse_AddHeader(response, "Link", registry->routes[i].link);
             }
             return DTNMOS_OK;
         }
     }
-    printf("  no route for %s\n", request->url);
-    dtnmos_http_response_set_status(response, 404);
+    printf("  no route for %s\n", request->Url);
+    DtNmosHttpResponse_SetStatus(response, 404);
     return DTNMOS_OK;
 }
 
@@ -233,20 +232,20 @@ static void registry_routes(route* table, size_t* count, char* page_one,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- make_query -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_query* make_query(fake_registry* registry)
+static DtNmosQuery* make_query(fake_registry* registry)
 {
-    dtnmos_query_config config;
+    DtNmosQueryConfig config;
     memset(&config, 0, sizeof(config));
-    config.size = sizeof(config);
-    config.registry_url = "http://registry.test/";
-    config.http = fake_http;
-    config.http_user = registry;
-    config.timeout_ms = 2000;
-    dtnmos_query* query = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
-    if (dtnmos_query_create(&config, &query, &error) != DTNMOS_OK)
+    config.Size = sizeof(config);
+    config.RegistryUrl = "http://registry.test/";
+    config.Http = fake_http;
+    config.HttpUser = registry;
+    config.TimeoutMs = 2000;
+    DtNmosQuery* query = NULL;
+    DtNmosError error = {DTNMOS_OK, ""};
+    if (DtNmosQuery_Create(&config, &query, &error) != DTNMOS_OK)
     {
-        printf("  %s\n", error.message);
+        printf("  %s\n", error.Message);
     }
     return query;
 }
@@ -264,32 +263,32 @@ void query_lists_the_senders_of_every_page(void)
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
     fake_registry registry = {table, count, 0, 0};
-    dtnmos_query* query = make_query(&registry);
+    DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
-    dtnmos_sender_list* list = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
-    const dtnmos_result result = dtnmos_query_senders(query, &list, &error);
+    DtNmosSenderList* list = NULL;
+    DtNmosError error = {DTNMOS_OK, ""};
+    const DtNmosResult result = DtNmosQuery_Senders(query, &list, &error);
     if (result != DTNMOS_OK)
     {
-        printf("  %s\n", error.message);
+        printf("  %s\n", error.Message);
     }
     REQUIRE(result == DTNMOS_OK);
-    REQUIRE(dtnmos_sender_list_count(list) == 2);
-    const dtnmos_sender_info* video = dtnmos_sender_list_at(list, 0);
-    CHECK_STR(video->id.text, VIDEO_ID);
-    CHECK_STR(dtnmos_string_get(&video->label), "camera 1");
-    CHECK_STR(dtnmos_string_get(&video->description), "studio");
-    CHECK_EQ(video->media, DTNMOS_MEDIA_VIDEO);
-    CHECK_STR(dtnmos_string_get(&video->manifest_href), "http://camera.test/video.sdp");
-    CHECK_STR(video->device_id.text, TWIN_ID);
-    const dtnmos_sender_info* audio = dtnmos_sender_list_at(list, 1);
-    CHECK_EQ(audio->media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(dtnmos_string_get(&audio->manifest_href), "");
-    CHECK(dtnmos_sender_list_at(list, 2) == NULL);
+    REQUIRE(DtNmosSenderList_Count(list) == 2);
+    const DtNmosSenderInfo* video = DtNmosSenderList_At(list, 0);
+    CHECK_STR(video->Id.Text, VIDEO_ID);
+    CHECK_STR(DtNmosString_Get(&video->Label), "camera 1");
+    CHECK_STR(DtNmosString_Get(&video->Description), "studio");
+    CHECK_EQ(video->Media, DTNMOS_MEDIA_VIDEO);
+    CHECK_STR(DtNmosString_Get(&video->ManifestHref), "http://camera.test/video.sdp");
+    CHECK_STR(video->DeviceId.Text, TWIN_ID);
+    const DtNmosSenderInfo* audio = DtNmosSenderList_At(list, 1);
+    CHECK_EQ(audio->Media, DTNMOS_MEDIA_AUDIO);
+    CHECK_STR(DtNmosString_Get(&audio->ManifestHref), "");
+    CHECK(DtNmosSenderList_At(list, 2) == NULL);
     // Two pages of senders and one of flows.
     CHECK_EQ(registry.requests, 3);
-    dtnmos_sender_list_free(list);
-    dtnmos_query_destroy(query);
+    DtNmosSenderList_Free(list);
+    DtNmosQuery_Destroy(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- query_finds_a_sender_and_its_sdp -.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -305,34 +304,34 @@ void query_finds_a_sender_and_its_sdp(void)
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
     fake_registry registry = {table, count, 0, 0};
-    dtnmos_query* query = make_query(&registry);
+    DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
-    dtnmos_error error = {DTNMOS_OK, ""};
+    DtNmosError error = {DTNMOS_OK, ""};
     const char* const keys[] = {VIDEO_ID, "camera 1"};
     for (size_t k = 0; k < 2; ++k)
     {
-        dtnmos_sender_info sender = {0};
-        const dtnmos_result result =
-            dtnmos_query_find_sender(query, keys[k], &sender, &error);
+        DtNmosSenderInfo sender = {0};
+        const DtNmosResult result =
+            DtNmosQuery_FindSender(query, keys[k], &sender, &error);
         if (result != DTNMOS_OK)
         {
-            printf("  %s: %s\n", keys[k], error.message);
+            printf("  %s: %s\n", keys[k], error.Message);
         }
         REQUIRE(result == DTNMOS_OK);
-        CHECK_STR(sender.id.text, VIDEO_ID);
-        CHECK_EQ(sender.media, DTNMOS_MEDIA_VIDEO);
-        dtnmos_sdp* sdp = NULL;
-        REQUIRE(dtnmos_query_sender_sdp(query, &sender, &sdp, &error) == DTNMOS_OK);
-        CHECK_STR(dtnmos_string_get(&dtnmos_sdp_session(sdp)->name), "camera 1");
-        CHECK_EQ(dtnmos_sdp_flow(sdp, 0)->destination_port, 5004);
-        dtnmos_sdp_free(sdp);
-        dtnmos_sender_info copy = {0};
-        REQUIRE(dtnmos_sender_info_copy(&copy, &sender) == DTNMOS_OK);
-        dtnmos_sender_info_clear(&sender);
-        CHECK_STR(dtnmos_string_get(&copy.label), "camera 1");
-        dtnmos_sender_info_clear(&copy);
+        CHECK_STR(sender.Id.Text, VIDEO_ID);
+        CHECK_EQ(sender.Media, DTNMOS_MEDIA_VIDEO);
+        DtNmosSdp* sdp = NULL;
+        REQUIRE(DtNmosQuery_SenderSdp(query, &sender, &sdp, &error) == DTNMOS_OK);
+        CHECK_STR(DtNmosString_Get(&DtNmosSdp_Session(sdp)->Name), "camera 1");
+        CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->DestinationPort, 5004);
+        DtNmosSdp_Free(sdp);
+        DtNmosSenderInfo copy = {0};
+        REQUIRE(DtNmosSenderInfo_Copy(&copy, &sender) == DTNMOS_OK);
+        DtNmosSenderInfo_Clear(&sender);
+        CHECK_STR(DtNmosString_Get(&copy.Label), "camera 1");
+        DtNmosSenderInfo_Clear(&copy);
     }
-    dtnmos_query_destroy(query);
+    DtNmosQuery_Destroy(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- query_names_what_went_wrong -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -348,69 +347,68 @@ void query_names_what_went_wrong(void)
     registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
                     by_label, sizeof(by_label), twins, sizeof(twins));
     fake_registry registry = {table, count, 0, 0};
-    dtnmos_query* query = make_query(&registry);
+    DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
-    dtnmos_error error = {DTNMOS_OK, ""};
-    dtnmos_sender_info sender = {0};
+    DtNmosError error = {DTNMOS_OK, ""};
+    DtNmosSenderInfo sender = {0};
 
     // Two senders share a label.
-    CHECK(dtnmos_query_find_sender(query, "mic", &sender, &error) == DTNMOS_E_AMBIGUOUS);
-    CHECK(strstr(error.message, AUDIO_ID) != NULL &&
-          strstr(error.message, TWIN_ID) != NULL);
+    CHECK(DtNmosQuery_FindSender(query, "mic", &sender, &error) == DTNMOS_E_AMBIGUOUS);
+    CHECK(strstr(error.Message, AUDIO_ID) != NULL &&
+          strstr(error.Message, TWIN_ID) != NULL);
     // No sender has the ID or the label.
-    CHECK(dtnmos_query_find_sender(query, "44444444-4444-4444-8444-444444444444", &sender,
-                                   &error) == DTNMOS_E_NOT_FOUND);
-    CHECK(strstr(error.message, "no sender 44444444") != NULL);
+    CHECK(DtNmosQuery_FindSender(query, "44444444-4444-4444-8444-444444444444", &sender,
+                                 &error) == DTNMOS_E_NOT_FOUND);
+    CHECK(strstr(error.Message, "no sender 44444444") != NULL);
     table[4].body = "[]";
-    CHECK(dtnmos_query_find_sender(query, "camera 1", &sender, &error) ==
+    CHECK(DtNmosQuery_FindSender(query, "camera 1", &sender, &error) ==
           DTNMOS_E_NOT_FOUND);
-    CHECK(strstr(error.message, "no sender labelled 'camera 1'") != NULL);
+    CHECK(strstr(error.Message, "no sender labelled 'camera 1'") != NULL);
     // A sender without manifest gives no SDP.
-    dtnmos_sender_info audio = {0};
-    audio.id = (dtnmos_id){AUDIO_ID};
-    dtnmos_string_set_text(&audio.label, "mic");
-    dtnmos_string text = {0};
-    CHECK(dtnmos_query_sender_manifest(query, &audio, &text, &error) ==
-          DTNMOS_E_NOT_FOUND);
-    CHECK(strstr(error.message, "no manifest_href") != NULL);
-    dtnmos_sender_info_clear(&audio);
+    DtNmosSenderInfo audio = {0};
+    audio.Id = (DtNmosId){AUDIO_ID};
+    DtNmosString_SetText(&audio.Label, "mic");
+    DtNmosString text = {0};
+    CHECK(DtNmosQuery_SenderManifest(query, &audio, &text, &error) == DTNMOS_E_NOT_FOUND);
+    CHECK(strstr(error.Message, "no manifest_href") != NULL);
+    DtNmosSenderInfo_Clear(&audio);
     // An answer that is no JSON, and an error status.
     table[3].body = "<html>";
-    CHECK(dtnmos_query_find_sender(query, VIDEO_ID, &sender, &error) == DTNMOS_E_PARSE);
-    CHECK(strstr(error.message, "is no JSON") != NULL);
+    CHECK(DtNmosQuery_FindSender(query, VIDEO_ID, &sender, &error) == DTNMOS_E_PARSE);
+    CHECK(strstr(error.Message, "is no JSON") != NULL);
     table[3].status = 500;
-    CHECK(dtnmos_query_find_sender(query, VIDEO_ID, &sender, &error) == DTNMOS_E_HTTP);
-    CHECK(strstr(error.message, "answered with 500") != NULL);
+    CHECK(DtNmosQuery_FindSender(query, VIDEO_ID, &sender, &error) == DTNMOS_E_HTTP);
+    CHECK(strstr(error.Message, "answered with 500") != NULL);
     // A registry that does not answer.
     registry.unreachable = 1;
-    dtnmos_sender_list* list = NULL;
-    CHECK(dtnmos_query_senders(query, &list, &error) == DTNMOS_E_HTTP);
-    CHECK(strstr(error.message, "connection refused") != NULL);
+    DtNmosSenderList* list = NULL;
+    CHECK(DtNmosQuery_Senders(query, &list, &error) == DTNMOS_E_HTTP);
+    CHECK(strstr(error.Message, "connection refused") != NULL);
     CHECK(list == NULL);
-    dtnmos_query_destroy(query);
+    DtNmosQuery_Destroy(query);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.- query_refuses_an_incomplete_config -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void query_refuses_an_incomplete_config(void)
 {
-    dtnmos_query_config config;
+    DtNmosQueryConfig config;
     memset(&config, 0, sizeof(config));
-    config.size = sizeof(config);
-    dtnmos_query* query = NULL;
-    dtnmos_error error = {DTNMOS_OK, ""};
-    CHECK(dtnmos_query_create(&config, &query, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    config.registry_url = "http://registry.test";
-    config.http = fake_http;
-    config.api_version = "v1.2";
-    CHECK(dtnmos_query_create(&config, &query, &error) == DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(strstr(error.message, "v1.2") != NULL);
+    config.Size = sizeof(config);
+    DtNmosQuery* query = NULL;
+    DtNmosError error = {DTNMOS_OK, ""};
+    CHECK(DtNmosQuery_Create(&config, &query, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    config.RegistryUrl = "http://registry.test";
+    config.Http = fake_http;
+    config.ApiVersion = "v1.2";
+    CHECK(DtNmosQuery_Create(&config, &query, &error) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(error.Message, "v1.2") != NULL);
     CHECK(query == NULL);
-    dtnmos_http_response* response = dtnmos_http_response_create();
-    dtnmos_http_request request = {sizeof(request), "GET", "http://x", NULL, NULL, 0, 0};
-    if (!dtnmos_has_curl())
+    DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
+    DtNmosHttpRequest request = {sizeof(request), "GET", "http://x", NULL, NULL, 0, 0};
+    if (!DtNmos_HasCurl())
     {
-        CHECK(dtnmos_curl_http(NULL, &request, response, &error) == DTNMOS_E_STATE);
+        CHECK(DtNmos_CurlHttp(NULL, &request, response, &error) == DTNMOS_E_STATE);
     }
-    dtnmos_http_response_free(response);
+    DtNmosHttpResponse_Free(response);
 }

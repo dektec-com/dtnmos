@@ -38,8 +38,8 @@ typedef struct dtnmos_json
 
 // Parses length bytes of text into a value, which dtnmos_json_free() frees. Fails with
 // DTNMOS_E_PARSE naming the offset of what is wrong.
-dtnmos_result dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
-                                dtnmos_error* error);
+DtNmosResult dtnmos_json_parse(const char* text, size_t length, dtnmos_json** value,
+                               DtNmosError* error);
 void dtnmos_json_free(dtnmos_json* value);
 
 // Returns the member key of an object, or null when value is no object or lacks it.

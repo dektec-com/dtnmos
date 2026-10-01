@@ -45,17 +45,17 @@ static int has_ws_protocol(void)
     return 0;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_curl_websocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_has_curl_websocket(void)
+int DtNmos_HasCurlWebSocket(void)
 {
     return has_ws_protocol();
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result ws_connect(void* user, const char* url, uint32_t timeout_ms,
-                                void** connection, dtnmos_error* error)
+static DtNmosResult ws_connect(void* user, const char* url, uint32_t timeout_ms,
+                               void** connection, DtNmosError* error)
 {
     (void)user;
     if (url == NULL || connection == NULL)
@@ -141,8 +141,8 @@ static int wait_readable(CURL* curl, uint32_t timeout_ms)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                                dtnmos_string* message, dtnmos_error* error)
+static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
+                               DtNmosString* message, DtNmosError* error)
 {
     (void)user;
     curl_connection* c = connection;
@@ -194,9 +194,9 @@ static dtnmos_result ws_receive(void* user, void* connection, uint32_t timeout_m
         // The message is whole at the end of a frame that is not followed by another.
         if (frame->bytesleft == 0 && (frame->flags & CURLWS_CONT) == 0)
         {
-            const dtnmos_result result =
-                dtnmos_string_set(message, c->partial.data == NULL ? "" : c->partial.data,
-                                  c->partial.length);
+            const DtNmosResult result =
+                DtNmosString_Set(message, c->partial.data == NULL ? "" : c->partial.data,
+                                 c->partial.length);
             dtnmos_buffer_free(&c->partial);
             return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory(error);
         }
@@ -222,17 +222,17 @@ static void ws_close(void* user, void* connection)
 
 #else
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_has_curl_websocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int dtnmos_has_curl_websocket(void)
+int DtNmos_HasCurlWebSocket(void)
 {
     return 0;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result ws_connect(void* user, const char* url, uint32_t timeout_ms,
-                                void** connection, dtnmos_error* error)
+static DtNmosResult ws_connect(void* user, const char* url, uint32_t timeout_ms,
+                               void** connection, DtNmosError* error)
 {
     (void)user;
     (void)url;
@@ -248,8 +248,8 @@ static dtnmos_result ws_connect(void* user, const char* url, uint32_t timeout_ms
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static dtnmos_result ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                                dtnmos_string* message, dtnmos_error* error)
+static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
+                               DtNmosString* message, DtNmosError* error)
 {
     (void)user;
     (void)connection;
@@ -268,11 +268,11 @@ static void ws_close(void* user, void* connection)
 
 #endif
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_curl_websocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-const dtnmos_websocket_transport* dtnmos_curl_websocket(void)
+const DtNmosWebSocketTransport* DtNmos_CurlWebSocket(void)
 {
-    static const dtnmos_websocket_transport transport = {
-        sizeof(dtnmos_websocket_transport), NULL, ws_connect, ws_receive, ws_close};
+    static const DtNmosWebSocketTransport transport = {
+        sizeof(DtNmosWebSocketTransport), NULL, ws_connect, ws_receive, ws_close};
     return &transport;
 }

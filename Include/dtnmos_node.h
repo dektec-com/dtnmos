@@ -17,174 +17,173 @@ extern "C"
 {
 #endif
 
-typedef struct dtnmos_node dtnmos_node;
+typedef struct DtNmosNode DtNmosNode;
 
-// Called by dtnmos_node_poll(), on its thread and without the lock of the node, when the
+// Called by DtNmosNode_Poll(), on its thread and without the lock of the node, when the
 // registry has failed failures polls in a row: requests that got no answer, or an error
 // status. A registry that answers a heartbeat with 404 has lost the node, which registers
 // again with it, and that is no failure. The function returns 1 after setting next_url
 // to the base URL of another registry, which the node then registers with from the start,
 // or 0 to stay with the one it has.
-typedef int (*dtnmos_registry_failed_fn)(void* user, uint32_t failures,
-                                         dtnmos_string* next_url);
+typedef int (*DtNmosRegistryFailedFunc)(void* user, uint32_t failures,
+                                        DtNmosString* next_url);
 
-typedef struct dtnmos_node_config
+typedef struct DtNmosNodeConfig
 {
-    size_t size;  // sizeof(dtnmos_node_config)
-    dtnmos_id id; // stable, e.g. from dtnmos_id_from_name()
-    const char* label;
-    const char* description;
-    const char* hostname;
+    size_t Size; // sizeof(DtNmosNodeConfig)
+    DtNmosId Id; // stable, e.g. from DtNmosId_FromName()
+    const char* Label;
+    const char* Description;
+    const char* Hostname;
     // The address the Node and the Connection API are reached at; null finds the address
     // of this host on the way to the registry.
-    const char* api_host;
-    uint16_t api_port; // 0 lets dtnmos_node_serve() take any free port
-    const char*
-        registration_url;    // base URL of the registry, e.g. "http://registry.local"
-    const char* api_version; // of IS-04; "v1.3" when null, the only one accepted yet
-    dtnmos_http_fn http;     // for the requests to the registry
-    void* http_user;
-    uint32_t timeout_ms;   // of each request to the registry; 5000 when 0
-    uint32_t heartbeat_ms; // 5000 when 0
-    dtnmos_log_fn log;     // optional
-    void* log_user;
+    const char* ApiHost;
+    uint16_t ApiPort;            // 0 lets DtNmosNode_Serve() take any free port
+    const char* RegistrationUrl; // base URL of the registry, e.g. "http://registry.local"
+    const char* ApiVersion;      // of IS-04; "v1.3" when null, the only one accepted yet
+    DtNmosHttpFunc Http;         // for the requests to the registry
+    void* HttpUser;
+    uint32_t TimeoutMs;   // of each request to the registry; 5000 when 0
+    uint32_t HeartbeatMs; // 5000 when 0
+    DtNmosLogFunc Log;    // optional
+    void* LogUser;
     // Optional: moves the node to another registry when its registry fails.
-    dtnmos_registry_failed_fn registry_failed;
-    void* registry_failed_user;
-    uint32_t failures_before_switch; // polls that fail in a row first; 3 when 0
-} dtnmos_node_config;
+    DtNmosRegistryFailedFunc RegistryFailed;
+    void* RegistryFailedUser;
+    uint32_t FailuresBeforeSwitch; // polls that fail in a row first; 3 when 0
+} DtNmosNodeConfig;
 
-typedef struct dtnmos_device_config
+typedef struct DtNmosDeviceConfig
 {
-    size_t size;
-    dtnmos_id id;
-    const char* label; // e.g. "DTA-2110 2110000076 port 1"
-    const char* description;
-} dtnmos_device_config;
+    size_t Size;
+    DtNmosId Id;
+    const char* Label; // e.g. "DTA-2110 2110000076 port 1"
+    const char* Description;
+} DtNmosDeviceConfig;
 
-typedef struct dtnmos_sender_config
+typedef struct DtNmosSenderConfig
 {
-    size_t size;
-    dtnmos_id id;
-    dtnmos_id device_id;
-    const char* label;
-    const char* description;
-    const dtnmos_flow* flow; // what it sends, video or audio, written as its SDP; copied
-    const char* source_ip;   // the address it sends from, in its SDP
-} dtnmos_sender_config;
+    size_t Size;
+    DtNmosId Id;
+    DtNmosId DeviceId;
+    const char* Label;
+    const char* Description;
+    const DtNmosFlow* Flow; // what it sends, video or audio, written as its SDP; copied
+    const char* SourceIp;   // the address it sends from, in its SDP
+} DtNmosSenderConfig;
 
-typedef struct dtnmos_receiver_config
+typedef struct DtNmosReceiverConfig
 {
-    size_t size;
-    dtnmos_id id;
-    dtnmos_id device_id;
-    const char* label;
-    const char* description;
-    dtnmos_media media; // video or audio
-} dtnmos_receiver_config;
+    size_t Size;
+    DtNmosId Id;
+    DtNmosId DeviceId;
+    const char* Label;
+    const char* Description;
+    DtNmosMedia Media; // video or audio
+} DtNmosReceiverConfig;
 
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
 // receives: the flow of the media of the receiver in the transport file, with the
 // multicast_ip, source_ip and destination_port of the transport parameters over it.
-// has_flow is 0 when the staged parameters hold no transport file, as the parameters
+// HasFlow is 0 when the staged parameters hold no transport file, as the parameters
 // alone do not describe a flow. The node owns what it passes to a callback, which copies
-// what it keeps with dtnmos_flow_copy().
-typedef struct dtnmos_receiver_activation
+// what it keeps with DtNmosFlow_Copy().
+typedef struct DtNmosReceiverActivation
 {
-    int master_enable;
-    int has_flow;
-    dtnmos_flow flow;
-    dtnmos_id sender_id; // empty when not given
-} dtnmos_receiver_activation;
+    int MasterEnable;
+    int HasFlow;
+    DtNmosFlow Flow;
+    DtNmosId SenderId; // empty when not given
+} DtNmosReceiverActivation;
 
 // What a controller activates on a sender: whether it sends, and where to, "auto"
-// resolved to where it sends now; source_ip is empty for "auto".
-typedef struct dtnmos_sender_activation
+// resolved to where it sends now; SourceIp is empty for "auto".
+typedef struct DtNmosSenderActivation
 {
-    int master_enable;
-    dtnmos_string destination_ip;
-    uint16_t destination_port;
-    dtnmos_string source_ip;
-} dtnmos_sender_activation;
+    int MasterEnable;
+    DtNmosString DestinationIp;
+    uint16_t DestinationPort;
+    DtNmosString SourceIp;
+} DtNmosSenderActivation;
 
 // Called when a controller activates a receiver or a sender. The callback applies it and
 // returns DTNMOS_OK, or a failure that the node answers the controller with. It is called
 // on the thread that handles the request, without the lock of the node, and may block for
 // as long as applying takes.
-typedef dtnmos_result (*dtnmos_receiver_activate_fn)(
-    void* user, const dtnmos_id* receiver, const dtnmos_receiver_activation* activation,
-    dtnmos_error* error);
-typedef dtnmos_result (*dtnmos_sender_activate_fn)(
-    void* user, const dtnmos_id* sender, const dtnmos_sender_activation* activation,
-    dtnmos_error* error);
+typedef DtNmosResult (*DtNmosReceiverActivateFunc)(
+    void* user, const DtNmosId* receiver, const DtNmosReceiverActivation* activation,
+    DtNmosError* error);
+typedef DtNmosResult (*DtNmosSenderActivateFunc)(void* user, const DtNmosId* sender,
+                                                 const DtNmosSenderActivation* activation,
+                                                 DtNmosError* error);
 
 // Creates a node of config, whose strings it copies. Fails with DTNMOS_E_INVALID_ARGUMENT
 // without an ID, a registration URL or an HTTP function.
-DTNMOS_API dtnmos_result dtnmos_node_create(const dtnmos_node_config* config,
-                                            dtnmos_node** node, dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_Create(const DtNmosNodeConfig* config,
+                                          DtNmosNode** node, DtNmosError* error);
 
 // Stops serving, deletes what the node registered from the registry, and frees it.
-DTNMOS_API void dtnmos_node_destroy(dtnmos_node* node);
+DTNMOS_API void DtNmosNode_Destroy(DtNmosNode* node);
 
 // Adds a device, sender or receiver; the next poll registers it. Fails with
 // DTNMOS_E_INVALID_ARGUMENT for an ID the node has, an unknown device, or a sender of
 // neither video nor audio.
-DTNMOS_API dtnmos_result dtnmos_node_add_device(dtnmos_node* node,
-                                                const dtnmos_device_config* device,
-                                                dtnmos_error* error);
-DTNMOS_API dtnmos_result dtnmos_node_add_sender(dtnmos_node* node,
-                                                const dtnmos_sender_config* sender,
-                                                dtnmos_sender_activate_fn activate,
-                                                void* user, dtnmos_error* error);
-DTNMOS_API dtnmos_result dtnmos_node_add_receiver(dtnmos_node* node,
-                                                  const dtnmos_receiver_config* receiver,
-                                                  dtnmos_receiver_activate_fn activate,
-                                                  void* user, dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node,
+                                             const DtNmosDeviceConfig* device,
+                                             DtNmosError* error);
+DTNMOS_API DtNmosResult DtNmosNode_AddSender(DtNmosNode* node,
+                                             const DtNmosSenderConfig* sender,
+                                             DtNmosSenderActivateFunc activate,
+                                             void* user, DtNmosError* error);
+DTNMOS_API DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
+                                               const DtNmosReceiverConfig* receiver,
+                                               DtNmosReceiverActivateFunc activate,
+                                               void* user, DtNmosError* error);
 
 // Removes a device, sender or receiver, and the senders and receivers of a device; the
 // next poll deletes them from the registry. Fails with DTNMOS_E_NOT_FOUND for an unknown
 // ID.
-DTNMOS_API dtnmos_result dtnmos_node_remove(dtnmos_node* node, const dtnmos_id* id,
-                                            dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* node, const DtNmosId* id,
+                                          DtNmosError* error);
 
 // Changes the flow a sender sends, e.g. after its format changed, and its SDP with it;
 // the next poll registers the new version.
-DTNMOS_API dtnmos_result dtnmos_node_update_sender(dtnmos_node* node, const dtnmos_id* id,
-                                                   const dtnmos_flow* flow,
-                                                   dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
+                                                const DtNmosFlow* flow,
+                                                DtNmosError* error);
 
 // Registers what is not registered yet, deletes what was removed, and sends a heartbeat
 // when one is due, registering everything again when the registry has lost the node. Sets
 // next_ms, when it is not null, to when it wants to be called again. Fails with the first
 // request that failed; the next poll tries again.
-DTNMOS_API dtnmos_result dtnmos_node_poll(dtnmos_node* node, uint32_t* next_ms,
-                                          dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms,
+                                        DtNmosError* error);
 
 // Whether the registry holds the node and everything it has.
-DTNMOS_API int dtnmos_node_registered(const dtnmos_node* node);
+DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* node);
 
 // Answers a request to the Node API or the Connection API, for a caller with an HTTP
 // server of its own; request->url is the path and query of the request. Fills response,
 // which is empty, with the answer, an error status included.
-DTNMOS_API dtnmos_result dtnmos_node_handle(dtnmos_node* node,
-                                            const dtnmos_http_request* request,
-                                            dtnmos_http_response* response,
-                                            dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* node,
+                                          const DtNmosHttpRequest* request,
+                                          DtNmosHttpResponse* response,
+                                          DtNmosError* error);
 
 // Serves the Node API and the Connection API on api_host and api_port on a civetweb
-// server, and polls the node on a thread of its own, until dtnmos_node_destroy(). Fails
+// server, and polls the node on a thread of its own, until DtNmosNode_Destroy(). Fails
 // with DTNMOS_E_STATE when the library is built without DTNMOS_WITH_SERVER, and with
 // DTNMOS_E_HTTP when the server cannot listen.
-DTNMOS_API dtnmos_result dtnmos_node_serve(dtnmos_node* node, dtnmos_error* error);
+DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* node, DtNmosError* error);
 
 // Whether the library was built with the server, DTNMOS_WITH_SERVER.
-DTNMOS_API int dtnmos_has_server(void);
+DTNMOS_API int DtNmos_HasServer(void);
 
-// Returns the port the node is reached at: api_port, or the one dtnmos_node_serve() took.
-DTNMOS_API uint16_t dtnmos_node_api_port(const dtnmos_node* node);
+// Returns the port the node is reached at: api_port, or the one DtNmosNode_Serve() took.
+DTNMOS_API uint16_t DtNmosNode_ApiPort(const DtNmosNode* node);
 
 // Writes the base URL of the APIs of the node into url, e.g. "http://192.168.1.5:8080".
-DTNMOS_API dtnmos_result dtnmos_node_api_url(const dtnmos_node* node, dtnmos_string* url);
+DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, DtNmosString* url);
 
 #ifdef __cplusplus
 }
