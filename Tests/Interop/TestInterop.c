@@ -40,6 +40,7 @@ static const DtNmosId Namespace = {"3b9e6f52-41d7-4c0a-b8e3-5f2a7d1c9e64"};
 typedef struct NmosInteropNode
 {
     DtNmosNode* Node;
+    DtNmosRegistrySearch* Search; // of a node that searches, which it borrows
     char Host[64];
     uint16_t Port;
     DtNmosId Sender;
@@ -89,12 +90,14 @@ static const char* Getenv(const char* Name)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StopNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Frees the node, which deletes what it registered; the cleanup of a failing case.
+// Frees the node, which deletes what it registered, and then the search it borrowed; the
+// cleanup of a failing case.
 //
 static void StopNode(void* Context)
 {
     NmosInteropNode* Interop = Context;
     DtNmosNode_Freep(&Interop->Node);
+    DtNmosRegistrySearch_Freep(&Interop->Search);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -118,6 +121,19 @@ static void StartNode(NmosInteropNode* Interop, int Searches)
     Config.Description = "The node of the interop tests of dtnmos";
     Config.Hostname = "dtnmos-interop";
     Config.RegistrationUrl = Registry;
+    if (Searches)
+    {
+        DtNmosRegistrySearchConfig SearchConfig;
+        memset(&SearchConfig, 0, sizeof(SearchConfig));
+        SearchConfig.Size = sizeof(SearchConfig);
+        SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+        Interop->Search = DtNmosRegistrySearch_Alloc();
+        NMOS_ASSERT(Interop->Search != NULL);
+        NmosTest_SetCleanup(StopNode, Interop);
+        NMOS_ASSERT(DtNmosRegistrySearch_Open(Interop->Search, &SearchConfig) ==
+                    DTNMOS_OK);
+        Config.Search = Interop->Search;
+    }
     Config.Http = DtNmos_CurlHttp;
     // A registry that does not answer is given up within a heartbeat, as IS-04-01 tests.
     Config.TimeoutMs = 2000;

@@ -304,8 +304,27 @@ int main(int Argc, char** Argv)
         Flow = *DtNmosSdp_Flow(Sdp, 0);
     }
 
-    // Without --registry, the node searches for its registry itself, with DNS-SD.
+    // Without --registry, the node takes the registries a search of the program finds
+    // with DNS-SD; a program of more nodes shares one search among them.
     const char* Url = Example_Value(Argc, Argv, "--registry");
+    DtNmosRegistrySearch* Search = NULL;
+    if (Url == NULL)
+    {
+        DtNmosRegistrySearchConfig SearchConfig;
+        memset(&SearchConfig, 0, sizeof(SearchConfig));
+        SearchConfig.Size = sizeof(SearchConfig);
+        SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+        Search = DtNmosRegistrySearch_Alloc();
+        const DtNmosResult Opened =
+            Search == NULL ? DTNMOS_E_NO_MEMORY
+                           : DtNmosRegistrySearch_Open(Search, &SearchConfig);
+        if (Opened != DTNMOS_OK)
+        {
+            DtNmosRegistrySearch_Freep(&Search);
+            DtNmosSdp_Free(Sdp);
+            return Example_Failed("DtNmosRegistrySearch_Open", Opened);
+        }
+    }
     DtNmosNodeConfig Config;
     memset(&Config, 0, sizeof(Config));
     Config.Size = sizeof(Config);
@@ -313,6 +332,7 @@ int main(int Argc, char** Argv)
     Config.Label = Label;
     Config.ApiPort = (uint16_t)Port;
     Config.RegistrationUrl = Url;
+    Config.Search = Search;
     Config.Http = DtNmos_CurlHttp;
     Config.Log = Example_Log;
     Config.LogUser = Example_HasFlag(Argc, Argv, "--verbose") ? (void*)Label : NULL;
@@ -325,6 +345,7 @@ int main(int Argc, char** Argv)
     if (Result != DTNMOS_OK)
     {
         DtNmosNode_Freep(&Node);
+        DtNmosRegistrySearch_Freep(&Search);
         DtNmosSdp_Free(Sdp);
         return Example_Failed("DtNmosNode_Open", Result);
     }
@@ -353,8 +374,10 @@ int main(int Argc, char** Argv)
     {
         Exit = Run(Node, Seconds);
     }
-    // Freeing the node closes it, which deletes what it registered from the registry.
+    // Freeing the node closes it, which deletes what it registered from the registry; the
+    // search it borrowed goes after it.
     DtNmosNode_Freep(&Node);
+    DtNmosRegistrySearch_Freep(&Search);
     printf("unregistered\n");
     return Exit;
 }

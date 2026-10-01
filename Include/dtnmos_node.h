@@ -41,12 +41,12 @@ typedef struct DtNmosNodeConfig
     const char* Description;
     const char* Hostname;
     // The address the Node and the Connection API are reached at; null finds the address
-    // of this host on the way to the registry, or, when the node searches for one, that
-    // of the interface it searches on.
+    // of this host on the way to the registry, or, when the node takes its registry from
+    // a search, that of the default route.
     const char* ApiHost;
     uint16_t ApiPort; // 0 lets DtNmosNode_Serve() take any free port
-    // The base URL of the registry, e.g. "http://registry.local"; null makes the node
-    // search for one itself with DNS-SD, as Discovery says.
+    // The base URL of the registry, e.g. "http://registry.local"; null takes the
+    // registries of Search.
     const char* RegistrationUrl;
     const char* ApiVersion; // of IS-04; "v1.3" when null, the only one accepted yet
     DtNmosHttpFunc Http;    // for the requests to the registry
@@ -61,18 +61,14 @@ typedef struct DtNmosNodeConfig
     // Polls that fail in a row first; when 0, 3, or 1 for a node that searches for its
     // registry, as IS-04 has such a node move on at the first failure.
     uint32_t FailuresBeforeSwitch;
-    // How a node without a RegistrationUrl searches for its registry, as
-    // DtNmos_Discover() does, for the Registration API whatever Service says; copied.
-    // Null searches through multicast DNS and the DNS server of the host, on the
-    // interface of the default route. The node searches on a thread of its own, from its
-    // first poll until it is closed: every 3 seconds while it has a registry, so that it
-    // knows the registries it can fail over to, and without one every second at first
-    // and every 8 seconds at most. It registers with the most preferred usable registry
-    // it found; when one fails FailuresBeforeSwitch polls in a row, it asks
-    // RegistryFailed, when that is set, and else moves to the most preferred one that has
-    // not failed yet, with a heartbeat first, as IS-04 asks of a node; once all have
-    // failed, it starts over from the most preferred.
-    const DtNmosDiscoveryConfig* Discovery;
+    // The search of the application, which finds the Registration API, for a node without
+    // a RegistrationUrl; the node borrows it, and is closed before it. The node registers
+    // with the most preferred usable registry the search found; when one fails
+    // FailuresBeforeSwitch polls in a row, it asks RegistryFailed, when that is set, and
+    // else moves to the most preferred one that has not failed yet, with a heartbeat
+    // first, as IS-04 asks of a node; once all have failed, it starts over from the most
+    // preferred. While it has none, it has the search search sooner.
+    DtNmosRegistrySearch* Search;
 } DtNmosNodeConfig;
 
 typedef struct DtNmosDeviceConfig
@@ -208,10 +204,9 @@ DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* Node,
 DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
 
 // Opens node with config, whose strings it copies; it registers nothing until it is
-// polled, nor searches for its registry. Fails with DTNMOS_E_INVALID_ARGUMENT without an
-// ID or an HTTP function, or for a Discovery of another size, and with DTNMOS_E_STATE
-// when the node is open. A node closed can be opened again, with another config, keeping
-// its handle.
+// polled. Fails with DTNMOS_E_INVALID_ARGUMENT without an ID or an HTTP function, or with
+// neither a RegistrationUrl nor a Search, and with DTNMOS_E_STATE when the node is open.
+// A node closed can be opened again, with another config, keeping its handle.
 DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config);
 
 // Applies the scheduled activations that are due, takes a registry the search found when

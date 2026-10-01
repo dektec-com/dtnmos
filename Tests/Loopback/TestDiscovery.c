@@ -840,9 +840,9 @@ static int PollUntil(DtNmosNode* Node, const int* Count, int Above)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- NodeSearchesForItsRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A node without the URL of a registry searches for one, registers with the most
-// preferred, moves to the next with a heartbeat when it fails, and starts over with the
-// first when all failed.
+// A node without the URL of a registry takes the registries of the search it borrows,
+// registers with the most preferred, moves to the next with a heartbeat when it fails,
+// and starts over with the first when all failed.
 //
 NMOS_TEST(NodeSearchesForItsRegistry)
 {
@@ -866,7 +866,15 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     memset(&Fake, 0, sizeof(Fake));
     Fake.Urls[0] = "http://127.0.0.3:8081/";
     Fake.Urls[1] = "http://127.0.0.2:8080/";
-    DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
+    const DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
+    DtNmosRegistrySearchConfig SearchConfig;
+    memset(&SearchConfig, 0, sizeof(SearchConfig));
+    SearchConfig.Size = sizeof(SearchConfig);
+    SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+    SearchConfig.Discovery = &Discovery;
+    DtNmosRegistrySearch* Search = DtNmosRegistrySearch_Alloc();
+    NMOS_ASSERT(Search != NULL);
+    NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &SearchConfig) == DTNMOS_OK);
     DtNmosNodeConfig Config;
     memset(&Config, 0, sizeof(Config));
     Config.Size = sizeof(Config);
@@ -880,13 +888,11 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     Config.HttpUser = &Fake;
     Config.HeartbeatMs = 1;
     Config.FailuresBeforeSwitch = 1;
-    Config.Discovery = &Discovery;
     DtNmosNode* Node = DtNmosNode_Alloc();
     NMOS_ASSERT(Node != NULL);
-    // A discovery config of another size is refused.
-    Discovery.Size = 4;
+    // A node with neither a URL nor a search is refused.
     NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
-    Discovery.Size = sizeof(Discovery);
+    Config.Search = Search;
     const DtNmosResult Opened = DtNmosNode_Open(Node, &Config);
     if (Opened != DTNMOS_OK)
     {
@@ -920,7 +926,9 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     Fake.Down[0] = 0;
     const int Before = Fake.Requests[0];
     NMOS_ASSERT(PollUntil(Node, &Fake.Requests[0], Before));
+    // The node goes before the search it borrows.
     DtNmosNode_Free(Node);
+    DtNmosRegistrySearch_Free(Search);
     StopResponder(&r);
 }
 

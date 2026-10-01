@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "NmosDiscovery.h"
 #include "NmosJson.h"
 #include "NmosNode.h"
 #include "NmosOs.h"
@@ -45,15 +46,6 @@ static char* CopyText(const char* Text)
         Copy[Length] = '\0';
     }
     return Copy;
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyOptional -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-// Copies Text, leaving null null, where CopyText() makes it an empty text.
-//
-static char* CopyOptional(const char* Text)
-{
-    return Text == NULL ? NULL : CopyText(Text);
 }
 
 static void NodeLog(DtNmosNode* Node, DtNmosLogLevel Level, const char* Format, ...)
@@ -184,47 +176,23 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
                               "IS-04 %s is not supported; dtnmos speaks v1.3.",
                               Config->ApiVersion);
     }
-    // A config of an older header ends before the search for a registry.
-    const DtNmosDiscoveryConfig* Discovery =
-        Config->Size >= offsetof(DtNmosNodeConfig, Discovery) + sizeof(Config->Discovery)
-            ? Config->Discovery
-            : NULL;
-    if (Discovery != NULL)
-    {
-        const DtNmosResult DiscoverySized = DTNMOS_CHECK_SIZE(
-            Discovery, DtNmosDiscoveryConfig, sizeof(DtNmosDiscoveryConfig));
-        if (DiscoverySized != DTNMOS_OK)
-        {
-            return DiscoverySized;
-        }
-    }
+    // A node without a registry takes those of the search of the application, which a
+    // config of an older header does not have.
     const int Searches =
         Config->RegistrationUrl == NULL || Config->RegistrationUrl[0] == '\0';
+    DtNmosRegistrySearch* Search =
+        Config->Size >= offsetof(DtNmosNodeConfig, Search) + sizeof(Config->Search)
+            ? Config->Search
+            : NULL;
+    if (Searches && Search == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A node needs the URL of its registry, or a search that "
+                              "finds the Registration API.");
+    }
     DtNmosNode* Result = Node;
     Result->Searches = Searches;
-    if (Discovery != NULL)
-    {
-        Result->Discovery = *Discovery;
-    }
-    Result->Discovery.Size = sizeof(Result->Discovery);
-    Result->Discovery.Service = DTNMOS_SERVICE_REGISTRATION;
-    // The strings of the search are the node's own; null stays null.
-    Result->Discovery.InterfaceAddress = CopyOptional(Result->Discovery.InterfaceAddress);
-    Result->Discovery.Destination = CopyOptional(Result->Discovery.Destination);
-    Result->Discovery.DnsServer = CopyOptional(Result->Discovery.DnsServer);
-    Result->Discovery.DnsDomain = CopyOptional(Result->Discovery.DnsDomain);
-    if (Result->Discovery.Log == NULL)
-    {
-        Result->Discovery.Log = Config->Log;
-        Result->Discovery.LogUser = Config->LogUser;
-    }
-    const int Copied =
-        (Discovery == NULL ||
-         ((Discovery->InterfaceAddress == NULL) ==
-              (Result->Discovery.InterfaceAddress == NULL) &&
-          (Discovery->Destination == NULL) == (Result->Discovery.Destination == NULL) &&
-          (Discovery->DnsServer == NULL) == (Result->Discovery.DnsServer == NULL) &&
-          (Discovery->DnsDomain == NULL) == (Result->Discovery.DnsDomain == NULL)));
+    Result->Search = Searches ? Search : NULL;
     Result->Mutex = NmosOs_MutexCreate();
     Result->Id = Config->Id;
     Result->Label = CopyText(Config->Label);
@@ -236,14 +204,11 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     {
         snprintf(Host, sizeof(Host), "%s", Config->ApiHost);
     }
-    else if (Searches && Result->Discovery.InterfaceAddress != NULL)
-    {
-        snprintf(Host, sizeof(Host), "%s", Result->Discovery.InterfaceAddress);
-    }
     else
     {
-        // The address on the way to the registry, or, for a node that searches for one,
-        // on the way to the group of multicast DNS: that of the default route.
+        // The address on the way to the registry, or, for a node that takes its registry
+        // from a search, on the way to the group of multicast DNS: that of the default
+        // route.
         char Registry[256] = "224.0.0.251";
         if ((!Searches &&
              !HostOfUrl(Config->RegistrationUrl, Registry, sizeof(Registry))) ||
@@ -276,7 +241,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     }
     Result->FirstRegistration = 1;
     if (Result->Mutex == NULL || Result->Label == NULL || Result->Description == NULL ||
-        Result->Hostname == NULL || Result->ApiHost == NULL || !Copied ||
+        Result->Hostname == NULL || Result->ApiHost == NULL ||
         (!Searches && Result->Registration == NULL))
     {
         NmosNode_Release(Result);
@@ -334,11 +299,6 @@ void NmosNode_Release(DtNmosNode* Node)
     free(Node->Hostname);
     free(Node->ApiHost);
     free(Node->Registration);
-    free((char*)Node->Discovery.InterfaceAddress);
-    free((char*)Node->Discovery.Destination);
-    free((char*)Node->Discovery.DnsServer);
-    free((char*)Node->Discovery.DnsDomain);
-    DtNmosRegistryList_Free(Node->Found);
     ForgetFailed(Node);
     NmosOs_MutexFree(Node->Mutex);
     memset(Node, 0, sizeof(*Node));
@@ -1569,70 +1529,6 @@ static int TakeRegistry(DtNmosNode* Node, const char* Url)
     return 1;
 }
 
-// The time between the searches of a node that has a registry, which keep the list it
-// fails over to fresh; and the longest between those of a node that has none.
-#define NMOS_SEARCH_REGISTERED_MS 3000u
-#define NMOS_SEARCH_MAX_WAIT_MS 8000u
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StopsSearching -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-// Whether the search thread is to stop, after waiting up to WaitMs for it.
-//
-static int StopsSearching(DtNmosNode* Node, uint32_t WaitMs)
-{
-    const uint64_t Until = NmosOs_MonotonicMs() + WaitMs;
-    for (;;)
-    {
-        NmosNode_Lock(Node);
-        const int Stop = Node->StopSearching;
-        NmosNode_Unlock(Node);
-        const uint64_t Now = NmosOs_MonotonicMs();
-        if (Stop || Now >= Until)
-        {
-            return Stop;
-        }
-        NmosOs_SleepMs(Until - Now < 50 ? (uint32_t)(Until - Now) : 50);
-    }
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SearchLoop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-// The search thread of a node that searches for its registry: searches with DNS-SD and
-// leaves what it found for the poll, which chooses from it. While the node has a
-// registry, it searches every few seconds, so that a failover finds the registries
-// announced since; without one, after a wait that doubles from a second to eight, short
-// enough for a registry that answers only once it saw the question.
-//
-static void SearchLoop(void* Argument)
-{
-    DtNmosNode* Node = Argument;
-    uint32_t WaitMs = 0;
-    while (!StopsSearching(Node, WaitMs))
-    {
-        DtNmosRegistryList* List = NULL;
-        if (DtNmos_Discover(&Node->Discovery, &List) != DTNMOS_OK)
-        {
-            NodeLog(Node, DTNMOS_LOG_WARNING, "The search for a registry failed: %s",
-                    DtNmos_GetLastError());
-        }
-        NmosNode_Lock(Node);
-        DtNmosRegistryList_Free(Node->Found);
-        Node->Found = List;
-        const int HasRegistry = Node->Registration != NULL;
-        NmosNode_Unlock(Node);
-        if (HasRegistry)
-        {
-            WaitMs = NMOS_SEARCH_REGISTERED_MS;
-        }
-        else
-        {
-            WaitMs =
-                WaitMs == 0 || WaitMs == NMOS_SEARCH_REGISTERED_MS ? 1000u : WaitMs * 2;
-            WaitMs = WaitMs > NMOS_SEARCH_MAX_WAIT_MS ? NMOS_SEARCH_MAX_WAIT_MS : WaitMs;
-        }
-    }
-}
-
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasFailed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Whether the registry of the base URL Base failed since the node last started over.
@@ -1692,21 +1588,29 @@ static void MarkFailed(DtNmosNode* Node)
 // Moves a node without a registry to the most preferred usable one its search found that
 // has not failed yet, so that it goes down the list and never back to one that failed;
 // when all have, forgets that they failed and starts over from the most preferred. A
-// node registered before sends a heartbeat first, which tells it whether
-// the registry has it; another registers everything. Returns 0 when there is none. On the
-// poll thread.
+// node registered before sends a heartbeat first, which tells it whether the registry
+// has it; another registers everything. Returns 0 when there is none, having had the
+// search search sooner. On the poll thread.
 //
 static int TakeFound(DtNmosNode* Node)
 {
-    for (int Round = 0; Round < 2; ++Round)
+    DtNmosRegistryList* Found = NULL;
+    if (DtNmosRegistrySearch_List(Node->Search, DTNMOS_SERVICE_REGISTRATION, &Found) !=
+        DTNMOS_OK)
+    {
+        NodeLog(Node, DTNMOS_LOG_WARNING, "The search gives no registries: %s",
+                DtNmos_GetLastError());
+    }
+    int Taken = 0;
+    for (int Round = 0; Round < 2 && !Taken; ++Round)
     {
         char* Base = NULL;
         char Url[DTNMOS_MAX_URL_SIZE] = "";
         int AnyFailed = 0;
         NmosNode_Lock(Node);
-        for (size_t i = 0; Base == NULL && i < DtNmosRegistryList_Count(Node->Found); ++i)
+        for (size_t i = 0; Base == NULL && i < DtNmosRegistryList_Count(Found); ++i)
         {
-            const DtNmosRegistryInfo* Info = DtNmosRegistryList_At(Node->Found, i);
+            const DtNmosRegistryInfo* Info = DtNmosRegistryList_At(Found, i);
             char* Candidate = Info->Usable ? RegistrationBase(Info->Url) : NULL;
             if (Candidate != NULL && HasFailed(Node, Candidate))
             {
@@ -1736,17 +1640,25 @@ static int TakeFound(DtNmosNode* Node)
         if (Base != NULL)
         {
             Node->Failures = 0;
-            NodeLog(Node, DTNMOS_LOG_INFO,
-                    "The node registers with %s, found with DNS-SD.", Url);
-            return 1;
+            NodeLog(Node, DTNMOS_LOG_INFO, "The node registers with %s, of its search.",
+                    Url);
+            Taken = 1;
         }
-        if (!AnyFailed)
+        else if (AnyFailed)
         {
-            return 0;
+            ForgetFailed(Node);
         }
-        ForgetFailed(Node);
+        else
+        {
+            break;
+        }
     }
-    return 0;
+    DtNmosRegistryList_Free(Found);
+    if (!Taken)
+    {
+        NmosRegistrySearch_Hurry(Node->Search);
+    }
+    return Taken;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -1761,19 +1673,8 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     // Scheduled activations first, as they do not wait for the registry.
     uint32_t ScheduledMs = UINT32_MAX;
     NmosConnection_Poll(Node, &ScheduledMs);
-    // A node that searches for its registry does so on a thread of its own, from the
-    // first poll; one without a registry takes one it found, and until there is one, it
-    // has nothing to register with, which is no failure.
-    if (Node->Searches && !Node->Closing && Node->Searcher == NULL)
-    {
-        Node->Searcher = NmosOs_ThreadStart(SearchLoop, Node);
-        if (Node->Searcher == NULL)
-        {
-            return NmosError_Fail(
-                DTNMOS_E_INTERNAL,
-                "The thread that searches for a registry did not start.");
-        }
-    }
+    // A node without a registry takes one its search found; until there is one, it has
+    // nothing to register with, which is no failure.
     if (Node->Registration == NULL && Node->Searches && !Node->Closing)
     {
         TakeFound(Node);
@@ -1974,15 +1875,6 @@ DtNmosResult DtNmosNode_Close(DtNmosNode* Node)
         return Result;
     }
     NmosServer_Stop(Node);
-    // The search thread stops before what it searches with is freed.
-    if (Node->Searcher != NULL)
-    {
-        NmosNode_Lock(Node);
-        Node->StopSearching = 1;
-        NmosNode_Unlock(Node);
-        NmosOs_ThreadJoin(Node->Searcher);
-        Node->Searcher = NULL;
-    }
     UnregisterAll(Node);
     NmosNode_Release(Node);
     return DTNMOS_OK;

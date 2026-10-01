@@ -268,9 +268,25 @@ if (DtNmos_Discover(&config, &list) == DTNMOS_OK)
 ```
 
 A search takes about a second, `TimeoutMs` of the config, and finding nothing is no
-failure. The URL of a Query API goes into `DtNmosQueryConfig.RegistryUrl`. A node needs
-no search of the program's: without a `RegistrationUrl` it searches for its registry
-itself, as the next section says.
+failure. The URL of a Query API goes into `DtNmosQueryConfig.RegistryUrl`. A node
+takes its registries from a search that keeps looking instead.
+
+A program that keeps looking, as a node needs, opens one `DtNmosRegistrySearch` and
+shares it among its nodes and clients. It searches on a thread of its own for the Query
+API, the Registration API or both, every 3 seconds, and sooner while a node of it has no
+registry; `DtNmosRegistrySearch_List()` copies what it found. A search opened as fed
+never searches, and holds the URLs `DtNmosRegistrySearch_Feed()` gives it, for a program
+that finds its registries in another way, or a test without a network:
+
+```c
+DtNmosRegistrySearchConfig search_config = {0};
+search_config.Size = sizeof(search_config);
+search_config.Finds = DTNMOS_FINDS_REGISTRATION;  // and/or DTNMOS_FINDS_QUERY
+DtNmosRegistrySearch* search = DtNmosRegistrySearch_Alloc();
+DtNmosRegistrySearch_Open(search, &search_config);
+// ... the nodes that borrow it, closed before it:
+DtNmosRegistrySearch_Freep(&search);
+```
 
 ## Being a node
 
@@ -287,7 +303,8 @@ DtNmosNodeConfig config = {0};
 config.Size = sizeof(config);
 DtNmosId_FromName(&my_namespace, "my node", &config.Id);
 config.Label = "my node";
-config.RegistrationUrl = NULL;  // the node searches; or e.g. "http://registry.local"
+config.RegistrationUrl = NULL;  // or e.g. "http://registry.local"
+config.Search = search;          // the search of the program, for a node without a URL
 config.Http = DtNmos_CurlHttp;
 DtNmosNode* node = DtNmosNode_Alloc();
 if (DtNmosNode_Open(node, &config) == DTNMOS_OK)
@@ -318,11 +335,11 @@ the host that has the address, a port of a DekTec card among them. A sender's SD
 the address as origin and source filter, and the MAC address of the interface as a
 reference clock of `localmac`.
 
-A node without a `RegistrationUrl` finds its registry itself, as IS-04 asks. It searches
-with DNS-SD on a thread of its own, as `Discovery` of the config says, or as
-`DtNmos_Discover()` does by default; registers with the most preferred usable registry;
-and when that fails, moves on at once to the next one it found, with a heartbeat first,
-going down the list and starting over from the top when all have failed. A node given
+A node without a `RegistrationUrl` takes its registries from the `Search` of its config,
+which it borrows; a node with neither fails to open. It registers with the most
+preferred usable registry; and when that fails, moves on at once to the next one the
+search found, with a heartbeat first, going down the list and starting over from the
+top when all have failed, as IS-04 asks of a node. A node given
 its registry can move to another when it fails: `RegistryFailed` of the config is called
 on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when 0), and
 returns the URL of the next registry, which the node then registers with from the
