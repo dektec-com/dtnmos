@@ -1445,6 +1445,9 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     {
         return Open;
     }
+    // Scheduled activations first, as they do not wait for the registry.
+    uint32_t ScheduledMs = UINT32_MAX;
+    NmosConnection_Poll(Node, &ScheduledMs);
     DtNmosResult Result = DTNMOS_OK;
     // Deletions first, children before parents as they were scheduled.
     for (;;)
@@ -1571,7 +1574,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
                                                : 0u;
         }
         NmosNode_Unlock(Node);
-        *NextMs = Wait;
+        *NextMs = Wait < ScheduledMs ? Wait : ScheduledMs;
     }
     return Result;
 }

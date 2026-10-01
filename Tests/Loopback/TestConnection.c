@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "NmosJson.h"
+#include "NmosOs.h"
 #include "NmosTest.h"
 #include "dtnmos_node.h"
 
@@ -290,8 +291,8 @@ NMOS_TEST(ConnectionAnswersItsParameters)
         Ask(Node, "PUT", CONNECTION "senders/" SENDER_ID "/staged", "{}", NULL), 405);
     NMOS_ASSERT_EQ(
         Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/active", "{}", NULL), 405);
-    NMOS_ASSERT_EQ(Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/senders", "[]", NULL),
-                   501);
+    NMOS_ASSERT_EQ(Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/flows", "[]", NULL),
+                   404);
     NMOS_ASSERT_EQ(Seen.SenderCalls + Seen.ReceiverCalls, 0);
     DtNmosNode_Free(Node);
 }
@@ -538,9 +539,12 @@ NMOS_TEST(ConnectionRefusesBadPatches)
                    400);
     NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
                        "{\"activation\": {\"mode\": \"activate_scheduled_relative\", "
-                       "\"requested_time\": \"0:0\"}}",
+                       "\"requested_time\": \"soon\"}}",
                        NULL),
-                   501);
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"activation\": {\"mode\": \"activate_later\"}}", NULL),
+                   400);
     NMOS_ASSERT_EQ(
         Ask(Node, "PATCH", CONNECTION "senders/" PEER_ID "/staged", "{}", NULL), 404);
     // A transport file without audio does not connect the audio receiver.
@@ -653,8 +657,119 @@ NMOS_TEST(ConnectionResolvesAuto)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivationMode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Writes the mode of the activation of the staged or active parameters of the sender
+// into Mode, "" for null.
+//
+static void ActivationMode(DtNmosNode* Node, const char* Leaf, char* Mode, size_t Size)
+{
+    char Path[160];
+    snprintf(Path, sizeof(Path), CONNECTION "senders/" SENDER_ID "/%s", Leaf);
+    NmosJson* Json = NULL;
+    Mode[0] = '\0';
+    if (Ask(Node, "GET", Path, NULL, &Json) == 200 && Json != NULL)
+    {
+        const char* Text =
+            NmosJson_MemberText(NmosJson_Member(Json, "activation"), "mode");
+        snprintf(Mode, Size, "%s", Text != NULL ? Text : "");
+    }
+    NmosJson_Free(Json);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionSchedulesActivations -.-.-.-.-.-.-.-.-.-.-.-
+//
+// A scheduled activation is answered with 202, locks the staged parameters but for a
+// PATCH that cancels it, and is applied by the poll when it is due.
+//
+NMOS_TEST(ConnectionSchedulesActivations)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    const char* const Staged = CONNECTION "senders/" SENDER_ID "/staged";
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"transport_params\": [{\"destination_ip\": \"192.168.1.9\"}], "
+                       "\"activation\": {\"mode\": \"activate_scheduled_relative\", "
+                       "\"requested_time\": \"0:200000000\"}}",
+                       NULL),
+                   202);
+    char Mode[64];
+    ActivationMode(Node, "staged", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "activate_scheduled_relative");
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": false}", NULL), 423);
+    uint32_t NextMs = 0;
+    NMOS_ASSERT(DtNmosNode_Poll(Node, &NextMs) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 0);
+    NMOS_ASSERT(NextMs <= 200);
+
+    // When it is due, the poll applies it, and the active parameters show it.
+    NmosOs_SleepMs(250);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT_STR(Seen.Destination, "192.168.1.9");
+    ActivationMode(Node, "active", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "activate_scheduled_relative");
+    ActivationMode(Node, "staged", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "");
+
+    // An activation of mode null cancels a scheduled one, which then never takes place.
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged,
+                       "{\"master_enable\": false, \"activation\": {\"mode\": "
+                       "\"activate_scheduled_absolute\", \"requested_time\": "
+                       "\"99999999999:0\"}}",
+                       NULL),
+                   202);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"activation\": {\"mode\": null}}", NULL),
+                   200);
+    ActivationMode(Node, "staged", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "");
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Staged, "{\"master_enable\": true}", NULL), 200);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersBulk -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The bulk interface applies each patch as a PATCH of its own would, and answers the
+// status and error of each.
+//
+NMOS_TEST(ConnectionAnswersBulk)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    NmosJson* Json = NULL;
+    NMOS_ASSERT_EQ(Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/senders",
+                       "[{\"id\": \"" SENDER_ID
+                       "\", \"params\": {\"master_enable\": false, "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}}, "
+                       "{\"id\": \"" PEER_ID "\", \"params\": {}}, {\"params\": {}}]",
+                       &Json),
+                   200);
+    NMOS_ASSERT(Json != NULL && Json->Type == DTNMOS_JSON_ARRAY && Json->Count == 3);
+    const int Codes[] = {200, 404, 400};
+    for (size_t i = 0; i < 3; ++i)
+    {
+        const NmosJson* Code = NmosJson_Member(&Json->Items[i], "code");
+        NMOS_EXPECT(Code != NULL && Code->Number == Codes[i]);
+        NMOS_EXPECT((NmosJson_MemberText(&Json->Items[i], "error") != NULL) == (i > 0));
+    }
+    NMOS_ASSERT_STR(NmosJson_MemberText(&Json->Items[0], "id"), SENDER_ID);
+    NmosJson_Free(Json);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(!Seen.SenderEnabled);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "POST", "/x-nmos/connection/v1.1/bulk/receivers", "{}", NULL), 400);
+    DtNmosNode_Free(Node);
+}
+
 NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
                NMOS_RUN(ConnectionRefusesBadPatches),
                NMOS_RUN(ConnectionAnswersCorsAndTheTarget),
-               NMOS_RUN(ConnectionResolvesAuto))
+               NMOS_RUN(ConnectionResolvesAuto), NMOS_RUN(ConnectionSchedulesActivations),
+               NMOS_RUN(ConnectionAnswersBulk))

@@ -99,6 +99,7 @@ struct DtNmosNode
     int NodeWasRegistered; // the registry held a version, which closing deletes
     int Closing; // the node deletes what it registered and registers nothing more
     uint64_t NextHeartbeatMs;
+    int Wake; // an activation was scheduled, which the next poll may have to apply
     DtNmosRegistryFailedFunc RegistryFailed;
     void* RegistryFailedUser;
     uint32_t FailuresBeforeSwitch;
@@ -164,6 +165,9 @@ void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver);
 DtNmosResult NmosConnection_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Request,
                                    char** Segments, size_t Count,
                                    DtNmosHttpResponse* Response);
+// Applies the scheduled activations that are due, each through its callback without the
+// lock, and lowers *WaitMs to the milliseconds until the next one, when it is sooner.
+void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs);
 
 // Stops the server of NmosServer.c and its polling, when the node serves itself.
 void NmosServer_Stop(DtNmosNode* Node);

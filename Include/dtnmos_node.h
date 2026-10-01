@@ -117,8 +117,10 @@ typedef struct DtNmosSenderActivation
 
 // Called when a controller activates a receiver or a sender. The callback applies it and
 // returns DTNMOS_OK, or fails with DtNmos_SetLastError(), whose message the node answers
-// the controller with. It is called on the thread that handles the request, without the
-// lock of the node, and may block for as long as applying takes.
+// the controller with. It is called without the lock of the node, and may block for as
+// long as applying takes: on the thread that handles the request for an immediate
+// activation, and in DtNmosNode_Poll() for a scheduled one, when it is due; the failure
+// of a scheduled one goes to the log.
 typedef DtNmosResult (*DtNmosReceiverActivateFunc)(
     void* User, const DtNmosId* Receiver, const DtNmosReceiverActivation* Activation);
 
@@ -191,10 +193,11 @@ DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
 // opened again, with another config, keeping its handle.
 DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config);
 
-// Registers what is not registered yet, deletes what was removed, and sends a heartbeat
-// when one is due, registering everything again when the registry has lost the node. Sets
-// NextMs, when it is not null, to when it wants to be called again. Fails with the first
-// request that failed; the next poll tries again.
+// Applies the scheduled activations that are due, registers what is not registered yet,
+// deletes what was removed, and sends a heartbeat when one is due, registering everything
+// again when the registry has lost the node. Sets NextMs, when it is not null, to when it
+// wants to be called again, which a scheduled activation brings forward. Fails with the
+// first request that failed; the next poll tries again.
 DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 
 // Removes a device, sender or receiver, and the senders and receivers of a device; the

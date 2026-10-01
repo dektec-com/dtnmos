@@ -116,6 +116,18 @@ static int Stopping(NmosServer* s)
     return Result;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-. Woken .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Whether an activation was scheduled since the last poll.
+//
+static int Woken(DtNmosNode* Node)
+{
+    NmosNode_Lock(Node);
+    const int Result = Node->Wake;
+    NmosNode_Unlock(Node);
+    return Result;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PollLoop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static void PollLoop(void* Argument)
@@ -130,11 +142,14 @@ static void PollLoop(void* Argument)
         {
             Node->Log(Node->LogUser, DTNMOS_LOG_WARNING, DtNmos_GetLastError());
         }
-        // Sleep in steps, so that stopping does not wait for a heartbeat.
-        for (uint32_t Slept = 0; Slept < NextMs && Slept < 5000 && !Stopping(s);
-             Slept += 50)
+        // Sleep in steps, so that stopping does not wait for a heartbeat, nor an
+        // activation that was scheduled meanwhile.
+        for (uint32_t Slept = 0;
+             Slept < NextMs && Slept < 5000 && !Stopping(s) && !Woken(Node);)
         {
-            NmosOs_SleepMs(50);
+            const uint32_t Step = NextMs - Slept < 10 ? NextMs - Slept : 10;
+            NmosOs_SleepMs(Step);
+            Slept += Step;
         }
     }
 }

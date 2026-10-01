@@ -303,14 +303,21 @@ typedef int NmosSocket;
 
 #endif
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_TaiNowNs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+uint64_t NmosOs_TaiNowNs(void)
+{
+    struct timespec Now;
+    timespec_get(&Now, TIME_UTC);
+    return ((uint64_t)Now.tv_sec + DTNMOS_TAI_OFFSET) * 1000000000u +
+           (uint64_t)Now.tv_nsec;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_VersionNow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size)
 {
-    struct timespec Now;
-    timespec_get(&Now, TIME_UTC);
-    uint64_t Nanoseconds =
-        ((uint64_t)Now.tv_sec + DTNMOS_TAI_OFFSET) * 1000000000u + (uint64_t)Now.tv_nsec;
+    uint64_t Nanoseconds = NmosOs_TaiNowNs();
     // Versions must rise even when two changes fall within one tick of the clock.
     if (Nanoseconds <= *Last)
     {

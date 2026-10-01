@@ -32,6 +32,9 @@ void NmosOs_SleepMs(uint32_t Milliseconds);
 // Milliseconds of a clock that only runs forward.
 uint64_t NmosOs_MonotonicMs(void);
 
+// The time now in nanoseconds of TAI, since the epoch of PTP, as IS-04 and IS-05 count.
+uint64_t NmosOs_TaiNowNs(void);
+
 // Writes the time now as an IS-04 version, "<seconds>:<nanoseconds>" of TAI, into text,
 // which holds at least 32 characters. last holds the previous version in nanoseconds,
 // which the new one exceeds even within one tick of the clock; its owner guards it.
