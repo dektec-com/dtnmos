@@ -313,7 +313,7 @@ void query_finds_a_sender_and_its_sdp(void)
         CHECK_EQ(sender.Media, DTNMOS_MEDIA_VIDEO);
         DtNmosSdp* sdp = NULL;
         REQUIRE(DtNmosQuery_SenderSdp(query, &sender, &sdp) == DTNMOS_OK);
-        CHECK_STR(DtNmosString_Get(&DtNmosSdp_Session(sdp)->Name), "camera 1");
+        CHECK_STR(DtNmosSdp_Session(sdp)->Name, "camera 1");
         CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->DestinationPort, 5004);
         DtNmosSdp_Free(sdp);
         DtNmosSenderInfo copy = {0};

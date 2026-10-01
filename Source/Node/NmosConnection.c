@@ -17,11 +17,11 @@
 // "" for null; a port is -1 for "auto".
 typedef struct leg
 {
-    char source_ip[64];
-    char destination_ip[64]; // of a sender
-    char multicast_ip[64];   // of a receiver
-    char interface_ip[64];   // of a receiver
-    int source_port;         // of a sender
+    char source_ip[DTNMOS_MAX_ADDRESS_SIZE];
+    char destination_ip[DTNMOS_MAX_ADDRESS_SIZE]; // of a sender
+    char multicast_ip[DTNMOS_MAX_ADDRESS_SIZE];   // of a receiver
+    char interface_ip[DTNMOS_MAX_ADDRESS_SIZE];   // of a receiver
+    int source_port;                              // of a sender
     int destination_port;
     int rtp_enabled;
 } leg;
@@ -103,7 +103,7 @@ DtNmosResult dtnmos_connection_init_sender(node_sender* sender)
              sender->source_ip != NULL && sender->source_ip[0] != '\0' ? sender->source_ip
                                                                        : "auto");
     snprintf(t->destination_ip, sizeof(t->destination_ip), "%s",
-             DtNmosString_Get(&sender->flow.DestinationIp));
+             sender->flow.DestinationIp);
     t->source_port = sender->flow.DestinationPort;
     t->destination_port = sender->flow.DestinationPort;
     t->rtp_enabled = 1;
@@ -483,7 +483,8 @@ static connection* find_connection(DtNmosNode* node, const char* id, int sender,
 // its transport file, with the transport parameters that are set over it. Returns 0 when
 // the transport file describes none.
 //
-static int receiver_flow(DtNmosMedia media, const parameters* staged, DtNmosFlow* flow)
+static int receiver_flow(DtNmosMedia media, const parameters* staged, dtnmos_store* store,
+                         DtNmosFlow* flow)
 {
     DtNmosSdp* sdp = NULL;
     if (DtNmosSdp_Parse(staged->transport_file, strlen(staged->transport_file), &sdp) !=
@@ -497,7 +498,7 @@ static int receiver_flow(DtNmosMedia media, const parameters* staged, DtNmosFlow
         const DtNmosFlow* candidate = DtNmosSdp_Flow(sdp, i);
         if (candidate->Media == media && candidate->Leg == 0)
         {
-            found = DtNmosFlow_Copy(flow, candidate) == DTNMOS_OK;
+            found = dtnmos_flow_copy(flow, store, candidate) == DTNMOS_OK;
         }
     }
     DtNmosSdp_Free(sdp);
@@ -508,11 +509,11 @@ static int receiver_flow(DtNmosMedia media, const parameters* staged, DtNmosFlow
     const leg* t = &staged->transport;
     if (t->multicast_ip[0] != '\0' && strcmp(t->multicast_ip, "auto") != 0)
     {
-        DtNmosString_SetText(&flow->DestinationIp, t->multicast_ip);
+        snprintf(flow->DestinationIp, sizeof(flow->DestinationIp), "%s", t->multicast_ip);
     }
     if (t->source_ip[0] != '\0' && strcmp(t->source_ip, "auto") != 0)
     {
-        DtNmosString_SetText(&flow->SourceIp, t->source_ip);
+        snprintf(flow->SourceIp, sizeof(flow->SourceIp), "%s", t->source_ip);
     }
     if (t->destination_port >= 0)
     {
@@ -531,15 +532,14 @@ typedef struct activation
     DtNmosId resource;
     DtNmosSenderActivation sender;
     DtNmosReceiverActivation receiver;
+    dtnmos_store store; // the strings and arrays of the flow of receiver
 } activation;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- clear_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static void clear_activation(activation* a)
 {
-    DtNmosString_Clear(&a->sender.DestinationIp);
-    DtNmosString_Clear(&a->sender.SourceIp);
-    DtNmosFlow_Clear(&a->receiver.Flow);
+    dtnmos_store_free(&a->store);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- gather_activation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -560,15 +560,10 @@ static const char* gather_activation(const node_sender* s, const node_receiver* 
         a->sender.MasterEnable = enabled;
         const int automatic =
             t->destination_ip[0] == '\0' || strcmp(t->destination_ip, "auto") == 0;
-        if (DtNmosString_SetText(&a->sender.DestinationIp,
-                                 automatic ? DtNmosString_Get(&s->flow.DestinationIp)
-                                           : t->destination_ip) != DTNMOS_OK ||
-            DtNmosString_SetText(&a->sender.SourceIp,
-                                 strcmp(t->source_ip, "auto") == 0 ? "" : t->source_ip) !=
-                DTNMOS_OK)
-        {
-            return "Out of memory.";
-        }
+        snprintf(a->sender.DestinationIp, sizeof(a->sender.DestinationIp), "%s",
+                 automatic ? s->flow.DestinationIp : t->destination_ip);
+        snprintf(a->sender.SourceIp, sizeof(a->sender.SourceIp), "%s",
+                 strcmp(t->source_ip, "auto") == 0 ? "" : t->source_ip);
         a->sender.DestinationPort = t->destination_port >= 0
                                         ? (uint16_t)t->destination_port
                                         : s->flow.DestinationPort;
@@ -582,7 +577,8 @@ static const char* gather_activation(const node_sender* s, const node_receiver* 
              staged->peer_id);
     if (staged->transport_file != NULL)
     {
-        a->receiver.HasFlow = receiver_flow(r->media, staged, &a->receiver.Flow);
+        a->receiver.HasFlow =
+            receiver_flow(r->media, staged, &a->store, &a->receiver.Flow);
         if (!a->receiver.HasFlow)
         {
             return "The transport file describes no flow that the receiver receives.";
@@ -610,14 +606,15 @@ static void make_active(DtNmosNode* node, connection* c, node_sender* s, node_re
         leg* t = &c->active.transport;
         if (t->destination_ip[0] != '\0' && strcmp(t->destination_ip, "auto") != 0)
         {
-            DtNmosString_SetText(&s->flow.DestinationIp, t->destination_ip);
+            snprintf(s->flow.DestinationIp, sizeof(s->flow.DestinationIp), "%s",
+                     t->destination_ip);
         }
         if (t->destination_port >= 0)
         {
             s->flow.DestinationPort = (uint16_t)t->destination_port;
         }
         snprintf(t->destination_ip, sizeof(t->destination_ip), "%s",
-                 DtNmosString_Get(&s->flow.DestinationIp));
+                 s->flow.DestinationIp);
         t->destination_port = s->flow.DestinationPort;
         if (t->source_port < 0)
         {
@@ -746,16 +743,17 @@ static void patch_staged(DtNmosNode* node, const char* id, int sender,
 //
 static void answer_transport_file(const node_sender* s, DtNmosHttpResponse* response)
 {
-    DtNmosString text = {0};
+    dtnmos_buffer text;
+    memset(&text, 0, sizeof(text));
     if (dtnmos_node_write_transport_file(s, &text) != DTNMOS_OK)
     {
+        dtnmos_buffer_free(&text);
         dtnmos_node_answer_error(response, 500, DtNmos_GetLastError());
         return;
     }
     DtNmosHttpResponse_SetStatus(response, 200);
-    DtNmosHttpResponse_SetBody(response, "application/sdp", DtNmosString_Get(&text),
-                               DtNmosString_Length(&text));
-    DtNmosString_Clear(&text);
+    DtNmosHttpResponse_SetBody(response, "application/sdp", text.data, text.length);
+    dtnmos_buffer_free(&text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- answer_ids -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

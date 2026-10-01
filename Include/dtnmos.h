@@ -52,7 +52,8 @@ typedef enum DtNmosResult
     DTNMOS_E_STATE = DTNMOS_E + 7,   // the handle is not in a state that allows the call
     DTNMOS_E_NO_MEMORY = DTNMOS_E + 8,
     DTNMOS_E_INTERNAL = DTNMOS_E + 9,
-    DTNMOS_E_NETWORK = DTNMOS_E + 10 // a socket could not be opened, or could not send
+    DTNMOS_E_NETWORK = DTNMOS_E + 10, // a socket could not be opened, or could not send
+    DTNMOS_E_BUFFER_TOO_SMALL = DTNMOS_E + 11 // a text does not fit the caller's buffer
 } DtNmosResult;
 
 // Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND"; a static string.

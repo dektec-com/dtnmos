@@ -82,6 +82,35 @@ int dtnmos_parse_byte(dtnmos_span span, uint8_t* value);
 // Sets string to span.
 DtNmosResult dtnmos_string_set_span(DtNmosString* string, dtnmos_span span);
 
+// Copies span into the array target of size bytes with its terminating null; returns 0,
+// leaving target empty, when it does not fit.
+int dtnmos_copy_span(char* target, size_t size, dtnmos_span span);
+
+// Copies the length bytes of data and a null into the caller's buffer of *size bytes,
+// and sets *size to length. When they do not fit, or buffer is null, it fails with
+// DTNMOS_E_BUFFER_TOO_SMALL and sets *size to length + 1, the bytes it needs.
+DtNmosResult dtnmos_copy_text(char* buffer, size_t* size, const char* data,
+                              size_t length);
+
+// The owner of the strings and arrays of a flow, or of anything else whose pointers
+// stay valid until the owner is freed: each piece is allocated on its own and freed
+// with the owner. A store set to zero is empty.
+typedef struct dtnmos_store
+{
+    void** pieces;
+    size_t count;
+    size_t capacity;
+} dtnmos_store;
+
+// Returns a copy of the length bytes of data, followed by a null, owned by store; null
+// when the memory ran out.
+char* dtnmos_store_text(dtnmos_store* store, const char* data, size_t length);
+// Returns a copy of the size bytes of data, owned by store; null when the memory ran
+// out or size is 0.
+void* dtnmos_store_copy(dtnmos_store* store, const void* data, size_t size);
+// Frees what store owns and leaves it empty.
+void dtnmos_store_free(dtnmos_store* store);
+
 // SHA-1 (RFC 3174), for name-based UUIDs only.
 typedef struct dtnmos_sha1
 {

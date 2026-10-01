@@ -62,7 +62,7 @@ int print_flows(const char* text)
   {
     const DtNmosFlow* flow = DtNmosSdp_Flow(sdp, i);
     printf("%s to %s:%u", DtNmosMedia_Name(flow->Media),
-           DtNmosString_Get(&flow->DestinationIp), (unsigned)flow->DestinationPort);
+           flow->DestinationIp, (unsigned)flow->DestinationPort);
     if (flow->Media == DTNMOS_MEDIA_VIDEO)
     {
       printf(", %ux%u at %u/%u", (unsigned)flow->Format.Video.Width,
@@ -81,27 +81,25 @@ Writing one takes the session and flows the caller fills:
 ```c
 DtNmosSession session = {0};
 session.Size = sizeof(session);
-DtNmosString_SetText(&session.OriginIp, "192.168.1.10");
+snprintf(session.OriginIp, sizeof(session.OriginIp), "%s", "192.168.1.10");
 DtNmosFlow flow = {0};
 flow.Size = sizeof(flow);
 flow.Media = DTNMOS_MEDIA_AUDIO;
-DtNmosString_SetText(&flow.DestinationIp, "239.0.0.2");
+snprintf(flow.DestinationIp, sizeof(flow.DestinationIp), "%s", "239.0.0.2");
 flow.DestinationPort = 5004;
 flow.PayloadType = 97;
 flow.ClockRate = 48000;
-DtNmosString_SetText(&flow.Format.Audio.Encoding, "L24");
+snprintf(flow.Format.Audio.Encoding, sizeof(flow.Format.Audio.Encoding), "%s", "L24");
 flow.Format.Audio.SampleRate = 48000;
 flow.Format.Audio.Channels = 2;
 flow.Format.Audio.PacketTimeNs = 1000000;
 
-DtNmosString text = {0};
-if (DtNmosSdp_Write(&session, &flow, 1, &text) == DTNMOS_OK)
+char text[4096];
+size_t size = sizeof(text);
+if (DtNmosSdp_Write(&session, &flow, 1, text, &size) == DTNMOS_OK)
 {
-  puts(DtNmosString_Get(&text));
+  puts(text);
 }
-DtNmosString_Clear(&text);
-DtNmosFlow_Clear(&flow);
-DtNmosSession_Clear(&session);
 ```
 
 The parser reports what a description says and judges no format: a receiver decides

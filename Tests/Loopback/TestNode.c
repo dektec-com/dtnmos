@@ -109,7 +109,7 @@ static DtNmosNode* make_node(fake_registration* registry, const char* host, uint
     DtNmosFlow flow = {0};
     flow.Size = sizeof(flow);
     flow.Media = DTNMOS_MEDIA_VIDEO;
-    DtNmosString_SetText(&flow.DestinationIp, "239.0.0.1");
+    snprintf(flow.DestinationIp, sizeof(flow.DestinationIp), "%s", "239.0.0.1");
     flow.DestinationPort = 5004;
     flow.PayloadType = 96;
     flow.ClockRate = 90000;
@@ -119,11 +119,11 @@ static DtNmosNode* make_node(fake_registration* registry, const char* host, uint
     flow.Format.Video.RateDenominator = 1;
     flow.Format.Video.Interlaced = 1;
     flow.Format.Video.Depth = 10;
-    DtNmosString_SetText(&flow.Format.Video.Sampling, "YCbCr-4:2:2");
+    snprintf(flow.Format.Video.Sampling, sizeof(flow.Format.Video.Sampling), "%s",
+             "YCbCr-4:2:2");
     DtNmosSenderConfig sender = {sizeof(sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
                                  &flow,          "192.168.1.5"};
     CHECK(DtNmosNode_AddSender(node, &sender, NULL, NULL) == DTNMOS_OK);
-    DtNmosFlow_Clear(&flow);
     DtNmosReceiverConfig receiver = {
         sizeof(receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
     CHECK(DtNmosNode_AddReceiver(node, &receiver, NULL, NULL) == DTNMOS_OK);
@@ -378,7 +378,7 @@ void node_answers_its_node_api_and_transport_files(void)
     REQUIRE(DtNmosSdp_Parse(body, length, &sdp) == DTNMOS_OK);
     CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->Format.Video.Height, 1080);
     CHECK(DtNmosSdp_Flow(sdp, 0)->Format.Video.Interlaced);
-    CHECK_STR(DtNmosString_Get(&DtNmosSdp_Session(sdp)->OriginIp), "192.168.1.5");
+    CHECK_STR(DtNmosSdp_Session(sdp)->OriginIp, "192.168.1.5");
     DtNmosSdp_Free(sdp);
     DtNmosHttpResponse_Free(response);
 

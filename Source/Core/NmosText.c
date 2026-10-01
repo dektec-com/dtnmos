@@ -295,3 +295,114 @@ int dtnmos_parse_byte(dtnmos_span span, uint8_t* value)
     *value = (uint8_t)result;
     return 1;
 }
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_copy_span -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+int dtnmos_copy_span(char* target, size_t size, dtnmos_span span)
+{
+    if (size == 0)
+    {
+        return 0;
+    }
+    if (span.length >= size)
+    {
+        target[0] = '\0';
+        return 0;
+    }
+    if (span.length > 0)
+    {
+        memcpy(target, span.data, span.length);
+    }
+    target[span.length] = '\0';
+    return 1;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- store_piece -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Allocates size bytes that store owns; null when the memory ran out.
+//
+static void* store_piece(dtnmos_store* store, size_t size)
+{
+    if (store->count == store->capacity)
+    {
+        const size_t capacity = store->capacity == 0 ? 8 : store->capacity * 2;
+        void** pieces = realloc(store->pieces, capacity * sizeof(*pieces));
+        if (pieces == NULL)
+        {
+            return NULL;
+        }
+        store->pieces = pieces;
+        store->capacity = capacity;
+    }
+    void* piece = malloc(size);
+    if (piece != NULL)
+    {
+        store->pieces[store->count++] = piece;
+    }
+    return piece;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+char* dtnmos_store_text(dtnmos_store* store, const char* data, size_t length)
+{
+    char* text = store_piece(store, length + 1);
+    if (text != NULL)
+    {
+        if (length > 0)
+        {
+            memcpy(text, data, length);
+        }
+        text[length] = '\0';
+    }
+    return text;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void* dtnmos_store_copy(dtnmos_store* store, const void* data, size_t size)
+{
+    if (size == 0)
+    {
+        return NULL;
+    }
+    void* copy = store_piece(store, size);
+    if (copy != NULL)
+    {
+        memcpy(copy, data, size);
+    }
+    return copy;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_store_free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void dtnmos_store_free(dtnmos_store* store)
+{
+    for (size_t i = 0; i < store->count; ++i)
+    {
+        free(store->pieces[i]);
+    }
+    free(store->pieces);
+    memset(store, 0, sizeof(*store));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_copy_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+DtNmosResult dtnmos_copy_text(char* buffer, size_t* size, const char* data, size_t length)
+{
+    if (buffer == NULL || *size < length + 1)
+    {
+        const size_t had = *size;
+        *size = length + 1;
+        return dtnmos_fail(DTNMOS_E_BUFFER_TOO_SMALL,
+                           "The text needs %zu bytes, and the buffer has %zu.",
+                           length + 1, buffer == NULL ? (size_t)0 : had);
+    }
+    if (length > 0)
+    {
+        memcpy(buffer, data, length);
+    }
+    buffer[length] = '\0';
+    *size = length;
+    return DTNMOS_OK;
+}

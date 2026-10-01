@@ -24,7 +24,9 @@
     DTNMOS_TEST(sdp_writes_what_it_reads_back)                                           \
     DTNMOS_TEST(sdp_writes_an_audio_sender)                                              \
     DTNMOS_TEST(sdp_refuses_to_write_an_incomplete_flow)                                 \
-    DTNMOS_TEST(flow_copy_owns_its_strings)                                              \
+    DTNMOS_TEST(flow_is_copied_with_assignment)                                          \
+    DTNMOS_TEST(sdp_reads_the_forms_of_ts_refclk)                                        \
+    DTNMOS_TEST(sdp_refuses_a_value_longer_than_its_field)                               \
     DTNMOS_TEST(json_reads_values_and_escapes)                                           \
     DTNMOS_TEST(json_refuses_what_is_malformed)                                          \
     DTNMOS_TEST(json_writes_escaped_strings)                                             \

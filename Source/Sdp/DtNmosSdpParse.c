@@ -9,14 +9,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "NmosInternal.h"
-#include "dtnmos_sdp.h"
+#include "NmosFlow.h"
 
 struct DtNmosSdp
 {
     DtNmosSession session;
     DtNmosFlow* flows;
     size_t count;
+    dtnmos_store store; // the strings and arrays of the session and the flows
 };
 
 // The attributes that the session level and a media section both may carry.
@@ -54,6 +54,7 @@ typedef struct parser
     size_t position;
     size_t line; // number of the current line, from 1
     DtNmosSession* session;
+    dtnmos_store* store; // of the DtNmosSdp being read
     shared_lines session_lines;
     dtnmos_span group_second[16]; // the second mid of each a=group:DUP
     size_t group_count;
@@ -162,9 +163,9 @@ static DtNmosResult read_origin(parser* p, dtnmos_span value)
         return fail_line(p, "o= needs a user, a session ID, a version and an address",
                          value);
     }
-    if (dtnmos_string_set_span(&p->session->OriginIp, address) != DTNMOS_OK)
+    if (!dtnmos_copy_span(p->session->OriginIp, sizeof(p->session->OriginIp), address))
     {
-        return dtnmos_fail_memory();
+        return fail_line(p, "o= has an address longer than a domain name may be", value);
     }
     return DTNMOS_OK;
 }
@@ -403,7 +404,8 @@ static DtNmosResult read_lines(parser* p)
             result = read_origin(p, value);
             break;
         case 's':
-            if (dtnmos_string_set_span(&p->session->Name, value) != DTNMOS_OK)
+            p->session->Name = dtnmos_store_text(p->store, value.data, value.length);
+            if (p->session->Name == NULL)
             {
                 result = dtnmos_fail_memory();
             }
@@ -518,13 +520,28 @@ typedef struct raster
     int* interlaced;
     int* segmented;
     uint32_t* depth;
-    DtNmosString* sampling;
-    DtNmosString* colorimetry;
-    DtNmosString* tcs;
-    DtNmosString* range;
-    DtNmosString* ssn;
-    DtNmosString* transmitter_type;
+    char* sampling;         // of DTNMOS_MAX_VALUE_SIZE
+    char* colorimetry;      // of DTNMOS_MAX_VALUE_SIZE
+    char* tcs;              // of DTNMOS_MAX_VALUE_SIZE
+    char* range;            // of DTNMOS_MAX_VALUE_SIZE
+    char* ssn;              // of DTNMOS_MAX_VALUE_SIZE
+    char* transmitter_type; // of DTNMOS_MAX_SHORT_SIZE
 } raster;
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- copy_value -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Copies the value of the parameter name of a=fmtp into the array target of size bytes;
+// fails when it does not fit.
+//
+static DtNmosResult copy_value(size_t line, dtnmos_span name, dtnmos_span value,
+                               char* target, size_t size)
+{
+    if (!dtnmos_copy_span(target, size, value))
+    {
+        return fail_at(line, "a=fmtp has a value longer than its standard allows", name);
+    }
+    return DTNMOS_OK;
+}
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_raster -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
@@ -535,7 +552,8 @@ static DtNmosResult read_raster(size_t line, const raster* r, dtnmos_span name,
 {
     *handled = 1;
     int valid = 1;
-    DtNmosString* text = NULL;
+    char* text = NULL;
+    size_t size = DTNMOS_MAX_VALUE_SIZE;
     if (dtnmos_span_equals(name, "width", 1))
     {
         valid = dtnmos_parse_u32(value, 65535, r->width);
@@ -583,6 +601,7 @@ static DtNmosResult read_raster(size_t line, const raster* r, dtnmos_span name,
     else if (dtnmos_span_equals(name, "TP", 1))
     {
         text = r->transmitter_type;
+        size = DTNMOS_MAX_SHORT_SIZE;
     }
     else
     {
@@ -593,24 +612,20 @@ static DtNmosResult read_raster(size_t line, const raster* r, dtnmos_span name,
         return fail_at(line, "a=fmtp has a parameter whose value is no number or rate",
                        name);
     }
-    if (text != NULL && dtnmos_string_set_span(text, value) != DTNMOS_OK)
-    {
-        return dtnmos_fail_memory();
-    }
-    return DTNMOS_OK;
+    return text == NULL ? DTNMOS_OK : copy_value(line, name, value, text, size);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_video -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 static DtNmosResult build_video(const section* s, DtNmosVideoFormat* video)
 {
-    const raster r = {&video->Width,          &video->Height,
-                      &video->RateNumerator,  &video->RateDenominator,
-                      &video->Interlaced,     &video->Segmented,
-                      &video->Depth,          &video->Sampling,
-                      &video->Colorimetry,    &video->Tcs,
-                      &video->Range,          &video->Ssn,
-                      &video->TransmitterType};
+    const raster r = {&video->Width,         &video->Height,
+                      &video->RateNumerator, &video->RateDenominator,
+                      &video->Interlaced,    &video->Segmented,
+                      &video->Depth,         video->Sampling,
+                      video->Colorimetry,    video->Tcs,
+                      video->Range,          video->Ssn,
+                      video->TransmitterType};
     fmtp_reader reader = {s->fmtp};
     dtnmos_span name;
     dtnmos_span value;
@@ -618,14 +633,14 @@ static DtNmosResult build_video(const section* s, DtNmosVideoFormat* video)
     {
         int handled = 0;
         DtNmosResult result = read_raster(s->fmtp_line, &r, name, value, &handled);
+        if (result == DTNMOS_OK && !handled && dtnmos_span_equals(name, "PM", 1))
+        {
+            result = copy_value(s->fmtp_line, name, value, video->PackingMode,
+                                sizeof(video->PackingMode));
+        }
         if (result != DTNMOS_OK)
         {
             return result;
-        }
-        if (!handled && dtnmos_span_equals(name, "PM", 1) &&
-            dtnmos_string_set_span(&video->PackingMode, value) != DTNMOS_OK)
-        {
-            return dtnmos_fail_memory();
         }
     }
     return DTNMOS_OK;
@@ -635,19 +650,20 @@ static DtNmosResult build_video(const section* s, DtNmosVideoFormat* video)
 //
 static DtNmosResult build_compressed(const section* s, DtNmosCompressedVideoFormat* video)
 {
-    if (dtnmos_string_set_span(&video->Encoding, s->encoding) != DTNMOS_OK)
+    if (!dtnmos_copy_span(video->Encoding, sizeof(video->Encoding), s->encoding))
     {
-        return dtnmos_fail_memory();
+        return fail_at(s->line, "a=rtpmap has an encoding longer than RFC 6838 allows",
+                       s->encoding);
     }
     video->TransmissionMode = 1;
     video->BandwidthKbps = s->bandwidth_kbps;
-    const raster r = {&video->Width,          &video->Height,
-                      &video->RateNumerator,  &video->RateDenominator,
-                      &video->Interlaced,     &video->Segmented,
-                      &video->Depth,          &video->Sampling,
-                      &video->Colorimetry,    &video->Tcs,
-                      &video->Range,          &video->Ssn,
-                      &video->TransmitterType};
+    const raster r = {&video->Width,         &video->Height,
+                      &video->RateNumerator, &video->RateDenominator,
+                      &video->Interlaced,    &video->Segmented,
+                      &video->Depth,         video->Sampling,
+                      video->Colorimetry,    video->Tcs,
+                      video->Range,          video->Ssn,
+                      video->TransmitterType};
     fmtp_reader reader = {s->fmtp};
     dtnmos_span name;
     dtnmos_span value;
@@ -663,19 +679,19 @@ static DtNmosResult build_compressed(const section* s, DtNmosCompressedVideoForm
         {
             continue;
         }
-        DtNmosString* text = NULL;
+        char* text = NULL;
         uint32_t* number = NULL;
         if (dtnmos_span_equals(name, "profile", 1))
         {
-            text = &video->Profile;
+            text = video->Profile;
         }
         else if (dtnmos_span_equals(name, "level", 1))
         {
-            text = &video->Level;
+            text = video->Level;
         }
         else if (dtnmos_span_equals(name, "sublevel", 1))
         {
-            text = &video->Sublevel;
+            text = video->Sublevel;
         }
         else if (dtnmos_span_equals(name, "packetmode", 1))
         {
@@ -685,9 +701,13 @@ static DtNmosResult build_compressed(const section* s, DtNmosCompressedVideoForm
         {
             number = &video->TransmissionMode;
         }
-        if (text != NULL && dtnmos_string_set_span(text, value) != DTNMOS_OK)
+        if (text != NULL)
         {
-            return dtnmos_fail_memory();
+            result = copy_value(s->fmtp_line, name, value, text, DTNMOS_MAX_VALUE_SIZE);
+            if (result != DTNMOS_OK)
+            {
+                return result;
+            }
         }
         if (number != NULL && !dtnmos_parse_u32(value, 255, number))
         {
@@ -700,11 +720,13 @@ static DtNmosResult build_compressed(const section* s, DtNmosCompressedVideoForm
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_audio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult build_audio(const section* s, DtNmosAudioFormat* audio)
+static DtNmosResult build_audio(const section* s, dtnmos_store* store,
+                                DtNmosAudioFormat* audio)
 {
-    if (dtnmos_string_set_span(&audio->Encoding, s->encoding) != DTNMOS_OK)
+    if (!dtnmos_copy_span(audio->Encoding, sizeof(audio->Encoding), s->encoding))
     {
-        return dtnmos_fail_memory();
+        return fail_at(s->line, "a=rtpmap has an audio encoding longer than L24",
+                       s->encoding);
     }
     audio->SampleRate = s->clock_rate;
     // RFC 4566 leaves one channel when a=rtpmap names none.
@@ -719,10 +741,13 @@ static DtNmosResult build_audio(const section* s, DtNmosAudioFormat* audio)
     dtnmos_span value;
     while (next_parameter(&reader, &name, &value))
     {
-        if (dtnmos_span_equals(name, "channel-order", 1) &&
-            dtnmos_string_set_span(&audio->ChannelOrder, value) != DTNMOS_OK)
+        if (dtnmos_span_equals(name, "channel-order", 1))
         {
-            return dtnmos_fail_memory();
+            audio->ChannelOrder = dtnmos_store_text(store, value.data, value.length);
+            if (audio->ChannelOrder == NULL)
+            {
+                return dtnmos_fail_memory();
+            }
         }
     }
     return DTNMOS_OK;
@@ -747,7 +772,7 @@ static int read_did_sdid(dtnmos_span value, DtNmosDidSdid* pair)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_anc -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult build_anc(const section* s, DtNmosFlow* flow)
+static DtNmosResult build_anc(const section* s, dtnmos_store* store, DtNmosFlow* flow)
 {
     DtNmosAncFormat* anc = &flow->Format.Anc;
     DtNmosDidSdid pairs[64];
@@ -758,7 +783,8 @@ static DtNmosResult build_anc(const section* s, DtNmosFlow* flow)
     while (next_parameter(&reader, &name, &value))
     {
         int valid = 1;
-        DtNmosString* text = NULL;
+        char* text = NULL;
+        size_t size = 0;
         if (dtnmos_span_equals(name, "DID_SDID", 1))
         {
             if (count == sizeof(pairs) / sizeof(pairs[0]))
@@ -777,25 +803,36 @@ static DtNmosResult build_anc(const section* s, DtNmosFlow* flow)
         }
         else if (dtnmos_span_equals(name, "TM", 1))
         {
-            text = &anc->TransmissionModel;
+            text = anc->TransmissionModel;
+            size = sizeof(anc->TransmissionModel);
         }
         else if (dtnmos_span_equals(name, "SSN", 1))
         {
-            text = &anc->Ssn;
+            text = anc->Ssn;
+            size = sizeof(anc->Ssn);
         }
         if (!valid)
         {
             return fail_at(s->fmtp_line,
                            "a=fmtp has a parameter whose value is not valid", value);
         }
-        if (text != NULL && dtnmos_string_set_span(text, value) != DTNMOS_OK)
+        if (text != NULL)
+        {
+            const DtNmosResult result = copy_value(s->fmtp_line, name, value, text, size);
+            if (result != DTNMOS_OK)
+            {
+                return result;
+            }
+        }
+    }
+    if (count > 0)
+    {
+        anc->DidSdid = dtnmos_store_copy(store, pairs, count * sizeof(pairs[0]));
+        if (anc->DidSdid == NULL)
         {
             return dtnmos_fail_memory();
         }
-    }
-    if (DtNmosFlow_SetDidSdid(flow, pairs, count) != DTNMOS_OK)
-    {
-        return dtnmos_fail_memory();
+        anc->DidSdidCount = count;
     }
     return DTNMOS_OK;
 }
@@ -844,6 +881,94 @@ static DtNmosResult read_media_clock(const section* s, dtnmos_span mediaclk,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ptp_domain -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Reads the domain after the grandmaster of ptp=, ":127" as ST 2110-10 §8.2 writes it or
+// ":domain-nmbr=127" as RFC 7273 §4.8 does, into *domain; returns 0 for anything else,
+// such as a domain-name, which the clock then keeps as text.
+//
+static int read_ptp_domain(dtnmos_span text, int* domain)
+{
+    if (dtnmos_span_starts_with(text, "domain-nmbr="))
+    {
+        text.data += 12;
+        text.length -= 12;
+    }
+    uint32_t number = 0;
+    if (!dtnmos_parse_u32(text, 127, &number))
+    {
+        return 0;
+    }
+    *domain = (int)number;
+    return 1;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ptp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Reads the value of ptp=, <version>:<grandmaster>[:<domain>] or <version>:traceable,
+// into clock; returns 0 when it is neither.
+//
+static int read_ptp(dtnmos_span text, DtNmosRefClock* clock)
+{
+    dtnmos_span version;
+    const dtnmos_span rest = dtnmos_span_split(text, ':', &version);
+    dtnmos_span grandmaster;
+    const dtnmos_span domain = dtnmos_span_split(rest, ':', &grandmaster);
+    if (rest.data == NULL || version.length == 0 || grandmaster.length == 0 ||
+        !dtnmos_copy_span(clock->PtpVersion, sizeof(clock->PtpVersion), version))
+    {
+        return 0;
+    }
+    if (dtnmos_span_equals(grandmaster, "traceable", 0))
+    {
+        clock->Traceable = 1;
+        return domain.data == NULL;
+    }
+    return dtnmos_copy_span(clock->Grandmaster, sizeof(clock->Grandmaster),
+                            grandmaster) &&
+           (domain.data == NULL || read_ptp_domain(domain, &clock->Domain));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- read_ref_clock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Reads the value of a=ts-refclk into clock: a PTP clock or the MAC of ST 2110-10 §8.2
+// into its fields, any other kind as its text, owned by store.
+//
+static DtNmosResult read_ref_clock(dtnmos_span text, dtnmos_store* store,
+                                   DtNmosRefClock* clock)
+{
+    memset(clock, 0, sizeof(*clock));
+    clock->Domain = -1;
+    if (text.length == 0)
+    {
+        return DTNMOS_OK;
+    }
+    if (dtnmos_span_starts_with(text, "ptp="))
+    {
+        const dtnmos_span value = {text.data + 4, text.length - 4};
+        if (read_ptp(value, clock))
+        {
+            clock->Kind = DTNMOS_REFCLOCK_PTP;
+            return DTNMOS_OK;
+        }
+    }
+    else if (dtnmos_span_starts_with(text, "localmac="))
+    {
+        const dtnmos_span mac = {text.data + 9, text.length - 9};
+        if (mac.length > 0 &&
+            dtnmos_copy_span(clock->LocalMac, sizeof(clock->LocalMac), mac))
+        {
+            clock->Kind = DTNMOS_REFCLOCK_LOCALMAC;
+            return DTNMOS_OK;
+        }
+    }
+    memset(clock, 0, sizeof(*clock));
+    clock->Domain = -1;
+    clock->Kind = DTNMOS_REFCLOCK_OTHER;
+    clock->Text = dtnmos_store_text(store, text.data, text.length);
+    return clock->Text == NULL ? dtnmos_fail_memory() : DTNMOS_OK;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- build_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult build_flow(parser* p, const section* s, DtNmosFlow* flow)
@@ -869,13 +994,17 @@ static DtNmosResult build_flow(parser* p, const section* s, DtNmosFlow* flow)
         own->ts_refclk.length > 0 ? own->ts_refclk : session->ts_refclk;
     const dtnmos_span mediaclk =
         own->mediaclk.length > 0 ? own->mediaclk : session->mediaclk;
-    if (dtnmos_string_set_span(&flow->DestinationIp, connection) != DTNMOS_OK ||
-        dtnmos_string_set_span(&flow->SourceIp, source) != DTNMOS_OK ||
-        dtnmos_string_set_span(&flow->TsRefclk, refclk) != DTNMOS_OK)
+    if (!dtnmos_copy_span(flow->DestinationIp, sizeof(flow->DestinationIp), connection) ||
+        !dtnmos_copy_span(flow->SourceIp, sizeof(flow->SourceIp), source))
     {
-        return dtnmos_fail_memory();
+        return fail_at(s->line, "an address is longer than a domain name may be",
+                       connection);
     }
-    DtNmosResult result = read_media_clock(s, mediaclk, flow);
+    DtNmosResult result = read_ref_clock(refclk, p->store, &flow->RefClock);
+    if (result == DTNMOS_OK)
+    {
+        result = read_media_clock(s, mediaclk, flow);
+    }
     if (result != DTNMOS_OK)
     {
         return result;
@@ -885,20 +1014,31 @@ static DtNmosResult build_flow(parser* p, const section* s, DtNmosFlow* flow)
     case DTNMOS_MEDIA_VIDEO:
         return build_video(s, &flow->Format.Video);
     case DTNMOS_MEDIA_AUDIO:
-        return build_audio(s, &flow->Format.Audio);
+        return build_audio(s, p->store, &flow->Format.Audio);
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
         return build_compressed(s, &flow->Format.CompressedVideo);
     case DTNMOS_MEDIA_ANC:
-        return build_anc(s, flow);
+        return build_anc(s, p->store, flow);
     case DTNMOS_MEDIA_OTHER:
-        if (dtnmos_string_set_span(&flow->Format.Other.Encoding, s->encoding) !=
-                DTNMOS_OK ||
-            dtnmos_string_set_span(&flow->Format.Other.Fmtp, dtnmos_span_trim(s->fmtp)) !=
-                DTNMOS_OK)
+    {
+        DtNmosOtherFormat* other = &flow->Format.Other;
+        const dtnmos_span fmtp = dtnmos_span_trim(s->fmtp);
+        if (!dtnmos_copy_span(other->Encoding, sizeof(other->Encoding), s->encoding))
         {
-            return dtnmos_fail_memory();
+            return fail_at(s->line,
+                           "a=rtpmap has an encoding longer than RFC 6838 allows",
+                           s->encoding);
+        }
+        if (fmtp.length > 0)
+        {
+            other->Fmtp = dtnmos_store_text(p->store, fmtp.data, fmtp.length);
+            if (other->Fmtp == NULL)
+            {
+                return dtnmos_fail_memory();
+            }
         }
         return DTNMOS_OK;
+    }
     }
     return DTNMOS_OK;
 }
@@ -924,6 +1064,7 @@ DtNmosResult DtNmosSdp_Parse(const char* text, size_t length, DtNmosSdp** sdp)
     p.text = text;
     p.length = length;
     p.session = &result->session;
+    p.store = &result->store;
     DtNmosResult status = read_lines(&p);
     if (status == DTNMOS_OK && p.count == 0)
     {
@@ -981,11 +1122,7 @@ void DtNmosSdp_Free(DtNmosSdp* sdp)
     {
         return;
     }
-    for (size_t i = 0; i < sdp->count; ++i)
-    {
-        DtNmosFlow_Clear(&sdp->flows[i]);
-    }
     free(sdp->flows);
-    DtNmosSession_Clear(&sdp->session);
+    dtnmos_store_free(&sdp->store);
     free(sdp);
 }

@@ -102,8 +102,8 @@ void sdp_reads_video_on_two_paths(void)
     DtNmosSdp* sdp = parse(video_sdp);
     REQUIRE(sdp != NULL);
     const DtNmosSession* session = DtNmosSdp_Session(sdp);
-    CHECK_STR(DtNmosString_Get(&session->Name), "Example of a SMPTE ST2110-20 signal");
-    CHECK_STR(DtNmosString_Get(&session->OriginIp), "192.168.100.2");
+    CHECK_STR(session->Name, "Example of a SMPTE ST2110-20 signal");
+    CHECK_STR(session->OriginIp, "192.168.100.2");
     CHECK_EQ(session->SessionId, 123456);
     CHECK_EQ(session->SessionVersion, 11);
     REQUIRE(DtNmosSdp_FlowCount(sdp) == 2);
@@ -111,13 +111,17 @@ void sdp_reads_video_on_two_paths(void)
 
     const DtNmosFlow* primary = DtNmosSdp_Flow(sdp, 0);
     CHECK_EQ(primary->Media, DTNMOS_MEDIA_VIDEO);
-    CHECK_STR(DtNmosString_Get(&primary->DestinationIp), "239.100.9.10");
+    CHECK_STR(primary->DestinationIp, "239.100.9.10");
     CHECK_EQ(primary->DestinationPort, 50000);
-    CHECK_STR(DtNmosString_Get(&primary->SourceIp), "192.168.100.2");
+    CHECK_STR(primary->SourceIp, "192.168.100.2");
     CHECK_EQ(primary->PayloadType, 112);
     CHECK_EQ(primary->ClockRate, 90000);
-    CHECK_STR(DtNmosString_Get(&primary->TsRefclk),
-              "ptp=IEEE1588-2008:39-A7-94-FF-FE-07-CB-D0:37");
+    // The domain as ST 2110-10 §8.2 writes it, after the grandmaster.
+    CHECK_EQ(primary->RefClock.Kind, DTNMOS_REFCLOCK_PTP);
+    CHECK_STR(primary->RefClock.PtpVersion, "IEEE1588-2008");
+    CHECK_STR(primary->RefClock.Grandmaster, "39-A7-94-FF-FE-07-CB-D0");
+    CHECK_EQ(primary->RefClock.Domain, 37);
+    CHECK(!primary->RefClock.Traceable);
     CHECK(primary->MediaClockDirect);
     CHECK_EQ(primary->MediaClockOffset, 0);
     CHECK_EQ(primary->Leg, 0);
@@ -128,16 +132,16 @@ void sdp_reads_video_on_two_paths(void)
     CHECK_EQ(video->RateDenominator, 1001);
     CHECK_EQ(video->Depth, 10);
     CHECK(!video->Interlaced);
-    CHECK_STR(DtNmosString_Get(&video->Sampling), "YCbCr-4:2:2");
-    CHECK_STR(DtNmosString_Get(&video->Colorimetry), "BT709");
-    CHECK_STR(DtNmosString_Get(&video->Tcs), "SDR");
-    CHECK_STR(DtNmosString_Get(&video->PackingMode), "2110GPM");
-    CHECK_STR(DtNmosString_Get(&video->Ssn), "ST2110-20:2017");
-    CHECK_STR(DtNmosString_Get(&video->TransmitterType), "2110TPN");
+    CHECK_STR(video->Sampling, "YCbCr-4:2:2");
+    CHECK_STR(video->Colorimetry, "BT709");
+    CHECK_STR(video->Tcs, "SDR");
+    CHECK_STR(video->PackingMode, "2110GPM");
+    CHECK_STR(video->Ssn, "ST2110-20:2017");
+    CHECK_STR(video->TransmitterType, "2110TPN");
 
     const DtNmosFlow* secondary = DtNmosSdp_Flow(sdp, 1);
     CHECK_EQ(secondary->Leg, 1);
-    CHECK_STR(DtNmosString_Get(&secondary->DestinationIp), "239.101.9.10");
+    CHECK_STR(secondary->DestinationIp, "239.101.9.10");
     CHECK_EQ(secondary->Format.Video.Height, 1080);
     CHECK_EQ(secondary->Format.Video.RateNumerator, 25);
     CHECK_EQ(secondary->Format.Video.RateDenominator, 1);
@@ -154,14 +158,14 @@ void sdp_reads_audio(void)
     REQUIRE(DtNmosSdp_FlowCount(sdp) == 1);
     const DtNmosFlow* flow = DtNmosSdp_Flow(sdp, 0);
     CHECK_EQ(flow->Media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(DtNmosString_Get(&flow->SourceIp), "");
+    CHECK_STR(flow->SourceIp, "");
     CHECK_EQ(flow->MediaClockOffset, 1234);
     const DtNmosAudioFormat* audio = &flow->Format.Audio;
-    CHECK_STR(DtNmosString_Get(&audio->Encoding), "L24");
+    CHECK_STR(audio->Encoding, "L24");
     CHECK_EQ(audio->SampleRate, 48000);
     CHECK_EQ(audio->Channels, 8);
     CHECK_EQ(audio->PacketTimeNs, 125000);
-    CHECK_STR(DtNmosString_Get(&audio->ChannelOrder), "SMPTE2110.(SGRP,SGRP)");
+    CHECK_STR(audio->ChannelOrder, "SMPTE2110.(SGRP,SGRP)");
     DtNmosSdp_Free(sdp);
 }
 
@@ -175,17 +179,17 @@ void sdp_reads_compressed_video(void)
     REQUIRE(flow != NULL);
     CHECK_EQ(flow->Media, DTNMOS_MEDIA_COMPRESSED_VIDEO);
     const DtNmosCompressedVideoFormat* video = &flow->Format.CompressedVideo;
-    CHECK_STR(DtNmosString_Get(&video->Encoding), "jxsv");
-    CHECK_STR(DtNmosString_Get(&video->Profile), "High444.12");
-    CHECK_STR(DtNmosString_Get(&video->Level), "2k-1");
-    CHECK_STR(DtNmosString_Get(&video->Sublevel), "Sublev3bpp");
+    CHECK_STR(video->Encoding, "jxsv");
+    CHECK_STR(video->Profile, "High444.12");
+    CHECK_STR(video->Level, "2k-1");
+    CHECK_STR(video->Sublevel, "Sublev3bpp");
     CHECK_EQ(video->PacketMode, 0);
     CHECK_EQ(video->TransmissionMode, 1);
     CHECK_EQ(video->BandwidthKbps, 116000);
     CHECK_EQ(video->Width, 1920);
     CHECK_EQ(video->RateDenominator, 1001);
-    CHECK_STR(DtNmosString_Get(&video->Range), "FULL");
-    CHECK_STR(DtNmosString_Get(&video->TransmitterType), "2110TPNL");
+    CHECK_STR(video->Range, "FULL");
+    CHECK_STR(video->TransmitterType, "2110TPNL");
     DtNmosSdp_Free(sdp);
 }
 
@@ -206,8 +210,8 @@ void sdp_reads_ancillary_data(void)
     CHECK_EQ(anc->DidSdid[1].Sdid, 0x05);
     CHECK_EQ(anc->VpidCode, 133);
     CHECK_EQ(anc->RateNumerator, 30000);
-    CHECK_STR(DtNmosString_Get(&anc->TransmissionModel), "CTM");
-    CHECK_STR(DtNmosString_Get(&anc->Ssn), "ST2110-40:2023");
+    CHECK_STR(anc->TransmissionModel, "CTM");
+    CHECK_STR(anc->Ssn, "ST2110-40:2023");
     DtNmosSdp_Free(sdp);
 }
 
@@ -223,9 +227,8 @@ void sdp_reads_other_media_as_they_are(void)
     const DtNmosFlow* flow = DtNmosSdp_Flow(sdp, 0);
     REQUIRE(flow != NULL);
     CHECK_EQ(flow->Media, DTNMOS_MEDIA_OTHER);
-    CHECK_STR(DtNmosString_Get(&flow->Format.Other.Encoding), "H264");
-    CHECK_STR(DtNmosString_Get(&flow->Format.Other.Fmtp),
-              "packetization-mode=1; profile-level-id=42e01f");
+    CHECK_STR(flow->Format.Other.Encoding, "H264");
+    CHECK_STR(flow->Format.Other.Fmtp, "packetization-mode=1; profile-level-id=42e01f");
     DtNmosSdp_Free(sdp);
 }
 
@@ -244,13 +247,14 @@ void sdp_takes_defaults_of_the_session(void)
     REQUIRE(sdp != NULL);
     const DtNmosFlow* flow = DtNmosSdp_Flow(sdp, 0);
     REQUIRE(flow != NULL);
-    CHECK_STR(DtNmosString_Get(&flow->DestinationIp), "ff15::7");
-    CHECK_STR(DtNmosString_Get(&flow->SourceIp), "fd00::5");
-    CHECK_STR(DtNmosString_Get(&flow->TsRefclk), "localmac=CA-FE-01-02-03-04");
+    CHECK_STR(flow->DestinationIp, "ff15::7");
+    CHECK_STR(flow->SourceIp, "fd00::5");
+    CHECK_EQ(flow->RefClock.Kind, DTNMOS_REFCLOCK_LOCALMAC);
+    CHECK_STR(flow->RefClock.LocalMac, "CA-FE-01-02-03-04");
     CHECK_EQ(flow->MediaClockOffset, 5);
-    CHECK_STR(DtNmosString_Get(&flow->Format.Audio.Encoding), "L16");
+    CHECK_STR(flow->Format.Audio.Encoding, "L16");
     CHECK_EQ(flow->Format.Audio.PacketTimeNs, 1000000);
-    CHECK_STR(DtNmosString_Get(&DtNmosSdp_Session(sdp)->OriginIp), "fd00::5");
+    CHECK_STR(DtNmosSdp_Session(sdp)->OriginIp, "fd00::5");
     DtNmosSdp_Free(sdp);
 }
 
@@ -303,11 +307,23 @@ void sdp_names_the_line_of_an_error(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- same -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Checks that the strings a and b hold the same text.
+// Checks that the texts a and b are the same; a null one counts as empty.
 //
-static int same(const DtNmosString* a, const DtNmosString* b)
+static int same(const char* a, const char* b)
 {
-    return strcmp(DtNmosString_Get(a), DtNmosString_Get(b)) == 0;
+    return strcmp(a == NULL ? "" : a, b == NULL ? "" : b) == 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- same_clock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Whether a and b are the same reference clock.
+//
+static int same_clock(const DtNmosRefClock* a, const DtNmosRefClock* b)
+{
+    return a->Kind == b->Kind && same(a->PtpVersion, b->PtpVersion) &&
+           same(a->Grandmaster, b->Grandmaster) && a->Traceable == b->Traceable &&
+           a->Domain == b->Domain && same(a->LocalMac, b->LocalMac) &&
+           same(a->Text, b->Text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- flows_equal -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -316,10 +332,11 @@ static int same(const DtNmosString* a, const DtNmosString* b)
 //
 static int flows_equal(const DtNmosFlow* a, const DtNmosFlow* b)
 {
-    if (a->Media != b->Media || !same(&a->DestinationIp, &b->DestinationIp) ||
-        a->DestinationPort != b->DestinationPort || !same(&a->SourceIp, &b->SourceIp) ||
+    if (a->Media != b->Media || !same(a->DestinationIp, b->DestinationIp) ||
+        a->DestinationPort != b->DestinationPort || !same(a->SourceIp, b->SourceIp) ||
         a->PayloadType != b->PayloadType || a->ClockRate != b->ClockRate ||
-        !same(&a->TsRefclk, &b->TsRefclk) || a->MediaClockDirect != b->MediaClockDirect ||
+        !same_clock(&a->RefClock, &b->RefClock) ||
+        a->MediaClockDirect != b->MediaClockDirect ||
         a->MediaClockOffset != b->MediaClockOffset || a->Leg != b->Leg)
     {
         return 0;
@@ -334,29 +351,29 @@ static int flows_equal(const DtNmosFlow* a, const DtNmosFlow* b)
                x->RateNumerator == y->RateNumerator &&
                x->RateDenominator == y->RateDenominator &&
                x->Interlaced == y->Interlaced && x->Segmented == y->Segmented &&
-               x->Depth == y->Depth && same(&x->Sampling, &y->Sampling) &&
-               same(&x->Colorimetry, &y->Colorimetry) && same(&x->Tcs, &y->Tcs) &&
-               same(&x->Range, &y->Range) && same(&x->PackingMode, &y->PackingMode) &&
-               same(&x->Ssn, &y->Ssn) && same(&x->TransmitterType, &y->TransmitterType);
+               x->Depth == y->Depth && same(x->Sampling, y->Sampling) &&
+               same(x->Colorimetry, y->Colorimetry) && same(x->Tcs, y->Tcs) &&
+               same(x->Range, y->Range) && same(x->PackingMode, y->PackingMode) &&
+               same(x->Ssn, y->Ssn) && same(x->TransmitterType, y->TransmitterType);
     }
     case DTNMOS_MEDIA_AUDIO:
     {
         const DtNmosAudioFormat* x = &a->Format.Audio;
         const DtNmosAudioFormat* y = &b->Format.Audio;
-        return same(&x->Encoding, &y->Encoding) && x->SampleRate == y->SampleRate &&
+        return same(x->Encoding, y->Encoding) && x->SampleRate == y->SampleRate &&
                x->Channels == y->Channels && x->PacketTimeNs == y->PacketTimeNs &&
-               same(&x->ChannelOrder, &y->ChannelOrder);
+               same(x->ChannelOrder, y->ChannelOrder);
     }
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
     {
         const DtNmosCompressedVideoFormat* x = &a->Format.CompressedVideo;
         const DtNmosCompressedVideoFormat* y = &b->Format.CompressedVideo;
-        return same(&x->Encoding, &y->Encoding) && x->Width == y->Width &&
+        return same(x->Encoding, y->Encoding) && x->Width == y->Width &&
                x->Height == y->Height && x->RateNumerator == y->RateNumerator &&
                x->RateDenominator == y->RateDenominator && x->Depth == y->Depth &&
-               same(&x->Sampling, &y->Sampling) && same(&x->Profile, &y->Profile) &&
-               same(&x->Level, &y->Level) && same(&x->Sublevel, &y->Sublevel) &&
-               same(&x->Range, &y->Range) && same(&x->Ssn, &y->Ssn) &&
+               same(x->Sampling, y->Sampling) && same(x->Profile, y->Profile) &&
+               same(x->Level, y->Level) && same(x->Sublevel, y->Sublevel) &&
+               same(x->Range, y->Range) && same(x->Ssn, y->Ssn) &&
                x->PacketMode == y->PacketMode &&
                x->TransmissionMode == y->TransmissionMode &&
                x->BandwidthKbps == y->BandwidthKbps;
@@ -370,12 +387,11 @@ static int flows_equal(const DtNmosFlow* a, const DtNmosFlow* b)
                 memcmp(x->DidSdid, y->DidSdid, x->DidSdidCount * sizeof(*x->DidSdid)) ==
                     0) &&
                x->VpidCode == y->VpidCode && x->RateNumerator == y->RateNumerator &&
-               same(&x->TransmissionModel, &y->TransmissionModel) &&
-               same(&x->Ssn, &y->Ssn);
+               same(x->TransmissionModel, y->TransmissionModel) && same(x->Ssn, y->Ssn);
     }
     case DTNMOS_MEDIA_OTHER:
-        return same(&a->Format.Other.Encoding, &b->Format.Other.Encoding) &&
-               same(&a->Format.Other.Fmtp, &b->Format.Other.Fmtp);
+        return same(a->Format.Other.Encoding, b->Format.Other.Encoding) &&
+               same(a->Format.Other.Fmtp, b->Format.Other.Fmtp);
     }
     return 0;
 }
@@ -394,17 +410,18 @@ void sdp_writes_what_it_reads_back(void)
         REQUIRE(flows != NULL);
         for (size_t i = 0; i < count; ++i)
         {
-            REQUIRE(DtNmosFlow_Copy(&flows[i], DtNmosSdp_Flow(original, i)) == DTNMOS_OK);
+            flows[i] = *DtNmosSdp_Flow(original, i);
         }
-        DtNmosString written = {0};
+        char written[4096];
+        size_t size = sizeof(written);
         const DtNmosResult result =
-            DtNmosSdp_Write(DtNmosSdp_Session(original), flows, count, &written);
+            DtNmosSdp_Write(DtNmosSdp_Session(original), flows, count, written, &size);
         if (result != DTNMOS_OK)
         {
             printf("  %s\n", DtNmos_GetLastError());
         }
         CHECK(result == DTNMOS_OK);
-        DtNmosSdp* again = parse(DtNmosString_Get(&written));
+        DtNmosSdp* again = parse(written);
         CHECK(again != NULL);
         if (again != NULL)
         {
@@ -414,19 +431,14 @@ void sdp_writes_what_it_reads_back(void)
                 if (!flows_equal(DtNmosSdp_Flow(again, i), &flows[i]))
                 {
                     printf("  flow %zu of SDP %zu differs after writing:\n%s\n", i, t,
-                           DtNmosString_Get(&written));
+                           written);
                     CHECK(0);
                 }
             }
-            CHECK(same(&DtNmosSdp_Session(again)->Name,
-                       &DtNmosSdp_Session(original)->Name));
+            CHECK(
+                same(DtNmosSdp_Session(again)->Name, DtNmosSdp_Session(original)->Name));
         }
         DtNmosSdp_Free(again);
-        DtNmosString_Clear(&written);
-        for (size_t i = 0; i < count; ++i)
-        {
-            DtNmosFlow_Clear(&flows[i]);
-        }
         free(flows);
         DtNmosSdp_Free(original);
     }
@@ -438,38 +450,43 @@ void sdp_writes_an_audio_sender(void)
 {
     DtNmosSession session = {0};
     session.Size = sizeof(session);
-    DtNmosString_SetText(&session.Name, "dt2110audiosink");
-    DtNmosString_SetText(&session.OriginIp, "192.168.1.10");
+    session.Name = "dt2110audiosink";
+    snprintf(session.OriginIp, sizeof(session.OriginIp), "%s", "192.168.1.10");
     session.SessionId = 42;
     session.SessionVersion = 1;
     DtNmosFlow flow = {0};
     flow.Size = sizeof(flow);
     flow.Media = DTNMOS_MEDIA_AUDIO;
-    DtNmosString_SetText(&flow.DestinationIp, "239.0.0.2");
+    snprintf(flow.DestinationIp, sizeof(flow.DestinationIp), "%s", "239.0.0.2");
     flow.DestinationPort = 5004;
     flow.PayloadType = 97;
     flow.ClockRate = 48000;
-    DtNmosString_SetText(&flow.TsRefclk, "localmac=00-14-F4-01-02-03");
+    flow.RefClock.Kind = DTNMOS_REFCLOCK_LOCALMAC;
+    snprintf(flow.RefClock.LocalMac, sizeof(flow.RefClock.LocalMac), "%s",
+             "00-14-F4-01-02-03");
     flow.MediaClockDirect = 1;
-    DtNmosString_SetText(&flow.Format.Audio.Encoding, "L24");
+    snprintf(flow.Format.Audio.Encoding, sizeof(flow.Format.Audio.Encoding), "%s", "L24");
     flow.Format.Audio.SampleRate = 48000;
     flow.Format.Audio.Channels = 2;
     flow.Format.Audio.PacketTimeNs = 1000000;
-    DtNmosString text = {0};
-    REQUIRE(DtNmosSdp_Write(&session, &flow, 1, &text) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&text), "v=0\r\n"
-                                       "o=- 42 1 IN IP4 192.168.1.10\r\n"
-                                       "s=dt2110audiosink\r\n"
-                                       "t=0 0\r\n"
-                                       "m=audio 5004 RTP/AVP 97\r\n"
-                                       "c=IN IP4 239.0.0.2/64\r\n"
-                                       "a=rtpmap:97 L24/48000/2\r\n"
-                                       "a=ptime:1\r\n"
-                                       "a=ts-refclk:localmac=00-14-F4-01-02-03\r\n"
-                                       "a=mediaclk:direct=0\r\n");
-    DtNmosString_Clear(&text);
-    DtNmosFlow_Clear(&flow);
-    DtNmosSession_Clear(&session);
+    char text[1024];
+    size_t size = sizeof(text);
+    REQUIRE(DtNmosSdp_Write(&session, &flow, 1, text, &size) == DTNMOS_OK);
+    CHECK_EQ(size, strlen(text));
+    CHECK_STR(text, "v=0\r\n"
+                    "o=- 42 1 IN IP4 192.168.1.10\r\n"
+                    "s=dt2110audiosink\r\n"
+                    "t=0 0\r\n"
+                    "m=audio 5004 RTP/AVP 97\r\n"
+                    "c=IN IP4 239.0.0.2/64\r\n"
+                    "a=rtpmap:97 L24/48000/2\r\n"
+                    "a=ptime:1\r\n"
+                    "a=ts-refclk:localmac=00-14-F4-01-02-03\r\n"
+                    "a=mediaclk:direct=0\r\n");
+    // A buffer too small for it gets the size it needs.
+    size_t small = 10;
+    CHECK(DtNmosSdp_Write(&session, &flow, 1, text, &small) == DTNMOS_E_BUFFER_TOO_SMALL);
+    CHECK_EQ(small, size + 1);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- sdp_refuses_to_write_an_incomplete_flow -.-.-.-.-.-.-.-.-.-.-.-.
@@ -478,56 +495,106 @@ void sdp_refuses_to_write_an_incomplete_flow(void)
 {
     DtNmosSession session = {0};
     session.Size = sizeof(session);
-    DtNmosString_SetText(&session.OriginIp, "10.0.0.1");
+    snprintf(session.OriginIp, sizeof(session.OriginIp), "%s", "10.0.0.1");
     DtNmosFlow flows[2] = {{0}, {0}};
     flows[0].Size = sizeof(flows[0]);
     flows[1].Size = sizeof(flows[1]);
     flows[0].Media = DTNMOS_MEDIA_OTHER;
-    DtNmosString text = {0};
-    CHECK(DtNmosSdp_Write(&session, flows, 1, &text) == DTNMOS_E_INVALID_ARGUMENT);
+    char text[2048];
+    size_t size = sizeof(text);
+    CHECK(DtNmosSdp_Write(&session, flows, 1, text, &size) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "destination") != NULL);
-    DtNmosString_SetText(&flows[0].DestinationIp, "239.0.0.1");
+    snprintf(flows[0].DestinationIp, sizeof(flows[0].DestinationIp), "%s", "239.0.0.1");
     flows[0].DestinationPort = 5000;
-    REQUIRE(DtNmosFlow_Copy(&flows[1], &flows[0]) == DTNMOS_OK);
-    DtNmosString_SetText(&flows[1].DestinationIp, "239.0.0.2");
+    flows[1] = flows[0];
+    snprintf(flows[1].DestinationIp, sizeof(flows[1].DestinationIp), "%s", "239.0.0.2");
     flows[1].Leg = 1;
     flows[0].Leg = 1;
-    CHECK(DtNmosSdp_Write(&session, flows, 2, &text) == DTNMOS_E_INVALID_ARGUMENT);
+    size = sizeof(text);
+    CHECK(DtNmosSdp_Write(&session, flows, 2, text, &size) == DTNMOS_E_INVALID_ARGUMENT);
     CHECK(strstr(DtNmos_GetLastError(), "second path") != NULL);
     flows[0].Leg = 0;
-    REQUIRE(DtNmosSdp_Write(&session, flows, 2, &text) == DTNMOS_OK);
-    CHECK(strstr(DtNmosString_Get(&text), "a=group:DUP primary0 secondary1\r\n") != NULL);
+    size = sizeof(text);
+    REQUIRE(DtNmosSdp_Write(&session, flows, 2, text, &size) == DTNMOS_OK);
+    CHECK(strstr(text, "a=group:DUP primary0 secondary1\r\n") != NULL);
     DtNmosSession empty = {0};
     empty.Size = sizeof(empty);
-    CHECK(DtNmosSdp_Write(&empty, flows, 1, &text) == DTNMOS_E_INVALID_ARGUMENT);
-    DtNmosString_Clear(&text);
-    DtNmosFlow_Clear(&flows[0]);
-    DtNmosFlow_Clear(&flows[1]);
-    DtNmosSession_Clear(&session);
+    size = sizeof(text);
+    CHECK(DtNmosSdp_Write(&empty, flows, 1, text, &size) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- flow_copy_owns_its_strings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.- flow_is_copied_with_assignment -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-void flow_copy_owns_its_strings(void)
+// A flow is copied with =. Its fixed arrays are its own and outlive the SDP it came
+// from; its pointers, here DidSdid, point into that SDP.
+void flow_is_copied_with_assignment(void)
 {
     DtNmosSdp* sdp = parse(anc_sdp);
     REQUIRE(sdp != NULL);
-    DtNmosFlow copy = {0};
-    REQUIRE(DtNmosFlow_Copy(&copy, DtNmosSdp_Flow(sdp, 0)) == DTNMOS_OK);
-    CHECK(copy.Format.Anc.DidSdid != DtNmosSdp_Flow(sdp, 0)->Format.Anc.DidSdid);
-    DtNmosSdp_Free(sdp);
-    // What the copy holds survives the SDP it came from.
+    const DtNmosFlow copy = *DtNmosSdp_Flow(sdp, 0);
+    CHECK(copy.Format.Anc.DidSdid == DtNmosSdp_Flow(sdp, 0)->Format.Anc.DidSdid);
     CHECK_EQ(copy.Format.Anc.DidSdidCount, 2);
     CHECK_EQ(copy.Format.Anc.DidSdid[1].Did, 0x41);
-    CHECK_STR(DtNmosString_Get(&copy.Format.Anc.Ssn), "ST2110-40:2023");
-    CHECK_STR(DtNmosString_Get(&copy.DestinationIp), "239.100.9.11");
-    // Copying over a flow that holds strings frees them.
-    DtNmosSdp* other = parse(video_sdp);
-    REQUIRE(other != NULL);
-    REQUIRE(DtNmosFlow_Copy(&copy, DtNmosSdp_Flow(other, 0)) == DTNMOS_OK);
-    CHECK_EQ(copy.Media, DTNMOS_MEDIA_VIDEO);
-    DtNmosSdp_Free(other);
-    CHECK_STR(DtNmosString_Get(&copy.Format.Video.TransmitterType), "2110TPN");
-    DtNmosFlow_Clear(&copy);
-    CHECK(copy.Media == DTNMOS_MEDIA_VIDEO);
+    DtNmosSdp_Free(sdp);
+    CHECK_STR(copy.Format.Anc.Ssn, "ST2110-40:2023");
+    CHECK_STR(copy.DestinationIp, "239.100.9.11");
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- sdp_reads_the_forms_of_ts_refclk -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The forms of a=ts-refclk: a PTP domain of RFC 7273 and of ST 2110-10, a traceable PTP
+// clock, a local MAC, and another kind, which keeps its text.
+void sdp_reads_the_forms_of_ts_refclk(void)
+{
+    static const char* const values[] = {
+        "ptp=IEEE1588-2008:39-A7-94-FF-FE-07-CB-D0:domain-nmbr=127",
+        "ptp=IEEE1588-2008:39-A7-94-FF-FE-07-CB-D0",
+        "ptp=IEEE802.1AS-2011:traceable",
+        "localmac=CA-FE-01-02-03-04",
+        "ntp=203.0.113.10",
+    };
+    char text[512];
+    DtNmosRefClock clocks[5];
+    for (size_t i = 0; i < 5; ++i)
+    {
+        snprintf(text, sizeof(text),
+                 "v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
+                 "m=audio 5004 RTP/AVP 97\nc=IN IP4 239.0.0.1/64\n"
+                 "a=rtpmap:97 L24/48000/2\na=ts-refclk:%s\n",
+                 values[i]);
+        DtNmosSdp* sdp = parse(text);
+        REQUIRE(sdp != NULL);
+        clocks[i] = DtNmosSdp_Flow(sdp, 0)->RefClock;
+        if (i == 4)
+        {
+            CHECK_STR(clocks[i].Text, "ntp=203.0.113.10");
+        }
+        DtNmosSdp_Free(sdp);
+    }
+    CHECK_EQ(clocks[0].Kind, DTNMOS_REFCLOCK_PTP);
+    CHECK_EQ(clocks[0].Domain, 127);
+    CHECK_EQ(clocks[1].Kind, DTNMOS_REFCLOCK_PTP);
+    CHECK_EQ(clocks[1].Domain, -1);
+    CHECK_STR(clocks[1].Grandmaster, "39-A7-94-FF-FE-07-CB-D0");
+    CHECK_EQ(clocks[2].Kind, DTNMOS_REFCLOCK_PTP);
+    CHECK(clocks[2].Traceable);
+    CHECK_STR(clocks[2].PtpVersion, "IEEE802.1AS-2011");
+    CHECK_STR(clocks[2].Grandmaster, "");
+    CHECK_EQ(clocks[3].Kind, DTNMOS_REFCLOCK_LOCALMAC);
+    CHECK_EQ(clocks[4].Kind, DTNMOS_REFCLOCK_OTHER);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.- sdp_refuses_a_value_longer_than_its_field -.-.-.-.-.-.-.-.-.-.-.
+//
+// A value of a=fmtp longer than its field, which no standard allows, fails the parse and
+// names the line and the parameter.
+void sdp_refuses_a_value_longer_than_its_field(void)
+{
+    check_error(
+        "v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
+        "m=video 5000 RTP/AVP 96\nc=IN IP4 239.0.0.1/64\n"
+        "a=rtpmap:96 raw/90000\n"
+        "a=fmtp:96 sampling=YCbCr-4:2:2-and-far-more-than-it-may-be\n",
+        DTNMOS_E_PARSE,
+        "SDP line 8: a=fmtp has a value longer than its standard allows: 'sampling'");
 }

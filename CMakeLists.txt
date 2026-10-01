@@ -76,7 +76,7 @@ add_library(
   Source/Query/DtNmosController.c
   Source/Query/DtNmosQuery.c
   Source/Query/DtNmosSubscription.c
-  Source/Sdp/DtNmosFlow.c
+  Source/Sdp/NmosFlow.c
   Source/Sdp/DtNmosSdpParse.c
   Source/Sdp/DtNmosSdpWrite.c)
 add_library(dtnmos::dtnmos ALIAS dtnmos)
@@ -90,7 +90,8 @@ set(DTNMOS_INTERNAL_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/Source/Discovery"
     "${CMAKE_CURRENT_SOURCE_DIR}/Source/Node"
     "${CMAKE_CURRENT_SOURCE_DIR}/Source/OAL"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Query")
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Query"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Sdp")
 target_include_directories(dtnmos PRIVATE ${DTNMOS_INTERNAL_INCLUDE_DIRS})
 target_compile_features(dtnmos PRIVATE c_std_11)
 target_compile_definitions(dtnmos PRIVATE DTNMOS_BUILDING)

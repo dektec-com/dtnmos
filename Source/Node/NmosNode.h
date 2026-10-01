@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include "NmosFlow.h"
 #include "NmosInternal.h"
 #include "NmosOs.h"
 #include "dtnmos_node.h"
@@ -35,6 +36,7 @@ typedef struct node_sender
     char* description;
     char* source_ip;
     DtNmosFlow flow;
+    dtnmos_store flow_store; // the strings and arrays of flow
     DtNmosSenderActivateFunc activate;
     void* user;
     char version[32];
@@ -133,7 +135,7 @@ void dtnmos_node_write_receiver(const node_receiver* receiver, dtnmos_buffer* b)
 
 // Writes the SDP of sender, its transport file; the caller holds the lock.
 DtNmosResult dtnmos_node_write_transport_file(const node_sender* sender,
-                                              DtNmosString* text);
+                                              dtnmos_buffer* text);
 
 void dtnmos_node_answer_error(DtNmosHttpResponse* response, int status,
                               const char* message);

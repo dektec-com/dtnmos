@@ -27,14 +27,14 @@ typedef struct activations
 {
     int sender_calls;
     int sender_enabled;
-    char destination[64];
+    char destination[DTNMOS_MAX_ADDRESS_SIZE];
     int destination_port;
-    char source[64];
+    char source[DTNMOS_MAX_ADDRESS_SIZE];
     int receiver_calls;
     int receiver_enabled;
     int has_flow;
     DtNmosMedia media;
-    char receives[64];
+    char receives[DTNMOS_MAX_ADDRESS_SIZE];
     int receives_port;
     char sender_id[37];
     DtNmosResult answer;
@@ -52,10 +52,9 @@ static DtNmosResult activate_sender(void* user, const DtNmosId* sender,
     ++seen->sender_calls;
     seen->sender_enabled = activation->MasterEnable;
     snprintf(seen->destination, sizeof(seen->destination), "%s",
-             DtNmosString_Get(&activation->DestinationIp));
+             activation->DestinationIp);
     seen->destination_port = activation->DestinationPort;
-    snprintf(seen->source, sizeof(seen->source), "%s",
-             DtNmosString_Get(&activation->SourceIp));
+    snprintf(seen->source, sizeof(seen->source), "%s", activation->SourceIp);
     if (seen->answer != DTNMOS_OK)
     {
         return DtNmos_SetLastError(seen->answer, "the card refused it");
@@ -75,7 +74,7 @@ static DtNmosResult activate_receiver(void* user, const DtNmosId* receiver,
     seen->has_flow = activation->HasFlow;
     seen->media = activation->Flow.Media;
     snprintf(seen->receives, sizeof(seen->receives), "%s",
-             DtNmosString_Get(&activation->Flow.DestinationIp));
+             activation->Flow.DestinationIp);
     seen->receives_port = activation->Flow.DestinationPort;
     snprintf(seen->sender_id, sizeof(seen->sender_id), "%s", activation->SenderId.Text);
     return seen->answer;
@@ -139,7 +138,7 @@ static DtNmosNode* make_node(activations* seen)
     DtNmosFlow flow = {0};
     flow.Size = sizeof(flow);
     flow.Media = DTNMOS_MEDIA_VIDEO;
-    DtNmosString_SetText(&flow.DestinationIp, "239.0.0.1");
+    snprintf(flow.DestinationIp, sizeof(flow.DestinationIp), "%s", "239.0.0.1");
     flow.DestinationPort = 5004;
     flow.PayloadType = 96;
     flow.ClockRate = 90000;
@@ -148,11 +147,11 @@ static DtNmosNode* make_node(activations* seen)
     flow.Format.Video.RateNumerator = 50;
     flow.Format.Video.RateDenominator = 1;
     flow.Format.Video.Depth = 10;
-    DtNmosString_SetText(&flow.Format.Video.Sampling, "YCbCr-4:2:2");
+    snprintf(flow.Format.Video.Sampling, sizeof(flow.Format.Video.Sampling), "%s",
+             "YCbCr-4:2:2");
     DtNmosSenderConfig sender = {sizeof(sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
                                  &flow,          "192.168.1.5"};
     CHECK(DtNmosNode_AddSender(node, &sender, activate_sender, seen) == DTNMOS_OK);
-    DtNmosFlow_Clear(&flow);
     DtNmosReceiverConfig receiver = {
         sizeof(receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
     CHECK(DtNmosNode_AddReceiver(node, &receiver, activate_receiver, seen) == DTNMOS_OK);
@@ -413,7 +412,7 @@ void connection_moves_a_sender(void)
     const char* text = DtNmosHttpResponse_Body(response, &length);
     DtNmosSdp* sdp = NULL;
     REQUIRE(DtNmosSdp_Parse(text, length, &sdp) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&DtNmosSdp_Flow(sdp, 0)->DestinationIp), "192.168.1.9");
+    CHECK_STR(DtNmosSdp_Flow(sdp, 0)->DestinationIp, "192.168.1.9");
     CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->DestinationPort, 6000);
     CHECK_EQ(DtNmosSdp_Session(sdp)->SessionVersion, 2);
     DtNmosSdp_Free(sdp);

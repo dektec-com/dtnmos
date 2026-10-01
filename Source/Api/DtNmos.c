@@ -60,6 +60,8 @@ const char* DtNmosResult_Name(DtNmosResult result)
         return "DTNMOS_E_INTERNAL";
     case DTNMOS_E_NETWORK:
         return "DTNMOS_E_NETWORK";
+    case DTNMOS_E_BUFFER_TOO_SMALL:
+        return "DTNMOS_E_BUFFER_TOO_SMALL";
     }
     return "unknown DtNmosResult";
 }

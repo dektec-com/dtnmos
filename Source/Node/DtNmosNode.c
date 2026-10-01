@@ -205,7 +205,7 @@ static void free_sender(node_sender* sender)
     free(sender->label);
     free(sender->description);
     free(sender->source_ip);
-    DtNmosFlow_Clear(&sender->flow);
+    dtnmos_store_free(&sender->flow_store);
     dtnmos_connection_clear_sender(sender);
 }
 
@@ -448,9 +448,9 @@ void dtnmos_node_write_source(const node_sender* sender, dtnmos_buffer* b)
 //
 // Returns text, or fallback when it is empty.
 //
-static const char* or_default(const DtNmosString* text, const char* fallback)
+static const char* or_default(const char* text, const char* fallback)
 {
-    return DtNmosString_Length(text) > 0 ? DtNmosString_Get(text) : fallback;
+    return text[0] != '\0' ? text : fallback;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_flow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -484,14 +484,14 @@ void dtnmos_node_write_flow(const node_sender* sender, dtnmos_buffer* b)
             "{\"name\": \"Cr\", \"width\": %u, \"height\": %u, \"bit_depth\": %u}]}",
             (unsigned)video->RateNumerator,
             (unsigned)(video->RateDenominator == 0 ? 1 : video->RateDenominator), width,
-            height, or_default(&video->Colorimetry, "BT709"),
+            height, or_default(video->Colorimetry, "BT709"),
             video->Interlaced ? "interlaced_tff" : "progressive",
-            or_default(&video->Tcs, "SDR"), width, height, depth, width / 2, height,
-            depth, width / 2, height, depth);
+            or_default(video->Tcs, "SDR"), width, height, depth, width / 2, height, depth,
+            width / 2, height, depth);
         return;
     }
     const DtNmosAudioFormat* audio = &sender->flow.Format.Audio;
-    const int l16 = strcmp(DtNmosString_Get(&audio->Encoding), "L16") == 0;
+    const int l16 = strcmp(audio->Encoding, "L16") == 0;
     dtnmos_buffer_printf(
         b,
         ", \"sample_rate\": {\"numerator\": %u}, \"media_type\": \"audio/%s\", "
@@ -511,8 +511,7 @@ void dtnmos_node_write_sender(const DtNmosNode* node, const node_sender* sender,
         ", \"flow_id\": \"%s\", \"transport\": \"urn:x-nmos:transport:%s\", "
         "\"device_id\": \"%s\", \"manifest_href\": \"",
         sender->flow_id.Text,
-        dtnmos_is_multicast(DtNmosString_Get(&sender->flow.DestinationIp)) ? "rtp.mcast"
-                                                                           : "rtp.ucast",
+        dtnmos_is_multicast(sender->flow.DestinationIp) ? "rtp.mcast" : "rtp.ucast",
         sender->device_id.Text);
     dtnmos_node_write_base_url(node, b);
     dtnmos_buffer_printf(
@@ -577,24 +576,23 @@ int dtnmos_is_multicast(const char* address)
 // .-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_node_write_transport_file -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 DtNmosResult dtnmos_node_write_transport_file(const node_sender* sender,
-                                              DtNmosString* text)
+                                              dtnmos_buffer* text)
 {
     DtNmosSession session;
     memset(&session, 0, sizeof(session));
     session.Size = sizeof(session);
     session.SessionId = sender->session_id;
     session.SessionVersion = sender->session_version;
-    if (DtNmosString_SetText(&session.Name, sender->label) != DTNMOS_OK ||
-        DtNmosString_SetText(&session.OriginIp, sender->source_ip[0] != '\0'
-                                                    ? sender->source_ip
-                                                    : "0.0.0.0") != DTNMOS_OK)
+    session.Name = sender->label;
+    const char* origin = sender->source_ip[0] != '\0' ? sender->source_ip : "0.0.0.0";
+    if (!dtnmos_copy_span(session.OriginIp, sizeof(session.OriginIp),
+                          dtnmos_span_of(origin)))
     {
-        DtNmosSession_Clear(&session);
-        return dtnmos_fail_memory();
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "The source address of the sender is longer than a "
+                           "domain name may be.");
     }
-    const DtNmosResult result = DtNmosSdp_Write(&session, &sender->flow, 1, text);
-    DtNmosSession_Clear(&session);
-    return result;
+    return dtnmos_sdp_write(&session, &sender->flow, 1, text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- new_version -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -798,7 +796,8 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* se
         added->session_version = 1;
         if (added->label == NULL || added->description == NULL ||
             added->source_ip == NULL ||
-            DtNmosFlow_Copy(&added->flow, sender->Flow) != DTNMOS_OK ||
+            dtnmos_flow_copy(&added->flow, &added->flow_store, sender->Flow) !=
+                DTNMOS_OK ||
             dtnmos_connection_init_sender(added) != DTNMOS_OK)
         {
             free_sender(added);
@@ -1005,11 +1004,24 @@ DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
             DTNMOS_E_INVALID_ARGUMENT, "Sender %s sends %s and cannot send %s.", id->Text,
             DtNmosMedia_Name(sender->flow.Media), DtNmosMedia_Name(flow->Media));
     }
-    else if (DtNmosFlow_Copy(&sender->flow, flow) != DTNMOS_OK)
-    {
-        result = dtnmos_fail_memory();
-    }
     else
+    {
+        // The new flow gets an owner of its own, which replaces the old one only
+        // once all of it was copied.
+        dtnmos_store store;
+        memset(&store, 0, sizeof(store));
+        result = dtnmos_flow_copy(&sender->flow, &store, flow);
+        if (result == DTNMOS_OK)
+        {
+            dtnmos_store_free(&sender->flow_store);
+            sender->flow_store = store;
+        }
+        else
+        {
+            dtnmos_store_free(&store);
+        }
+    }
+    if (result == DTNMOS_OK && sender != NULL)
     {
         new_version(node, sender->version, sizeof(sender->version));
         ++sender->session_version;
