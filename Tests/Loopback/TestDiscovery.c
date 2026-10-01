@@ -924,6 +924,118 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     StopResponder(&r);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearchIsFed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A fed search holds the registries it is given, the first the most preferred, and
+// refuses what it does not find or what is no URL of http.
+//
+NMOS_TEST(RegistrySearchIsFed)
+{
+    DtNmosRegistrySearch* Search = DtNmosRegistrySearch_Alloc();
+    NMOS_ASSERT(Search != NULL);
+    DtNmosRegistryList* List = NULL;
+    NMOS_ASSERT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION, &List) ==
+                DTNMOS_E_STATE);
+    DtNmosRegistrySearchConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_E_INVALID_ARGUMENT);
+    Config.Finds = DTNMOS_FINDS_REGISTRATION;
+    Config.Fed = 1;
+    NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION, &List) ==
+                DTNMOS_OK);
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 0);
+    DtNmosRegistryList_Free(List);
+
+    const char* const Urls[] = {"http://192.168.1.9:8010/", "https://[fd00::9]",
+                                "http://registry.local"};
+    NMOS_ASSERT(DtNmosRegistrySearch_Feed(Search, DTNMOS_SERVICE_REGISTRATION, Urls, 3) ==
+                DTNMOS_OK);
+    NMOS_ASSERT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION, &List) ==
+                DTNMOS_OK);
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 3);
+    const DtNmosRegistryInfo* First = DtNmosRegistryList_At(List, 0);
+    NMOS_EXPECT(strcmp(First->Url, "http://192.168.1.9:8010") == 0);
+    NMOS_EXPECT(strcmp(First->Address, "192.168.1.9") == 0);
+    NMOS_EXPECT(First->Port == 8010 && First->Usable && First->Priority == 0);
+    const DtNmosRegistryInfo* Second = DtNmosRegistryList_At(List, 1);
+    NMOS_EXPECT(strcmp(Second->Host, "fd00::9") == 0 && Second->Port == 443);
+    NMOS_EXPECT(strcmp(Second->ApiProto, "https") == 0 && Second->Priority == 1);
+    NMOS_EXPECT(DtNmosRegistryList_At(List, 2)->Port == 80);
+    DtNmosRegistryList_Free(List);
+
+    const char* const Wrong[] = {"ftp://registry.local"};
+    NMOS_ASSERT(DtNmosRegistrySearch_Feed(Search, DTNMOS_SERVICE_REGISTRATION, Wrong,
+                                          1) == DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(DtNmosRegistrySearch_Feed(Search, DTNMOS_SERVICE_QUERY, Urls, 1) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_QUERY, &List) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(DtNmosRegistrySearch_Close(Search) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosRegistrySearch_Close(Search) == DTNMOS_E_STATE);
+    DtNmosRegistrySearch_Freep(&Search);
+    NMOS_ASSERT(Search == NULL);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearchSearches -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A search that is not fed searches on its own thread and keeps what it found, and is
+// fed nothing.
+//
+NMOS_TEST(RegistrySearchSearches)
+{
+    static const NmosAnnounced Instances[] = {
+        {"Second",
+         "second.local",
+         8080,
+         {"api_proto=http", "api_ver=v1.3", "api_auth=false", "pri=10"},
+         4,
+         {127, 0, 0, 2}},
+        {"First",
+         "first.local",
+         8081,
+         {"api_proto=http", "api_ver=v1.3", "api_auth=false", "pri=0"},
+         4,
+         {127, 0, 0, 3}},
+    };
+    NmosResponder r;
+    NMOS_ASSERT(StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", 0));
+    const DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
+    DtNmosRegistrySearchConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Finds = DTNMOS_FINDS_REGISTRATION;
+    Config.Discovery = &Discovery;
+    DtNmosRegistrySearch* Search = DtNmosRegistrySearch_Alloc();
+    NMOS_ASSERT(Search != NULL);
+    NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_OK);
+    size_t Count = 0;
+    char First[64] = "";
+    for (int Wait = 0; Wait < 100 && Count < 2; ++Wait)
+    {
+        DtNmosRegistryList* List = NULL;
+        NMOS_EXPECT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION,
+                                              &List) == DTNMOS_OK);
+        Count = DtNmosRegistryList_Count(List);
+        if (Count > 0)
+        {
+            snprintf(First, sizeof(First), "%s",
+                     DtNmosRegistryList_At(List, 0)->Instance);
+        }
+        DtNmosRegistryList_Free(List);
+        NmosOs_SleepMs(20);
+    }
+    const char* const Urls[] = {"http://registry.local"};
+    const DtNmosResult Fed =
+        DtNmosRegistrySearch_Feed(Search, DTNMOS_SERVICE_REGISTRATION, Urls, 1);
+    DtNmosRegistrySearch_Free(Search);
+    StopResponder(&r);
+    NMOS_ASSERT_EQ(Count, 2);
+    NMOS_ASSERT_STR(First, "First");
+    NMOS_ASSERT(Fed == DTNMOS_E_STATE);
+}
+
 NMOS_TEST_MAIN("Discovery", NMOS_RUN(DnsWritesAQuery),
                NMOS_RUN(DnsReadsRecordsAndCompression),
                NMOS_RUN(DnsEscapesDotsWithinLabels),
@@ -933,4 +1045,5 @@ NMOS_TEST_MAIN("Discovery", NMOS_RUN(DnsWritesAQuery),
                NMOS_RUN(DiscoveryFindsNothingInSilence), NMOS_RUN(DnsReadsResolvConf),
                NMOS_RUN(DiscoveryAsksADnsServerToo),
                NMOS_RUN(DiscoveryTakesOnlyTheDnsServer),
-               NMOS_RUN(NodeSearchesForItsRegistry))
+               NMOS_RUN(NodeSearchesForItsRegistry), NMOS_RUN(RegistrySearchIsFed),
+               NMOS_RUN(RegistrySearchSearches))

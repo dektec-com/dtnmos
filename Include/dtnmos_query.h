@@ -386,6 +386,72 @@ DTNMOS_API size_t DtNmosRegistryList_Count(const DtNmosRegistryList* List);
 // Frees the list and the strings of its registries. Null is allowed.
 DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* List);
 
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+= One search of an application +=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+
+// The search of an application for the registries on the network, which its nodes and
+// its clients share: it searches on a thread of its own and keeps what it found fresh,
+// or, fed, holds the list the application gives it.
+typedef struct DtNmosRegistrySearch DtNmosRegistrySearch;
+
+// The APIs a search finds, or-ed in Finds.
+#define DTNMOS_FINDS_QUERY 1u
+#define DTNMOS_FINDS_REGISTRATION 2u
+
+typedef struct DtNmosRegistrySearchConfig
+{
+    size_t Size;    // sizeof(DtNmosRegistrySearchConfig)
+    unsigned Finds; // DTNMOS_FINDS_QUERY and DTNMOS_FINDS_REGISTRATION, or-ed
+    // How it searches, as DtNmos_Discover() does, for each API of Finds whatever Service
+    // says; copied. Null searches through multicast DNS and the DNS server of the host,
+    // on the interface of the default route.
+    const DtNmosDiscoveryConfig* Discovery;
+    // 1: it never searches, and holds the lists DtNmosRegistrySearch_Feed() gives it, as
+    // an application that finds registries in another way, or a test, wants.
+    int Fed;
+} DtNmosRegistrySearchConfig;
+
+// A function of a search other than _Alloc(), _Open(), _Free() and _Freep() needs an open
+// search, and fails with DTNMOS_E_STATE on another.
+
+// Allocates a search, closed. Returns null when the memory ran out.
+DTNMOS_API DtNmosRegistrySearch* DtNmosRegistrySearch_Alloc(void);
+
+// Stops searching and forgets what was found, leaving the search closed. The nodes that
+// borrow the search are closed first.
+DTNMOS_API DtNmosResult DtNmosRegistrySearch_Close(DtNmosRegistrySearch* Search);
+
+// Gives a fed search its list of the APIs of Service: the base URLs of Count registries,
+// e.g. "http://registry.local:8010", the most preferred first, which replaces the list it
+// held. Fails with DTNMOS_E_STATE for a search that is not fed, and with
+// DTNMOS_E_INVALID_ARGUMENT for a service it does not find or a URL that is not one of
+// http or https.
+DTNMOS_API DtNmosResult DtNmosRegistrySearch_Feed(DtNmosRegistrySearch* Search,
+                                                  DtNmosService Service,
+                                                  const char* const* Urls, size_t Count);
+
+// Closes the search when it is open, and frees it. Null is allowed.
+DTNMOS_API void DtNmosRegistrySearch_Free(DtNmosRegistrySearch* Search);
+
+// Frees *Search as DtNmosRegistrySearch_Free() does and sets *Search to null. Null is
+// allowed.
+DTNMOS_API void DtNmosRegistrySearch_Freep(DtNmosRegistrySearch** Search);
+
+// Sets *List to a copy of what the search found of the APIs of Service now, in the order
+// of DtNmos_Discover(), which the caller frees; empty before the first search ends. A
+// fed one's registries are usable, with their URL as instance and their place in the
+// list as priority. Fails with DTNMOS_E_INVALID_ARGUMENT for a service it does not find.
+DTNMOS_API DtNmosResult DtNmosRegistrySearch_List(DtNmosRegistrySearch* Search,
+                                                  DtNmosService Service,
+                                                  DtNmosRegistryList** List);
+
+// Opens search with config, whose strings it copies, and starts searching on a thread of
+// its own unless it is fed: every 3 seconds, and while a node of it has no registry,
+// after a wait that doubles from a second to 8, as IS-04 asks. Fails with
+// DTNMOS_E_INVALID_ARGUMENT for a config that finds nothing or a Discovery of another
+// size, and with DTNMOS_E_STATE when the search is open.
+DTNMOS_API DtNmosResult DtNmosRegistrySearch_Open(
+    DtNmosRegistrySearch* Search, const DtNmosRegistrySearchConfig* Config);
+
 #ifdef __cplusplus
 }
 #endif

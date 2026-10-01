@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "NmosDiscovery.h"
 #include "NmosDns.h"
 #include "NmosInternal.h"
 #include "NmosOs.h"
@@ -28,6 +29,8 @@ enum
 };
 
 static const char* const MdnsAddress = "224.0.0.251";
+
+static int IsIpv4(const char* Text);
 
 // A service instance as its records describe it.
 typedef struct NmosInstance
@@ -106,6 +109,129 @@ void DtNmosRegistryList_Free(DtNmosRegistryList* List)
     NmosStore_Free(&List->Store);
     free(List->Registries);
     free(List);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NewList -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Returns an empty list with room for Count registries, or null when out of memory.
+//
+static DtNmosRegistryList* NewList(size_t Count)
+{
+    DtNmosRegistryList* List = calloc(1, sizeof(*List));
+    if (List != NULL && Count > 0 &&
+        (List->Registries = calloc(Count, sizeof(*List->Registries))) == NULL)
+    {
+        free(List);
+        return NULL;
+    }
+    return List;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosRegistryList_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult NmosRegistryList_Copy(const DtNmosRegistryList* From,
+                                   DtNmosRegistryList** To)
+{
+    const size_t Count = DtNmosRegistryList_Count(From);
+    DtNmosRegistryList* List = NewList(Count);
+    if (List == NULL)
+    {
+        return NmosError_FailMemory();
+    }
+    for (size_t i = 0; i < Count; ++i)
+    {
+        const DtNmosRegistryInfo* Source = &From->Registries[i];
+        DtNmosRegistryInfo* Copy = &List->Registries[List->Count++];
+        *Copy = *Source;
+        Copy->Instance =
+            NmosStore_Text(&List->Store, Source->Instance, strlen(Source->Instance));
+        Copy->Url = NmosStore_Text(&List->Store, Source->Url, strlen(Source->Url));
+        Copy->ApiVersions = NmosStore_Text(&List->Store, Source->ApiVersions,
+                                           strlen(Source->ApiVersions));
+        if (Copy->Instance == NULL || Copy->Url == NULL || Copy->ApiVersions == NULL)
+        {
+            DtNmosRegistryList_Free(List);
+            return NmosError_FailMemory();
+        }
+    }
+    *To = List;
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosRegistryList_FromUrls -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult NmosRegistryList_FromUrls(DtNmosService Service, const char* const* Urls,
+                                       size_t Count, DtNmosRegistryList** To)
+{
+    DtNmosRegistryList* List = NewList(Count);
+    if (List == NULL)
+    {
+        return NmosError_FailMemory();
+    }
+    for (size_t i = 0; i < Count; ++i)
+    {
+        // "<http or https>://<host>[:<port>]", the host an address between brackets for
+        // IPv6.
+        const char* Url = Urls[i] != NULL ? Urls[i] : "";
+        const int Https = strncmp(Url, "https://", 8) == 0;
+        if (!Https && strncmp(Url, "http://", 7) != 0)
+        {
+            DtNmosRegistryList_Free(List);
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "%s is no URL of http or https.", Url);
+        }
+        const char* Host = Url + (Https ? 8 : 7);
+        const int Bracketed = Host[0] == '[';
+        const char* HostEnd = Bracketed ? strchr(Host, ']') : Host + strcspn(Host, ":/");
+        if (HostEnd == NULL || HostEnd == Host + Bracketed ||
+            (size_t)(HostEnd - Host) >= DTNMOS_MAX_ADDRESS_SIZE)
+        {
+            DtNmosRegistryList_Free(List);
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "%s names no host.", Url);
+        }
+        const char* After = HostEnd + (Bracketed ? 1 : 0);
+        // The port, when there is one, runs up to a path or the end of the URL.
+        uint32_t Port = Https ? 443 : 80;
+        const NmosSpan Number = {After + 1, *After == ':' ? strcspn(After + 1, "/") : 0};
+        if (*After == ':' && (!NmosText_ParseU32(Number, 65535, &Port) || Port == 0))
+        {
+            DtNmosRegistryList_Free(List);
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "%s has no port of 1 to 65535.", Url);
+        }
+        DtNmosRegistryInfo* Registry = &List->Registries[List->Count++];
+        Registry->Service = Service;
+        const char* Name = Host + Bracketed;
+        const size_t NameLength = (size_t)(HostEnd - Name);
+        memcpy(Registry->Host, Name, NameLength);
+        Registry->Host[NameLength] = '\0';
+        if (IsIpv4(Registry->Host))
+        {
+            snprintf(Registry->Address, sizeof(Registry->Address), "%s", Registry->Host);
+        }
+        Registry->Port = (uint16_t)Port;
+        snprintf(Registry->ApiProto, sizeof(Registry->ApiProto), "%s",
+                 Https ? "https" : "http");
+        Registry->Priority = (int)i;
+        Registry->Usable = 1;
+        // The URL of an API is its base, without a path.
+        size_t Length = strlen(Url);
+        while (Length > 0 && Url[Length - 1] == '/')
+        {
+            --Length;
+        }
+        Registry->Instance = NmosStore_Text(&List->Store, Url, Length);
+        Registry->Url = NmosStore_Text(&List->Store, Url, Length);
+        Registry->ApiVersions = NmosStore_Text(&List->Store, "v1.3", 4);
+        if (Registry->Instance == NULL || Registry->Url == NULL ||
+            Registry->ApiVersions == NULL)
+        {
+            DtNmosRegistryList_Free(List);
+            return NmosError_FailMemory();
+        }
+    }
+    *To = List;
+    return DTNMOS_OK;
 }
 
 static void LogMessage(const DtNmosDiscoveryConfig* Config, DtNmosLogLevel Level,

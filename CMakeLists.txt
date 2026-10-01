@@ -66,6 +66,7 @@ add_library(
   Source/Core/NmosSha1.c
   Source/Core/NmosText.c
   Source/Discovery/DtNmosDiscovery.c
+  Source/Discovery/DtNmosRegistrySearch.c
   Source/Discovery/NmosDns.c
   Source/Http/DtNmosHttp.c
   Source/Http/NmosCurl.c
