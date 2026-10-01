@@ -73,7 +73,9 @@ typedef struct DtNmosSenderConfig
     const char* Label;
     const char* Description;
     const DtNmosFlow* Flow; // what it sends, video or audio, written as its SDP; copied
-    const char* SourceIp;   // the address it sends from, in its SDP
+    // The address it sends from, that of the network port of the card; required. Its
+    // source_ip "auto" stands for it, and its SDP gives it as origin and source-filter.
+    const char* SourceIp;
 } DtNmosSenderConfig;
 
 typedef struct DtNmosReceiverConfig
@@ -84,6 +86,9 @@ typedef struct DtNmosReceiverConfig
     const char* Label;
     const char* Description;
     DtNmosMedia Media; // video or audio
+    // The address it receives on, that of the network port of the card; required. Its
+    // interface_ip "auto" stands for it.
+    const char* InterfaceIp;
 } DtNmosReceiverConfig;
 
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
@@ -100,8 +105,8 @@ typedef struct DtNmosReceiverActivation
     DtNmosId SenderId; // empty when not given
 } DtNmosReceiverActivation;
 
-// What a controller activates on a sender: whether it sends, and where to, "auto"
-// resolved to where it sends now; SourceIp is empty for "auto".
+// What a controller activates on a sender: whether it sends, where to and from where,
+// with "auto" resolved: to where it sends now, and to the SourceIp of its config.
 typedef struct DtNmosSenderActivation
 {
     int MasterEnable;
@@ -133,15 +138,15 @@ DTNMOS_API DtNmosResult DtNmosNode_AddDevice(DtNmosNode* Node,
 
 // Adds a receiver of a device the node has, which Activate is called for when a
 // controller activates it; the next poll registers it. Fails as DtNmosNode_AddDevice()
-// does, and for an unknown device.
+// does, for an unknown device, and without an InterfaceIp.
 DTNMOS_API DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
                                                const DtNmosReceiverConfig* Receiver,
                                                DtNmosReceiverActivateFunc Activate,
                                                void* User);
 
 // Adds a sender of a device the node has, which Activate is called for when a controller
-// activates it; the next poll registers it. Fails as DtNmosNode_AddReceiver() does, and
-// for a sender of neither video nor audio.
+// activates it; the next poll registers it. Fails as DtNmosNode_AddDevice() does, for an
+// unknown device, for a sender of neither video nor audio, and without a SourceIp.
 DTNMOS_API DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node,
                                              const DtNmosSenderConfig* Sender,
                                              DtNmosSenderActivateFunc Activate,

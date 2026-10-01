@@ -35,6 +35,7 @@ typedef struct NmosActivations
     DtNmosMedia Media;
     char Receives[DTNMOS_MAX_ADDRESS_SIZE];
     int ReceivesPort;
+    char ReceivesFrom[DTNMOS_MAX_ADDRESS_SIZE];
     char SenderId[37];
     DtNmosResult Answer;
     int Registrations; // of the registry: POSTs of a resource
@@ -75,6 +76,8 @@ static DtNmosResult ActivateReceiver(void* User, const DtNmosId* Receiver,
     snprintf(Seen->Receives, sizeof(Seen->Receives), "%s",
              Activation->Flow.DestinationIp);
     Seen->ReceivesPort = Activation->Flow.DestinationPort;
+    snprintf(Seen->ReceivesFrom, sizeof(Seen->ReceivesFrom), "%s",
+             Activation->Flow.SourceIp);
     snprintf(Seen->SenderId, sizeof(Seen->SenderId), "%s", Activation->SenderId.Text);
     return Seen->Answer;
 }
@@ -153,7 +156,8 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
                                  &Flow,          "192.168.1.5"};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {
-        sizeof(Receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
+        sizeof(Receiver),   {RECEIVER_ID}, {DEVICE_ID}, "monitor", "",
+        DTNMOS_MEDIA_AUDIO, "192.168.1.5"};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, Seen) ==
                 DTNMOS_OK);
     NMOS_EXPECT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
@@ -267,7 +271,12 @@ NMOS_TEST(ConnectionAnswersItsParameters)
     const NmosJson* File = NmosJson_Member(Json, "transport_file");
     NMOS_ASSERT(File != NULL);
     NMOS_ASSERT(NmosJson_Member(File, "data")->Type == DTNMOS_JSON_NULL);
-    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "destination_port")), "auto");
+    // A receiver starts from any source and without a group, on its port, at the port
+    // of RTP.
+    NMOS_ASSERT(LegMember(Json, "source_ip")->Type == DTNMOS_JSON_NULL);
+    NMOS_ASSERT(LegMember(Json, "multicast_ip")->Type == DTNMOS_JSON_NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "interface_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5004);
     NmosJson_Free(Json);
 
     // A receiver has no transport file, and unknown resources are not found.
@@ -294,7 +303,7 @@ static const char* const ConnectReceiver =
     "\"v=0\\no=- 1 1 IN IP4 192.168.1.7\\ns=peer\\nt=0 0\\n"
     "m=video 5000 RTP/AVP 96\\nc=IN IP4 239.1.1.1/64\\na=rtpmap:96 raw/90000\\n"
     "m=audio 5006 RTP/AVP 97\\nc=IN IP4 239.1.1.2/64\\na=rtpmap:97 L24/48000/2\\n"
-    "a=ptime:1\\n\"}, "
+    "a=source-filter: incl IN IP4 239.1.1.2 192.168.1.7\\na=ptime:1\\n\"}, "
     "\"transport_params\": [{\"destination_port\": 5008}]}";
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionConnectsAReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -323,13 +332,19 @@ NMOS_TEST(ConnectionConnectsAReceiver)
     NMOS_ASSERT_EQ(Seen.Media, DTNMOS_MEDIA_AUDIO);
     NMOS_ASSERT_STR(Seen.Receives, "239.1.1.2");
     NMOS_ASSERT_EQ(Seen.ReceivesPort, 5008);
+    NMOS_ASSERT_STR(Seen.ReceivesFrom, "192.168.1.7");
     NMOS_ASSERT_STR(Seen.SenderId, PEER_ID);
 
+    // The transport parameters took those of the flow of the transport file.
     NMOS_ASSERT_EQ(
         Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/active", NULL, &Json),
         200);
     NMOS_ASSERT(Json != NULL);
     NMOS_ASSERT_STR(NmosJson_MemberText(Json, "sender_id"), PEER_ID);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "source_ip")), "192.168.1.7");
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "multicast_ip")), "239.1.1.2");
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "interface_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5008);
     NMOS_ASSERT(NmosJson_MemberText(NmosJson_Member(Json, "transport_file"), "data") !=
                 NULL);
     NmosJson_Free(Json);
@@ -560,7 +575,86 @@ NMOS_TEST(ConnectionRefusesBadPatches)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionResolvesAuto -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// "auto" is staged where IS-05 allows it, and the active parameters hold what it stands
+// for: the addresses of the ports of the config, and the ports of the flows.
+//
+NMOS_TEST(ConnectionResolvesAuto)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    const char* const Receiver = CONNECTION "receivers/" RECEIVER_ID "/staged";
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Receiver,
+                       "{\"transport_params\": [{\"source_ip\": \"auto\"}]}", NULL),
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Receiver,
+                       "{\"transport_params\": [{\"multicast_ip\": \"auto\"}]}", NULL),
+                   400);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", Receiver,
+                       "{\"transport_params\": [{\"interface_ip\": \"auto\", "
+                       "\"destination_port\": \"auto\"}], "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NmosJson* Json = NULL;
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/staged", NULL, &Json),
+        200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "interface_ip")), "auto");
+    NmosJson_Free(Json);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" RECEIVER_ID "/active", NULL, &Json),
+        200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "interface_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5004);
+    NmosJson_Free(Json);
+
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"transport_params\": [{\"source_ip\": \"auto\", "
+                       "\"source_port\": \"auto\", \"destination_port\": \"auto\"}], "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_STR(Seen.Source, "192.168.1.5");
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "source_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(LegMember(Json, "source_port")->Number, 5004);
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5004);
+    NmosJson_Free(Json);
+
+    // The SDP of the sender gives the address it sends from as origin and source.
+    DtNmosHttpRequest Request;
+    memset(&Request, 0, sizeof(Request));
+    Request.Size = sizeof(Request);
+    Request.Method = "GET";
+    Request.Url = CONNECTION "senders/" SENDER_ID "/transportfile";
+    DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+    NMOS_ASSERT(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
+    size_t Length = 0;
+    const char* Text = DtNmosHttpResponse_Body(Response, &Length);
+    DtNmosSdp* Sdp = NULL;
+    const int Parsed = DtNmosSdp_Parse(Text, Length, &Sdp) == DTNMOS_OK;
+    DtNmosHttpResponse_Free(Response);
+    NMOS_ASSERT(Parsed);
+    char Origin[DTNMOS_MAX_ADDRESS_SIZE];
+    char Source[DTNMOS_MAX_ADDRESS_SIZE];
+    snprintf(Origin, sizeof(Origin), "%s", DtNmosSdp_Session(Sdp)->OriginIp);
+    snprintf(Source, sizeof(Source), "%s", DtNmosSdp_Flow(Sdp, 0)->SourceIp);
+    DtNmosSdp_Free(Sdp);
+    NMOS_ASSERT_STR(Origin, "192.168.1.5");
+    NMOS_ASSERT_STR(Source, "192.168.1.5");
+    DtNmosNode_Free(Node);
+}
+
 NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
                NMOS_RUN(ConnectionRefusesBadPatches),
-               NMOS_RUN(ConnectionAnswersCorsAndTheTarget))
+               NMOS_RUN(ConnectionAnswersCorsAndTheTarget),
+               NMOS_RUN(ConnectionResolvesAuto))

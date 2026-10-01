@@ -127,7 +127,8 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
                                  &Flow,          "192.168.1.5"};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {
-        sizeof(Receiver), {RECEIVER_ID}, {DEVICE_ID}, "monitor", "", DTNMOS_MEDIA_AUDIO};
+        sizeof(Receiver),   {RECEIVER_ID}, {DEVICE_ID}, "monitor", "",
+        DTNMOS_MEDIA_AUDIO, "192.168.1.5"};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, NULL, NULL) == DTNMOS_OK);
     return Node;
 }
@@ -154,7 +155,7 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
         NMOS_ASSERT_STR(Registry.Requests[i].Url,
                         "http://registry.test/x-nmos/registration/v1.3/resource");
     }
-    // Adding an ID twice, or a sender to a device the node lacks, fails.
+    // Adding an ID twice, or a receiver to a device the node lacks, fails.
     DtNmosDeviceConfig Twice = {sizeof(Twice), {DEVICE_ID}, "again", ""};
     NMOS_ASSERT(DtNmosNode_AddDevice(Node, &Twice) == DTNMOS_E_INVALID_ARGUMENT);
     DtNmosReceiverConfig Orphan = {sizeof(Orphan),
@@ -162,8 +163,38 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                    {"aaaaaaaa-0000-4000-8000-00000000000e"},
                                    "x",
                                    "",
-                                   DTNMOS_MEDIA_VIDEO};
+                                   DTNMOS_MEDIA_VIDEO,
+                                   "192.168.1.5"};
     NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Orphan, NULL, NULL) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    // So does a receiver without the address of its port, or with a name for it.
+    DtNmosReceiverConfig Portless = {sizeof(Portless),
+                                     {"aaaaaaaa-0000-4000-8000-00000000000f"},
+                                     {DEVICE_ID},
+                                     "x",
+                                     "",
+                                     DTNMOS_MEDIA_VIDEO,
+                                     NULL};
+    NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Portless, NULL, NULL) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    Portless.InterfaceIp = "card.local";
+    NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Portless, NULL, NULL) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    Portless.InterfaceIp = "192.168.1.256";
+    NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Portless, NULL, NULL) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosFlow Bare;
+    memset(&Bare, 0, sizeof(Bare));
+    Bare.Size = sizeof(Bare);
+    Bare.Media = DTNMOS_MEDIA_VIDEO;
+    DtNmosSenderConfig Sourceless = {sizeof(Sourceless),
+                                     {"aaaaaaaa-0000-4000-8000-00000000000d"},
+                                     {DEVICE_ID},
+                                     "x",
+                                     "",
+                                     &Bare,
+                                     NULL};
+    NMOS_ASSERT(DtNmosNode_AddSender(Node, &Sourceless, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
     DtNmosNode_Free(Node);
 }

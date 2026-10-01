@@ -8,8 +8,9 @@
 // Registers a node, its device, a video sender and a video receiver with a registry,
 // given with --registry or found with DNS-SD, and serves the Node API and the Connection
 // API of IS-05 for --seconds. The sender sends the first flow of the SDP of --sdp, or a
-// flow of 1080p25 to 239.100.1.1:5004. The IDs follow from --label, so that the node
-// keeps them when it starts again. Each activation a controller makes is printed:
+// flow of 1080p25 to 239.100.1.1:5004, from --address, which the receiver receives on:
+// with a card, the address of its network port. The IDs follow from --label, so that the
+// node keeps them when it starts again. Each activation a controller makes is printed:
 //
 //     node "dtnmos example" 6aac9516-..., registering with http://192.168.1.5:8010
 //     sender 9dfb9312-..., receiver a3b1ccff-...
@@ -37,6 +38,9 @@ static const ExampleOption Options[] = {
     {"--registry", true, "The base URL of the registry, e.g. http://registry:8010"},
     {"--label", true, "The label of the node, from which its IDs follow"},
     {"--sdp", true, "An SDP file whose first flow the sender sends"},
+    {"--address", true,
+     "The address the sender sends from and the receiver receives on; that of the APIs "
+     "of the node by default"},
     {"--port", true, "The port of the APIs of the node; any free one by default"},
     {"--seconds", true, "How long the node runs; 60 by default"},
     {"--verbose", false, "Prints what the node does"},
@@ -94,6 +98,29 @@ static DtNmosResult ActivateSender(void* User, const DtNmosId* Sender,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ApiHost -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Writes the host of the base URL of the APIs of the node into Address, of Size bytes.
+//
+static void ApiHost(const DtNmosNode* Node, char* Address, size_t Size)
+{
+    Address[0] = '\0';
+    char Url[256];
+    size_t UrlSize = sizeof(Url);
+    if (DtNmosNode_ApiUrl(Node, Url, &UrlSize) != DTNMOS_OK)
+    {
+        return;
+    }
+    const char* Host = strstr(Url, "://");
+    Host = Host != NULL ? Host + 3 : Url;
+    // An IPv6 address is between brackets, and the port follows the last colon.
+    const bool Ipv6 = Host[0] == '[';
+    const char* End = Ipv6 ? strchr(Host, ']') : strrchr(Host, ':');
+    Host += Ipv6 ? 1 : 0;
+    const size_t Length = End != NULL ? (size_t)(End - Host) : strlen(Host);
+    snprintf(Address, Size, "%.*s", (int)Length, Host);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DefaultFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // A flow of 1080p25, 10-bit 4:2:2, to a multicast group.
@@ -127,11 +154,12 @@ static void DefaultFlow(DtNmosFlow* Flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Adds the device, the sender of Flow and a video receiver, with IDs that follow from
-// the ID of the node. Returns EXAMPLE_OK, or EXAMPLE_FAILED having printed why.
+// Adds the device, the sender of Flow and a video receiver, which send from and receive
+// on Address, with IDs that follow from the ID of the node. Returns EXAMPLE_OK, or
+// EXAMPLE_FAILED having printed why.
 //
 static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
-                  const DtNmosFlow* Flow)
+                  const DtNmosFlow* Flow, const char* Address)
 {
     char Name[256];
     DtNmosDeviceConfig Device;
@@ -154,6 +182,7 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
     snprintf(Name, sizeof(Name), "%s sender", Label);
     Sender.Label = Name;
     Sender.Flow = Flow;
+    Sender.SourceIp = Address;
     Result = DtNmosNode_AddSender(Node, &Sender, ActivateSender, NULL);
     if (Result != DTNMOS_OK)
     {
@@ -168,6 +197,7 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
     snprintf(Name, sizeof(Name), "%s receiver", Label);
     Receiver.Label = Name;
     Receiver.Media = DTNMOS_MEDIA_VIDEO;
+    Receiver.InterfaceIp = Address;
     Result = DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, NULL);
     if (Result != DTNMOS_OK)
     {
@@ -313,7 +343,17 @@ int main(int Argc, char** Argv)
         return Example_Failed("DtNmosNode_Open", Result);
     }
     printf("node \"%s\" %s, registering with %s\n", Label, Config.Id.Text, Url);
-    int Exit = AddAll(Node, &Config.Id, Label, &Flow);
+    char Address[DTNMOS_MAX_ADDRESS_SIZE];
+    const char* GivenAddress = Example_Value(Argc, Argv, "--address");
+    if (GivenAddress != NULL)
+    {
+        snprintf(Address, sizeof(Address), "%s", GivenAddress);
+    }
+    else
+    {
+        ApiHost(Node, Address, sizeof(Address));
+    }
+    int Exit = AddAll(Node, &Config.Id, Label, &Flow, Address);
     DtNmosSdp_Free(Sdp);
     if (Exit == EXAMPLE_OK)
     {

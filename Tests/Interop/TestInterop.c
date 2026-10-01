@@ -182,6 +182,7 @@ static void StartNode(NmosInteropNode* Interop)
     Receiver.Label = "dtnmos interop receiver";
     Receiver.Description = "";
     Receiver.Media = DTNMOS_MEDIA_VIDEO;
+    Receiver.InterfaceIp = Interop->Host;
     NMOS_ASSERT(DtNmosNode_AddReceiver(Interop->Node, &Receiver, ActivateReceiver,
                                        Interop) == DTNMOS_OK);
     Interop->Receiver = Receiver.Id;

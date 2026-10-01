@@ -34,7 +34,9 @@ typedef struct NmosNodeSender
     DtNmosId ReceiverId; // the receiver a controller connected it to, or empty
     char* Label;
     char* Description;
-    char* SourceIp;
+    char* SourceIp; // of its config, which source_ip "auto" stands for
+    // The source_ip that is active, which its SDP gives as origin and source-filter.
+    char ActiveSourceIp[DTNMOS_MAX_ADDRESS_SIZE];
     DtNmosFlow Flow;
     NmosStore FlowStore; // the strings and arrays of flow
     DtNmosSenderActivateFunc Activate;
@@ -56,6 +58,7 @@ typedef struct NmosNodeReceiver
     char* Label;
     char* Description;
     DtNmosMedia Media;
+    char* InterfaceIp; // of its config, which interface_ip "auto" stands for
     DtNmosReceiverActivateFunc Activate;
     void* User;
     char Version[32];
@@ -125,6 +128,8 @@ NmosNodeDevice* NmosNode_FindDevice(DtNmosNode* Node, const DtNmosId* Id);
 NmosNodeSender* NmosNode_FindSender(DtNmosNode* Node, const DtNmosId* Id);
 NmosNodeReceiver* NmosNode_FindReceiver(DtNmosNode* Node, const DtNmosId* Id);
 
+// Whether address is an address of IPv4 or IPv6 that fits DTNMOS_MAX_ADDRESS_SIZE.
+int NmosNode_IsAddress(const char* Address);
 // Whether address is a multicast address of IPv4 or IPv6.
 int NmosNode_IsMulticast(const char* Address);
 

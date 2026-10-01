@@ -245,6 +245,7 @@ static void FreeReceiver(NmosNodeReceiver* Receiver)
 {
     free(Receiver->Label);
     free(Receiver->Description);
+    free(Receiver->InterfaceIp);
     NmosConnection_ClearReceiver(Receiver);
 }
 
@@ -582,6 +583,43 @@ void NmosNode_WriteReceiver(const NmosNodeReceiver* Receiver, NmosBuffer* b)
     NmosBuffer_Printf(b, ", \"active\": %s}}", Receiver->MasterEnable ? "true" : "false");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsAddress -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+int NmosNode_IsAddress(const char* Address)
+{
+    if (Address == NULL || Address[0] == '\0' ||
+        strlen(Address) >= DTNMOS_MAX_ADDRESS_SIZE)
+    {
+        return 0;
+    }
+    if (strchr(Address, ':') != NULL)
+    {
+        // An IPv6 address: hexadecimal groups between colons, the last two perhaps an
+        // IPv4 address.
+        return strspn(Address, "0123456789abcdefABCDEF:.") == strlen(Address);
+    }
+    // An IPv4 address: four numbers of 0 to 255 between dots.
+    const char* p = Address;
+    for (int Part = 0; Part < 4; ++Part)
+    {
+        int Value = 0;
+        int Digits = 0;
+        for (; *p >= '0' && *p <= '9' && Digits < 4; ++p, ++Digits)
+        {
+            Value = Value * 10 + (*p - '0');
+        }
+        if (Digits == 0 || Digits > 3 || Value > 255 || *p != (Part < 3 ? '.' : '\0'))
+        {
+            return 0;
+        }
+        if (Part < 3)
+        {
+            ++p;
+        }
+    }
+    return 1;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsMulticast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 int NmosNode_IsMulticast(const char* Address)
@@ -605,15 +643,12 @@ DtNmosResult NmosNode_WriteTransportFile(const NmosNodeSender* Sender, NmosBuffe
     Session.SessionId = Sender->SessionId;
     Session.SessionVersion = Sender->SessionVersion;
     Session.Name = Sender->Label;
-    const char* Origin = Sender->SourceIp[0] != '\0' ? Sender->SourceIp : "0.0.0.0";
-    if (!NmosText_CopySpan(Session.OriginIp, sizeof(Session.OriginIp),
-                           NmosSpan_Of(Origin)))
-    {
-        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
-                              "The source address of the sender is longer than a "
-                              "domain name may be.");
-    }
-    return NmosSdp_Write(&Session, &Sender->Flow, 1, Text);
+    // The SDP gives the address the sender sends from now as its origin and its
+    // source-filter.
+    snprintf(Session.OriginIp, sizeof(Session.OriginIp), "%s", Sender->ActiveSourceIp);
+    DtNmosFlow Flow = Sender->Flow;
+    snprintf(Flow.SourceIp, sizeof(Flow.SourceIp), "%s", Sender->ActiveSourceIp);
+    return NmosSdp_Write(&Session, &Flow, 1, Text);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NewVersion -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -797,6 +832,11 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
     {
         return Sized;
     }
+    if (!NmosNode_IsAddress(Sender->SourceIp))
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A sender needs the address of the port it sends from.");
+    }
     const DtNmosResult FlowSized =
         DTNMOS_CHECK_SIZE(Sender->Flow, DtNmosFlow, sizeof(DtNmosFlow));
     if (FlowSized != DTNMOS_OK)
@@ -883,6 +923,11 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
     {
         return Sized;
     }
+    if (!NmosNode_IsAddress(Receiver->InterfaceIp))
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A receiver needs the address of the port it receives on.");
+    }
     if (Receiver->Media != DTNMOS_MEDIA_VIDEO && Receiver->Media != DTNMOS_MEDIA_AUDIO)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
@@ -915,10 +960,11 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
         Added->Media = Receiver->Media;
         Added->Label = CopyText(Receiver->Label);
         Added->Description = CopyText(Receiver->Description);
+        Added->InterfaceIp = CopyText(Receiver->InterfaceIp);
         Added->Activate = Activate;
         Added->User = User;
         if (Added->Label == NULL || Added->Description == NULL ||
-            NmosConnection_InitReceiver(Added) != DTNMOS_OK)
+            Added->InterfaceIp == NULL || NmosConnection_InitReceiver(Added) != DTNMOS_OK)
         {
             FreeReceiver(Added);
             Result = NmosError_FailMemory();

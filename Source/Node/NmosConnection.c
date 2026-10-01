@@ -13,8 +13,11 @@
 #include "NmosJson.h"
 #include "NmosNode.h"
 
+// The port of RTP when nothing gives another (RFC 3551).
+#define NMOS_RTP_PORT 5004
+
 // The transport parameters of the one leg of RTP. An address is "auto", an address, or
-// "" for null; a port is -1 for "auto".
+// "" for null; a port is -1 for "auto". The active parameters hold no "auto".
 typedef struct NmosLeg
 {
     char SourceIp[DTNMOS_MAX_ADDRESS_SIZE];
@@ -59,6 +62,15 @@ static char* CopyText(const char* Text)
     return Copy;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-. IsAuto .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Whether an address the node chooses is left to it: "auto", or null.
+//
+static int IsAuto(const char* Address)
+{
+    return Address[0] == '\0' || strcmp(Address, "auto") == 0;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyParameters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Makes target a copy of source; returns 0 when out of memory, leaving target as it was.
@@ -97,11 +109,12 @@ DtNmosResult NmosConnection_InitSender(NmosNodeSender* Sender)
     {
         return DTNMOS_E_NO_MEMORY;
     }
-    // A sender sends where its element was told to until a controller moves it.
+    // A sender sends from its port where its element was told to, until a
+    // controller moves it.
     NmosLeg* t = &c->Active.Transport;
-    snprintf(t->SourceIp, sizeof(t->SourceIp), "%s",
-             Sender->SourceIp != NULL && Sender->SourceIp[0] != '\0' ? Sender->SourceIp
-                                                                     : "auto");
+    snprintf(t->SourceIp, sizeof(t->SourceIp), "%s", Sender->SourceIp);
+    snprintf(Sender->ActiveSourceIp, sizeof(Sender->ActiveSourceIp), "%s",
+             Sender->SourceIp);
     snprintf(t->DestinationIp, sizeof(t->DestinationIp), "%s",
              Sender->Flow.DestinationIp);
     t->SourcePort = Sender->Flow.DestinationPort;
@@ -130,11 +143,11 @@ DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver)
     {
         return DTNMOS_E_NO_MEMORY;
     }
-    // A receiver receives what its element was given until a controller connects it.
+    // A receiver receives what its element was given until a controller connects it: from
+    // any source, on its port, at the port of RTP.
     NmosLeg* t = &c->Active.Transport;
-    snprintf(t->SourceIp, sizeof(t->SourceIp), "auto");
-    snprintf(t->InterfaceIp, sizeof(t->InterfaceIp), "auto");
-    t->DestinationPort = -1;
+    snprintf(t->InterfaceIp, sizeof(t->InterfaceIp), "%s", Receiver->InterfaceIp);
+    t->DestinationPort = NMOS_RTP_PORT;
     t->RtpEnabled = 1;
     c->Active.MasterEnable = 1;
     c->Staged = c->Active;
@@ -326,6 +339,12 @@ static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
     {
         const char* Name = Params->Keys[i];
         const NmosJson* Member = &Params->Items[i];
+        if (!Sender &&
+            (strcmp(Name, "source_ip") == 0 || strcmp(Name, "multicast_ip") == 0) &&
+            Member->Type == DTNMOS_JSON_STRING && strcmp(Member->String, "auto") == 0)
+        {
+            return "The source_ip and multicast_ip of a receiver are an address or null.";
+        }
         int Valid = 0;
         if (strcmp(Name, "source_ip") == 0)
         {
@@ -367,19 +386,72 @@ static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
     return NULL;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Copies into flow, whose strings and arrays store then holds, the flow of media on the
+// first leg of the SDP text. Returns 0 when text is no SDP or describes no such flow.
+//
+static int FindFlow(DtNmosMedia Media, const char* Text, NmosStore* Store,
+                    DtNmosFlow* Flow)
+{
+    DtNmosSdp* Sdp = NULL;
+    if (DtNmosSdp_Parse(Text, strlen(Text), &Sdp) != DTNMOS_OK)
+    {
+        return 0;
+    }
+    int Found = 0;
+    for (size_t i = 0; !Found && i < DtNmosSdp_FlowCount(Sdp); ++i)
+    {
+        const DtNmosFlow* Candidate = DtNmosSdp_Flow(Sdp, i);
+        if (Candidate->Media == Media && Candidate->Leg == 0)
+        {
+            Found = NmosFlow_Copy(Flow, Store, Candidate) == DTNMOS_OK;
+        }
+    }
+    DtNmosSdp_Free(Sdp);
+    return Found;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeTransportFile -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Sets the transport parameters t of a receiver of media to those of the flow that its
+// transport file describes, as IS-05 asks of a receiver given one: the multicast group,
+// the source and the port. Returns 0 when the file describes no such flow.
+//
+static int TakeTransportFile(DtNmosMedia Media, const char* File, NmosLeg* t)
+{
+    NmosStore Store;
+    memset(&Store, 0, sizeof(Store));
+    DtNmosFlow Flow;
+    memset(&Flow, 0, sizeof(Flow));
+    const int Found = FindFlow(Media, File, &Store, &Flow);
+    if (Found)
+    {
+        snprintf(t->MulticastIp, sizeof(t->MulticastIp), "%s",
+                 NmosNode_IsMulticast(Flow.DestinationIp) ? Flow.DestinationIp : "");
+        snprintf(t->SourceIp, sizeof(t->SourceIp), "%s", Flow.SourceIp);
+        t->DestinationPort = Flow.DestinationPort;
+    }
+    NmosStore_Free(&Store);
+    return Found;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MergePatch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Merges the body of a PATCH into staged, and sets activate when it asks for an immediate
-// activation. Returns a message on failure, with its status in status.
+// Merges the body of a PATCH into staged, of a sender or of a receiver of media, and sets
+// activate when it asks for an immediate activation. Returns a message on failure, with
+// its status in status.
 //
-static const char* MergePatch(const NmosJson* Body, int Sender, NmosParameters* Staged,
-                              int* Activate, int* Status)
+static const char* MergePatch(const NmosJson* Body, int Sender, DtNmosMedia Media,
+                              NmosParameters* Staged, int* Activate, int* Status)
 {
     *Status = 400;
     if (Body->Type != DTNMOS_JSON_OBJECT)
     {
         return "The body of a PATCH is a JSON object.";
     }
+    int TookFile = 0;
+    const NmosJson* Params = NULL;
     for (size_t i = 0; i < Body->Count; ++i)
     {
         const char* Key = Body->Keys[i];
@@ -415,10 +487,11 @@ static const char* MergePatch(const NmosJson* Body, int Sender, NmosParameters* 
             }
             free(Staged->TransportFile);
             Staged->TransportFile = File;
+            TookFile = File != NULL;
         }
         else if (strcmp(Key, "transport_params") == 0)
         {
-            Failure = MergeLeg(Value, Sender, &Staged->Transport);
+            Params = Value;
         }
         else if (strcmp(Key, "activation") == 0)
         {
@@ -447,7 +520,13 @@ static const char* MergePatch(const NmosJson* Body, int Sender, NmosParameters* 
             return Failure;
         }
     }
-    return NULL;
+    // A receiver given a transport file takes the parameters of its flow, which the
+    // transport parameters of the same PATCH then override.
+    if (TookFile && !TakeTransportFile(Media, Staged->TransportFile, &Staged->Transport))
+    {
+        return "The transport file describes no flow that the receiver receives.";
+    }
+    return Params != NULL ? MergeLeg(Params, Sender, &Staged->Transport) : NULL;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindConnection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -478,41 +557,22 @@ static NmosConnection* FindConnection(DtNmosNode* Node, const char* Id, int Send
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReceiverFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Fills flow with what a receiver of media receives by staged: the flow of that media in
-// its transport file, with the transport parameters that are set over it. Returns 0 when
-// the transport file describes none.
+// its transport file, with the transport parameters over it, which took the values of the
+// transport file when it was staged. Returns 0 when the transport file describes none.
 //
 static int ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged, NmosStore* Store,
                         DtNmosFlow* Flow)
 {
-    DtNmosSdp* Sdp = NULL;
-    if (DtNmosSdp_Parse(Staged->TransportFile, strlen(Staged->TransportFile), &Sdp) !=
-        DTNMOS_OK)
-    {
-        return 0;
-    }
-    int Found = 0;
-    for (size_t i = 0; !Found && i < DtNmosSdp_FlowCount(Sdp); ++i)
-    {
-        const DtNmosFlow* Candidate = DtNmosSdp_Flow(Sdp, i);
-        if (Candidate->Media == Media && Candidate->Leg == 0)
-        {
-            Found = NmosFlow_Copy(Flow, Store, Candidate) == DTNMOS_OK;
-        }
-    }
-    DtNmosSdp_Free(Sdp);
-    if (!Found)
+    if (!FindFlow(Media, Staged->TransportFile, Store, Flow))
     {
         return 0;
     }
     const NmosLeg* t = &Staged->Transport;
-    if (t->MulticastIp[0] != '\0' && strcmp(t->MulticastIp, "auto") != 0)
+    if (t->MulticastIp[0] != '\0')
     {
         snprintf(Flow->DestinationIp, sizeof(Flow->DestinationIp), "%s", t->MulticastIp);
     }
-    if (t->SourceIp[0] != '\0' && strcmp(t->SourceIp, "auto") != 0)
-    {
-        snprintf(Flow->SourceIp, sizeof(Flow->SourceIp), "%s", t->SourceIp);
-    }
+    snprintf(Flow->SourceIp, sizeof(Flow->SourceIp), "%s", t->SourceIp);
     if (t->DestinationPort >= 0)
     {
         Flow->DestinationPort = (uint16_t)t->DestinationPort;
@@ -561,7 +621,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
         snprintf(a->Sender.DestinationIp, sizeof(a->Sender.DestinationIp), "%s",
                  Automatic ? s->Flow.DestinationIp : t->DestinationIp);
         snprintf(a->Sender.SourceIp, sizeof(a->Sender.SourceIp), "%s",
-                 strcmp(t->SourceIp, "auto") == 0 ? "" : t->SourceIp);
+                 IsAuto(t->SourceIp) ? s->SourceIp : t->SourceIp);
         a->Sender.DestinationPort = t->DestinationPort >= 0 ? (uint16_t)t->DestinationPort
                                                             : s->Flow.DestinationPort;
         return NULL;
@@ -586,8 +646,8 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MakeActive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Makes staged, activated, the active parameters of the sender s or receiver r, with the
-// "auto" of a sender resolved, and registers the new state of the sender or receiver.
+// Makes staged, activated, the active parameters of the sender s or receiver r, with each
+// "auto" resolved, and registers the new state of the sender or receiver.
 //
 static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
                        NmosNodeReceiver* r, NmosParameters* Staged)
@@ -616,6 +676,11 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
         {
             t->SourcePort = s->Flow.DestinationPort;
         }
+        if (IsAuto(t->SourceIp))
+        {
+            snprintf(t->SourceIp, sizeof(t->SourceIp), "%s", s->SourceIp);
+        }
+        snprintf(s->ActiveSourceIp, sizeof(s->ActiveSourceIp), "%s", t->SourceIp);
         s->MasterEnable = c->Active.MasterEnable && t->RtpEnabled;
         // A sender that is parked is subscribed to no receiver in IS-04.
         snprintf(s->ReceiverId.Text, sizeof(s->ReceiverId.Text), "%s",
@@ -626,7 +691,27 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
     }
     else
     {
-        r->MasterEnable = c->Active.MasterEnable && c->Active.Transport.RtpEnabled;
+        // The port, left to the node, is that of the flow of the transport file, or the
+        // port of RTP.
+        NmosLeg* t = &c->Active.Transport;
+        if (IsAuto(t->InterfaceIp))
+        {
+            snprintf(t->InterfaceIp, sizeof(t->InterfaceIp), "%s", r->InterfaceIp);
+        }
+        if (t->DestinationPort < 0)
+        {
+            NmosStore Store;
+            memset(&Store, 0, sizeof(Store));
+            DtNmosFlow Flow;
+            memset(&Flow, 0, sizeof(Flow));
+            t->DestinationPort =
+                c->Active.TransportFile != NULL &&
+                        FindFlow(r->Media, c->Active.TransportFile, &Store, &Flow)
+                    ? Flow.DestinationPort
+                    : NMOS_RTP_PORT;
+            NmosStore_Free(&Store);
+        }
+        r->MasterEnable = c->Active.MasterEnable && t->RtpEnabled;
         // A receiver that is parked is subscribed to no sender in IS-04.
         snprintf(r->SenderId.Text, sizeof(r->SenderId.Text), "%s",
                  r->MasterEnable ? Staged->PeerId : "");
@@ -667,7 +752,8 @@ static void PatchStaged(DtNmosNode* Node, const char* Id, int Sender,
         Failure = "Out of memory.";
         if (CopyParameters(&Staged, &c->Staged))
         {
-            Failure = MergePatch(Body, Sender, &Staged, &Activate, &Status);
+            Failure = MergePatch(Body, Sender, r != NULL ? r->Media : s->Flow.Media,
+                                 &Staged, &Activate, &Status);
         }
     }
     if (Failure == NULL && Activate)
