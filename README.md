@@ -22,10 +22,10 @@ projects as well, such as CDTAPI and FFmpeg.
 It builds, tests and installs on its own with CMake 3.25 or later:
 
 ```bash
-cmake -S src/dtnmos -B build/dtnmos -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/dtnmos
-ctest --test-dir build/dtnmos
-cmake --install build/dtnmos --prefix /usr/local
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build
+cmake --install build --prefix /usr/local
 ```
 
 It installs a static library by default, or a shared one with `-DBUILD_SHARED_LIBS=ON`, its

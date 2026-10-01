@@ -54,30 +54,38 @@ endfunction()
 
 add_library(
   dtnmos
-  src/common.c
-  src/connection.c
-  src/controller.c
-  src/curl.c
-  src/curl-websocket.c
-  src/discovery.c
-  src/dns.c
-  src/flow.c
-  src/http.c
-  src/json.c
-  src/node.c
-  src/platform.c
-  src/query.c
-  src/sdp-parse.c
-  src/sdp-write.c
-  src/server.c
-  src/sha1.c
-  src/string.c
-  src/subscription.c
-  src/text.c)
+  Source/Api/DtNmos.c
+  Source/Api/DtNmosString.c
+  Source/Core/NmosJson.c
+  Source/Core/NmosSha1.c
+  Source/Core/NmosText.c
+  Source/Discovery/DtNmosDiscovery.c
+  Source/Discovery/NmosDns.c
+  Source/Http/DtNmosHttp.c
+  Source/Http/NmosCurl.c
+  Source/Http/NmosCurlWebSocket.c
+  Source/Http/NmosServer.c
+  Source/Node/DtNmosNode.c
+  Source/Node/NmosConnection.c
+  Source/OAL/NmosOs.c
+  Source/Query/DtNmosController.c
+  Source/Query/DtNmosQuery.c
+  Source/Query/DtNmosSubscription.c
+  Source/Sdp/DtNmosFlow.c
+  Source/Sdp/DtNmosSdpParse.c
+  Source/Sdp/DtNmosSdpWrite.c)
 add_library(dtnmos::dtnmos ALIAS dtnmos)
 target_include_directories(
-  dtnmos PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  dtnmos PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Include>"
                 "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+# The internal headers are named without their directory, from any source.
+set(DTNMOS_INTERNAL_INCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Discovery"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Node"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/OAL"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Query")
+target_include_directories(dtnmos PRIVATE ${DTNMOS_INTERNAL_INCLUDE_DIRS})
 target_compile_features(dtnmos PRIVATE c_std_11)
 target_compile_definitions(dtnmos PRIVATE DTNMOS_BUILDING)
 if(BUILD_SHARED_LIBS)
@@ -118,13 +126,13 @@ if(DTNMOS_INSTALL)
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-  install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+  install(DIRECTORY Include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
   install(
     EXPORT dtnmos-targets
     NAMESPACE dtnmos::
     DESTINATION "${_dtnmos_package_dir}")
   configure_package_config_file(
-    cmake/dtnmos-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
+    dtnmos-config.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config.cmake"
     INSTALL_DESTINATION "${_dtnmos_package_dir}")
   write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/dtnmos-config-version.cmake"
@@ -157,12 +165,12 @@ if(DTNMOS_INSTALL)
   else()
     set(DTNMOS_PC_LIBS_PRIVATE "-lpthread")
   endif()
-  configure_file(cmake/dtnmos.pc.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc" @ONLY)
+  configure_file(dtnmos.pc.in "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc" @ONLY)
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/dtnmos.pc"
           DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 endif()
 
 if(DTNMOS_BUILD_TESTS)
   enable_testing()
-  add_subdirectory(tests)
+  add_subdirectory(Tests)
 endif()
