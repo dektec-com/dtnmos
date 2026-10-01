@@ -214,8 +214,10 @@ DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* Sdp);
 
 // Writes the SDP of session with the count flows of flows into buffer, which holds
 // *Size bytes, with a terminating null. A flow of leg 1 is the second path of the flow
-// of leg 0 before it, which a=group:DUP pairs it with. An IPv4 multicast destination
-// gets a TTL of 64. When the text does not fit, or buffer is null, it fails with
+// of leg 0 before it, which a=group:DUP pairs it with: the paths of the first pair are
+// a=mid:primary and a=mid:secondary, those of the next primary2 and secondary2, and so
+// on, and a flow of one path has no a=mid. An IPv4 multicast destination gets a TTL of
+// 64. When the text does not fit, or buffer is null, it fails with
 // DTNMOS_E_BUFFER_TOO_SMALL and sets *Size to the bytes it needs; on success *Size is
 // the length of the text.
 DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* Session,

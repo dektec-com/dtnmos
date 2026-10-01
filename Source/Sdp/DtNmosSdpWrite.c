@@ -6,6 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdio.h>
 #include <string.h>
 
 #include "NmosFlow.h"
@@ -304,10 +305,30 @@ static void WriteRefClock(NmosBuffer* Buffer, const DtNmosRefClock* Clock)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PairName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Writes the a=mid of a path of pair Pair, from 1: "primary" and "secondary" for the
+// first pair, the names an SDP of ST 2022-7 commonly has, and with the number of the
+// pair after them for the next, "primary2", so that each is unique.
+//
+static void PairName(char* Name, size_t Size, const char* Path, size_t Pair)
+{
+    if (Pair == 1)
+    {
+        snprintf(Name, Size, "%s", Path);
+    }
+    else
+    {
+        snprintf(Name, Size, "%s%zu", Path, Pair);
+    }
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void WriteFlow(NmosBuffer* Buffer, const DtNmosFlow* Flow, size_t Index,
-                      int WithMid)
+// Pair is the number of the pair of ST 2022-7 the flow is a path of, from 1, or 0 for a
+// flow of one path, which has no a=mid.
+//
+static void WriteFlow(NmosBuffer* Buffer, const DtNmosFlow* Flow, size_t Pair)
 {
     const char* Destination = Flow->DestinationIp;
     NmosBuffer_Printf(Buffer, "m=%s %u RTP/AVP %u\r\n",
@@ -350,10 +371,11 @@ static void WriteFlow(NmosBuffer* Buffer, const DtNmosFlow* Flow, size_t Index,
         NmosBuffer_Printf(Buffer, "a=mediaclk:direct=%u\r\n",
                           (unsigned)Flow->MediaClockOffset);
     }
-    if (WithMid)
+    if (Pair != 0)
     {
-        NmosBuffer_Printf(Buffer, "a=mid:%s%zu\r\n",
-                          Flow->Leg == 1 ? "secondary" : "primary", Index);
+        char Name[32];
+        PairName(Name, sizeof(Name), Flow->Leg == 1 ? "secondary" : "primary", Pair);
+        NmosBuffer_Printf(Buffer, "a=mid:%s\r\n", Name);
     }
 }
 
@@ -378,7 +400,6 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "An SDP needs the address of its sender in OriginIp.");
     }
-    int WithMid = 0;
     for (size_t i = 0; i < Count; ++i)
     {
         if (Flows[i].DestinationIp[0] == '\0' || Flows[i].DestinationPort == 0)
@@ -395,7 +416,6 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
                     DTNMOS_E_INVALID_ARGUMENT,
                     "Flow %zu is a second path and needs the first right before it.", i);
             }
-            WithMid = 1;
         }
     }
 
@@ -411,19 +431,29 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
                       Session->Name != NULL && Session->Name[0] != '\0' ? Session->Name
                                                                         : " ");
     DTNMOS_APPEND_LITERAL(&Buffer, "t=0 0\r\n");
-    for (size_t i = 0; WithMid && i < Count; ++i)
+    // A flow of leg 1 and the flow before it are a pair, numbered from 1 in their order.
+    size_t Pairs = 0;
+    for (size_t i = 0; i < Count; ++i)
     {
         if (Flows[i].Leg == 1)
         {
-            // Flow i is named primary<i> or secondary<i>; the first path is the flow
-            // before.
-            NmosBuffer_Printf(&Buffer, "a=group:DUP primary%zu secondary%zu\r\n", i - 1,
-                              i);
+            ++Pairs;
+            char Primary[32];
+            char Secondary[32];
+            PairName(Primary, sizeof(Primary), "primary", Pairs);
+            PairName(Secondary, sizeof(Secondary), "secondary", Pairs);
+            NmosBuffer_Printf(&Buffer, "a=group:DUP %s %s\r\n", Primary, Secondary);
         }
     }
+    size_t Pair = 0;
     for (size_t i = 0; i < Count; ++i)
     {
-        WriteFlow(&Buffer, &Flows[i], i, WithMid);
+        const int Paired = i + 1 < Count && Flows[i + 1].Leg == 1;
+        if (Paired)
+        {
+            ++Pair;
+        }
+        WriteFlow(&Buffer, &Flows[i], Paired || Flows[i].Leg == 1 ? Pair : 0);
     }
     if (Buffer.Failed)
     {

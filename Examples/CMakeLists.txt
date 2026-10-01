@@ -48,7 +48,7 @@ add_test(NAME dtnmos.example.write-sdp COMMAND DtNmosReadSdp --file "${_sdp}" --
 set_tests_properties(
   dtnmos.example.write-sdp
   PROPERTIES PASS_REGULAR_EXPRESSION
-             "a=group:DUP primary0 secondary1.*m=video 5004 RTP/AVP 96.*m=audio 5006 RTP/AVP 97")
+             "a=group:DUP primary secondary.*m=video 5004 RTP/AVP 96.*m=audio 5006 RTP/AVP 97")
 
 # A registry that does not answer fails the request the program makes first.
 add_test(NAME dtnmos.example.no-registry COMMAND DtNmosListSenders --registry

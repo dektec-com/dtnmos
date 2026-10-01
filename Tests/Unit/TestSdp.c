@@ -519,12 +519,63 @@ NMOS_TEST(SdpRefusesToWriteAnIncompleteFlow)
     Flows[0].Leg = 0;
     Size = sizeof(Text);
     NMOS_ASSERT(DtNmosSdp_Write(&Session, Flows, 2, Text, &Size) == DTNMOS_OK);
-    NMOS_ASSERT(strstr(Text, "a=group:DUP primary0 secondary1\r\n") != NULL);
+    NMOS_ASSERT(strstr(Text, "a=group:DUP primary secondary\r\n") != NULL);
     DtNmosSession Empty = {0};
     Empty.Size = sizeof(Empty);
     Size = sizeof(Text);
     NMOS_ASSERT(DtNmosSdp_Write(&Empty, Flows, 1, Text, &Size) ==
                 DTNMOS_E_INVALID_ARGUMENT);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- SdpNamesThePathsOfEachPair -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Five flows: a pair, a flow of one path, and a pair. The first pair is primary and
+// secondary, the second primary2 and secondary2, and the flow of one path has no a=mid;
+// read back, the pairs are the same.
+NMOS_TEST(SdpNamesThePathsOfEachPair)
+{
+    DtNmosSession Session = {0};
+    Session.Size = sizeof(Session);
+    snprintf(Session.OriginIp, sizeof(Session.OriginIp), "%s", "10.0.0.1");
+    DtNmosFlow Flows[5];
+    memset(Flows, 0, sizeof(Flows));
+    const uint32_t Legs[5] = {0, 1, 0, 0, 1};
+    for (int i = 0; i < 5; i++)
+    {
+        Flows[i].Size = sizeof(Flows[i]);
+        Flows[i].Media = DTNMOS_MEDIA_OTHER;
+        snprintf(Flows[i].DestinationIp, sizeof(Flows[i].DestinationIp), "239.0.0.%d",
+                 i + 1);
+        Flows[i].DestinationPort = 5000;
+        snprintf(Flows[i].Format.Other.Encoding, sizeof(Flows[i].Format.Other.Encoding),
+                 "%s", "x");
+        Flows[i].Leg = Legs[i];
+    }
+    char Text[4096];
+    size_t Size = sizeof(Text);
+    NMOS_ASSERT(DtNmosSdp_Write(&Session, Flows, 5, Text, &Size) == DTNMOS_OK);
+    NMOS_ASSERT(strstr(Text, "a=group:DUP primary secondary\r\n"
+                             "a=group:DUP primary2 secondary2\r\n") != NULL);
+    // Each a=mid follows the media section it names; the third has none.
+    const char* Third = strstr(Text, "c=IN IP4 239.0.0.3/64");
+    const char* Fourth = strstr(Text, "c=IN IP4 239.0.0.4/64");
+    NMOS_ASSERT(Third != NULL && Fourth != NULL);
+    const char* Primary = strstr(Text, "a=mid:primary\r\n");
+    const char* Secondary = strstr(Text, "a=mid:secondary\r\n");
+    NMOS_ASSERT(Primary != NULL && Primary < Third);
+    NMOS_ASSERT(Secondary != NULL && Secondary < Third);
+    NMOS_ASSERT(strstr(Third, "a=mid:") > Fourth);
+    NMOS_ASSERT(strstr(Fourth, "a=mid:primary2\r\n") != NULL);
+    NMOS_ASSERT(strstr(Fourth, "a=mid:secondary2\r\n") != NULL);
+
+    DtNmosSdp* Sdp = NULL;
+    NMOS_ASSERT(DtNmosSdp_Parse(Text, Size, &Sdp) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(DtNmosSdp_FlowCount(Sdp), 5);
+    for (size_t i = 0; i < 5; i++)
+    {
+        NMOS_ASSERT_EQ(DtNmosSdp_Flow(Sdp, i)->Leg, Legs[i]);
+    }
+    DtNmosSdp_Free(Sdp);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- FlowIsCopiedWithAssignment -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -609,5 +660,6 @@ NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio)
                NMOS_RUN(SdpTakesDefaultsOfTheSession), NMOS_RUN(SdpNamesTheLineOfAnError),
                NMOS_RUN(SdpWritesWhatItReadsBack), NMOS_RUN(SdpWritesAnAudioSender),
                NMOS_RUN(SdpRefusesToWriteAnIncompleteFlow),
-               NMOS_RUN(FlowIsCopiedWithAssignment), NMOS_RUN(SdpReadsTheFormsOfTsRefclk),
+               NMOS_RUN(SdpNamesThePathsOfEachPair), NMOS_RUN(FlowIsCopiedWithAssignment),
+               NMOS_RUN(SdpReadsTheFormsOfTsRefclk),
                NMOS_RUN(SdpRefusesAValueLongerThanItsField))
