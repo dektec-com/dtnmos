@@ -356,6 +356,54 @@ NMOS_TEST(ConnectionConnectsAReceiver)
     NMOS_ASSERT_EQ(Seen.ReceiverCalls, 2);
     NMOS_ASSERT(!Seen.ReceiverEnabled);
     NMOS_ASSERT(!Seen.HasFlow);
+
+    // A receiver that is parked is subscribed to no sender in IS-04.
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", "/x-nmos/node/v1.3/receivers/" RECEIVER_ID, NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    Subscription = NmosJson_Member(Json, "subscription");
+    NMOS_ASSERT(NmosJson_Member(Subscription, "sender_id")->Type == DTNMOS_JSON_NULL);
+    NMOS_ASSERT(NmosJson_Member(Subscription, "active")->Type == DTNMOS_JSON_FALSE);
+    NmosJson_Free(Json);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersCorsAndTheTarget -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Every answer carries the headers of CORS, with PATCH among the methods, and a
+// preflight OPTIONS is answered 200; the deprecated target of a receiver answers 501.
+//
+NMOS_TEST(ConnectionAnswersCorsAndTheTarget)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    const char* const Methods[] = {"GET", "OPTIONS"};
+    for (int i = 0; i < 2; i++)
+    {
+        DtNmosHttpRequest Request;
+        memset(&Request, 0, sizeof(Request));
+        Request.Size = sizeof(Request);
+        Request.Method = Methods[i];
+        Request.Url = CONNECTION "receivers/" RECEIVER_ID "/staged";
+        DtNmosHttpResponse* Response = DtNmosHttpResponse_Alloc();
+        NMOS_ASSERT(DtNmosNode_Handle(Node, &Request, Response) == DTNMOS_OK);
+        const int Status = DtNmosHttpResponse_Status(Response);
+        const char* Allowed =
+            DtNmosHttpResponse_FindHeader(Response, "Access-Control-Allow-Methods");
+        const int HasPatch = Allowed != NULL && strstr(Allowed, "PATCH") != NULL;
+        const char* Origin =
+            DtNmosHttpResponse_FindHeader(Response, "Access-Control-Allow-Origin");
+        const int AnyOrigin = Origin != NULL && strcmp(Origin, "*") == 0;
+        DtNmosHttpResponse_Free(Response);
+        NMOS_ASSERT_EQ(Status, 200);
+        NMOS_ASSERT(HasPatch);
+        NMOS_ASSERT(AnyOrigin);
+    }
+    NMOS_ASSERT_EQ(Ask(Node, "PUT", "/x-nmos/node/v1.3/receivers/" RECEIVER_ID "/target",
+                       "{}", NULL),
+                   501);
     DtNmosNode_Free(Node);
 }
 
@@ -514,4 +562,5 @@ NMOS_TEST(ConnectionRefusesBadPatches)
 
 NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
-               NMOS_RUN(ConnectionRefusesBadPatches))
+               NMOS_RUN(ConnectionRefusesBadPatches),
+               NMOS_RUN(ConnectionAnswersCorsAndTheTarget))

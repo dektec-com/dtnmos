@@ -19,6 +19,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -281,7 +282,10 @@ static void RunSuite(const char* Suite, const char* const* Versions, size_t Coun
         if (State != NULL && strcmp(State, "Pass") != 0 &&
             strcmp(State, "Not Applicable") != 0 && strcmp(State, "Test Disabled") != 0)
         {
-            printf("    %-15s %s: %.200s\n", State, Name != NULL ? Name : "?",
+            // A failure is printed whole, with the schema and the value a validation
+            // names; any other result in one line.
+            printf("    %-15s %s: %.*s\n", State, Name != NULL ? Name : "?",
+                   strcmp(State, "Fail") == 0 ? INT_MAX : 200,
                    Detail != NULL ? Detail : "");
         }
         *Failed += State != NULL && strcmp(State, "Fail") == 0;

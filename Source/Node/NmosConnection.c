@@ -617,7 +617,9 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
             t->SourcePort = s->Flow.DestinationPort;
         }
         s->MasterEnable = c->Active.MasterEnable && t->RtpEnabled;
-        snprintf(s->ReceiverId.Text, sizeof(s->ReceiverId.Text), "%s", Staged->PeerId);
+        // A sender that is parked is subscribed to no receiver in IS-04.
+        snprintf(s->ReceiverId.Text, sizeof(s->ReceiverId.Text), "%s",
+                 s->MasterEnable ? Staged->PeerId : "");
         ++s->SessionVersion;
         NmosOs_VersionNow(&Node->LastVersion, s->Version, sizeof(s->Version));
         s->Registered = 0;
@@ -625,7 +627,9 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
     else
     {
         r->MasterEnable = c->Active.MasterEnable && c->Active.Transport.RtpEnabled;
-        snprintf(r->SenderId.Text, sizeof(r->SenderId.Text), "%s", Staged->PeerId);
+        // A receiver that is parked is subscribed to no sender in IS-04.
+        snprintf(r->SenderId.Text, sizeof(r->SenderId.Text), "%s",
+                 r->MasterEnable ? Staged->PeerId : "");
         NmosOs_VersionNow(&Node->LastVersion, r->Version, sizeof(r->Version));
         r->Registered = 0;
     }

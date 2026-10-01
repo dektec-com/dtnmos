@@ -83,11 +83,18 @@ static int HandleRequest(struct mg_connection* Connection, void* User)
     char ContentLength[32];
     snprintf(ContentLength, sizeof(ContentLength), "%zu", Length);
     mg_response_header_start(Connection, Status);
-    mg_response_header_add(Connection, "Content-Type",
-                           DtNmosHttpResponse_ContentType(Response), -1);
+    const char* ContentType = DtNmosHttpResponse_ContentType(Response);
+    if (ContentType != NULL && ContentType[0] != '\0')
+    {
+        mg_response_header_add(Connection, "Content-Type", ContentType, -1);
+    }
     mg_response_header_add(Connection, "Content-Length", ContentLength, -1);
-    // Controllers that run in a browser ask the APIs from pages of other origins.
-    mg_response_header_add(Connection, "Access-Control-Allow-Origin", "*", -1);
+    // The headers of the answer of the node, those of CORS among them.
+    for (size_t i = 0; i < DtNmosHttpResponse_HeaderCount(Response); ++i)
+    {
+        const DtNmosHttpHeader Header = DtNmosHttpResponse_Header(Response, i);
+        mg_response_header_add(Connection, Header.Name, Header.Value, -1);
+    }
     mg_response_header_send(Connection);
     if (strcmp(Info->request_method, "HEAD") != 0 && Length > 0)
     {

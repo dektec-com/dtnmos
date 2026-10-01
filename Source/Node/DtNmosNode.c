@@ -1713,6 +1713,19 @@ DtNmosResult DtNmosNode_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Reques
     {
         return Sized;
     }
+    // Every answer lets a page of another origin use the APIs, as the CORS sections of
+    // IS-04 and IS-05 ask, and a browser's preflight is answered at once.
+    DtNmosHttpResponse_AddHeader(Response, "Access-Control-Allow-Origin", "*");
+    DtNmosHttpResponse_AddHeader(Response, "Access-Control-Allow-Methods",
+                                 "GET, PUT, POST, PATCH, HEAD, OPTIONS, DELETE");
+    DtNmosHttpResponse_AddHeader(Response, "Access-Control-Allow-Headers",
+                                 "Content-Type, Accept");
+    DtNmosHttpResponse_AddHeader(Response, "Access-Control-Max-Age", "3600");
+    if (strcmp(Request->Method, "OPTIONS") == 0)
+    {
+        DtNmosHttpResponse_SetStatus(Response, 200);
+        return DTNMOS_OK;
+    }
     // The path without its query, split into its segments.
     char Path[512];
     snprintf(Path, sizeof(Path), "%s", Request->Url);
@@ -1730,6 +1743,17 @@ DtNmosResult DtNmosNode_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Reques
         strcmp(Segments[1], "connection") == 0 && strcmp(Segments[2], "v1.1") == 0)
     {
         return NmosConnection_Handle(Node, Request, Segments + 3, Count - 3, Response);
+    }
+    // The target of a receiver is deprecated in IS-04 v1.3, for the Connection API, and a
+    // node may leave it out with 501.
+    if (Count == 6 && strcmp(Request->Method, "PUT") == 0 &&
+        strcmp(Segments[0], "x-nmos") == 0 && strcmp(Segments[1], "node") == 0 &&
+        strcmp(Segments[3], "receivers") == 0 && strcmp(Segments[5], "target") == 0)
+    {
+        NmosNode_AnswerError(Response, 501,
+                             "The node connects its receivers through the Connection API "
+                             "only.");
+        return DTNMOS_OK;
     }
     if (!Get)
     {
