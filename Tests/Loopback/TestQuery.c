@@ -269,14 +269,16 @@ void query_lists_the_senders_of_every_page(void)
     REQUIRE(DtNmosSenderList_Count(list) == 2);
     const DtNmosSenderInfo* video = DtNmosSenderList_At(list, 0);
     CHECK_STR(video->Id.Text, VIDEO_ID);
-    CHECK_STR(DtNmosString_Get(&video->Label), "camera 1");
-    CHECK_STR(DtNmosString_Get(&video->Description), "studio");
+    CHECK_STR(video->Label, "camera 1");
+    CHECK_STR(video->Description, "studio");
     CHECK_EQ(video->Media, DTNMOS_MEDIA_VIDEO);
-    CHECK_STR(DtNmosString_Get(&video->ManifestHref), "http://camera.test/video.sdp");
+    CHECK_STR(video->ManifestHref, "http://camera.test/video.sdp");
     CHECK_STR(video->DeviceId.Text, TWIN_ID);
     const DtNmosSenderInfo* audio = DtNmosSenderList_At(list, 1);
     CHECK_EQ(audio->Media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(DtNmosString_Get(&audio->ManifestHref), "");
+    // A string the registry leaves out is empty, not null.
+    REQUIRE(audio->ManifestHref != NULL);
+    CHECK_STR(audio->ManifestHref, "");
     CHECK(DtNmosSenderList_At(list, 2) == NULL);
     // Two pages of senders and one of flows.
     CHECK_EQ(registry.requests, 3);
@@ -302,26 +304,67 @@ void query_finds_a_sender_and_its_sdp(void)
     const char* const keys[] = {VIDEO_ID, "camera 1"};
     for (size_t k = 0; k < 2; ++k)
     {
-        DtNmosSenderInfo sender = {0};
-        const DtNmosResult result = DtNmosQuery_FindSender(query, keys[k], &sender);
+        DtNmosSenderList* found = NULL;
+        const DtNmosResult result = DtNmosQuery_FindSender(query, keys[k], &found);
         if (result != DTNMOS_OK)
         {
             printf("  %s: %s\n", keys[k], DtNmos_GetLastError());
         }
         REQUIRE(result == DTNMOS_OK);
-        CHECK_STR(sender.Id.Text, VIDEO_ID);
-        CHECK_EQ(sender.Media, DTNMOS_MEDIA_VIDEO);
+        REQUIRE(DtNmosSenderList_Count(found) == 1);
+        const DtNmosSenderInfo* sender = DtNmosSenderList_At(found, 0);
+        CHECK_STR(sender->Id.Text, VIDEO_ID);
+        CHECK_STR(sender->Label, "camera 1");
+        CHECK_EQ(sender->Media, DTNMOS_MEDIA_VIDEO);
         DtNmosSdp* sdp = NULL;
-        REQUIRE(DtNmosQuery_SenderSdp(query, &sender, &sdp) == DTNMOS_OK);
+        REQUIRE(DtNmosQuery_SenderSdp(query, sender, &sdp) == DTNMOS_OK);
         CHECK_STR(DtNmosSdp_Session(sdp)->Name, "camera 1");
         CHECK_EQ(DtNmosSdp_Flow(sdp, 0)->DestinationPort, 5004);
         DtNmosSdp_Free(sdp);
-        DtNmosSenderInfo copy = {0};
-        REQUIRE(DtNmosSenderInfo_Copy(&copy, &sender) == DTNMOS_OK);
-        DtNmosSenderInfo_Clear(&sender);
-        CHECK_STR(DtNmosString_Get(&copy.Label), "camera 1");
-        DtNmosSenderInfo_Clear(&copy);
+        DtNmosSenderList_Free(found);
     }
+    DtNmosQuery_Destroy(query);
+}
+
+// .-.-.-.-.-.-.-.-.- query_writes_a_manifest_into_the_callers_buffer -.-.-.-.-.-.-.-.-.-.
+//
+void query_writes_a_manifest_into_the_callers_buffer(void)
+{
+    route table[16];
+    size_t count = 0;
+    char page_one[1024];
+    char single[512];
+    char by_label[512];
+    char twins[512];
+    registry_routes(table, &count, page_one, sizeof(page_one), single, sizeof(single),
+                    by_label, sizeof(by_label), twins, sizeof(twins));
+    fake_registry registry = {table, count, 0, 0};
+    DtNmosQuery* query = make_query(&registry);
+    REQUIRE(query != NULL);
+    DtNmosSenderList* found = NULL;
+    REQUIRE(DtNmosQuery_FindSender(query, VIDEO_ID, &found) == DTNMOS_OK);
+    const DtNmosSenderInfo* sender = DtNmosSenderList_At(found, 0);
+
+    // Without a buffer, it says how many bytes the SDP needs.
+    size_t size = 0;
+    CHECK(DtNmosQuery_SenderManifest(query, sender, NULL, &size) ==
+          DTNMOS_E_BUFFER_TOO_SMALL);
+    REQUIRE(size > 1);
+    const size_t needed = size;
+    char small[8];
+    size = sizeof(small);
+    CHECK(DtNmosQuery_SenderManifest(query, sender, small, &size) ==
+          DTNMOS_E_BUFFER_TOO_SMALL);
+    CHECK_EQ(size, needed);
+    // A buffer of that size takes it, and the size is then its length.
+    char text[4096];
+    REQUIRE(needed <= sizeof(text));
+    size = needed;
+    REQUIRE(DtNmosQuery_SenderManifest(query, sender, text, &size) == DTNMOS_OK);
+    CHECK_EQ(size, needed - 1);
+    CHECK_EQ(strlen(text), needed - 1);
+    CHECK(strstr(text, "s=camera 1") != NULL);
+    DtNmosSenderList_Free(found);
     DtNmosQuery_Destroy(query);
 }
 
@@ -340,12 +383,13 @@ void query_names_what_went_wrong(void)
     fake_registry registry = {table, count, 0, 0};
     DtNmosQuery* query = make_query(&registry);
     REQUIRE(query != NULL);
-    DtNmosSenderInfo sender = {0};
+    DtNmosSenderList* sender = NULL;
 
     // Two senders share a label.
     CHECK(DtNmosQuery_FindSender(query, "mic", &sender) == DTNMOS_E_AMBIGUOUS);
     CHECK(strstr(DtNmos_GetLastError(), AUDIO_ID) != NULL &&
           strstr(DtNmos_GetLastError(), TWIN_ID) != NULL);
+    CHECK(sender == NULL);
     // No sender has the ID or the label.
     CHECK(DtNmosQuery_FindSender(query, "44444444-4444-4444-8444-444444444444",
                                  &sender) == DTNMOS_E_NOT_FOUND);
@@ -356,11 +400,12 @@ void query_names_what_went_wrong(void)
     // A sender without manifest gives no SDP.
     DtNmosSenderInfo audio = {0};
     audio.Id = (DtNmosId){AUDIO_ID};
-    DtNmosString_SetText(&audio.Label, "mic");
-    DtNmosString text = {0};
-    CHECK(DtNmosQuery_SenderManifest(query, &audio, &text) == DTNMOS_E_NOT_FOUND);
+    audio.Label = "mic";
+    audio.ManifestHref = "";
+    char text[64];
+    size_t size = sizeof(text);
+    CHECK(DtNmosQuery_SenderManifest(query, &audio, text, &size) == DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "no manifest_href") != NULL);
-    DtNmosSenderInfo_Clear(&audio);
     // An answer that is no JSON, and an error status.
     table[3].body = "<html>";
     CHECK(DtNmosQuery_FindSender(query, VIDEO_ID, &sender) == DTNMOS_E_PARSE);

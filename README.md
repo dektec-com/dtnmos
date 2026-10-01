@@ -125,15 +125,15 @@ config.Http = DtNmos_CurlHttp;  // or a function on the HTTP stack of the progra
 DtNmosQuery* query = NULL;
 if (DtNmosQuery_Create(&config, &query) == DTNMOS_OK)
 {
-  DtNmosSenderInfo sender = {0};
+  DtNmosSenderList* found = NULL;
   DtNmosSdp* sdp = NULL;
-  if (DtNmosQuery_FindSender(query, "camera 1", &sender) == DTNMOS_OK &&
-      DtNmosQuery_SenderSdp(query, &sender, &sdp) == DTNMOS_OK)
+  if (DtNmosQuery_FindSender(query, "camera 1", &found) == DTNMOS_OK &&
+      DtNmosQuery_SenderSdp(query, DtNmosSenderList_At(found, 0), &sdp) == DTNMOS_OK)
   {
     // The flows of the sender, as DtNmosSdp_Parse() gives them.
     DtNmosSdp_Free(sdp);
   }
-  DtNmosSenderInfo_Clear(&sender);
+  DtNmosSenderList_Free(found);
   DtNmosQuery_Destroy(query);
 }
 ```
@@ -143,7 +143,9 @@ An HTTP function of its own receives a `DtNmosHttpRequest` and fills the respons
 `DTNMOS_OK` whenever the server answered, whatever the status.
 
 `DtNmosQuery_Receivers()` and `DtNmosQuery_FindReceiver()` list and find the receivers
-of a registry the same way, each with the sender it is subscribed to.
+of a registry the same way, each with the sender it is subscribed to. What finds one
+sender or receiver returns it in a list of one, which owns its strings, as every list
+does: they stay valid until the list is freed.
 
 ## Connecting a receiver
 
@@ -155,12 +157,12 @@ requests to the node go through the HTTP function of the query:
 
 ```c
 
-DtNmosConnection connection = {0};
+DtNmosConnection* connection = NULL;
 if (DtNmosQuery_Connect(query, "monitor", "camera 1", &connection) == DTNMOS_OK)
 {
-  // connection.Receiver and connection.Sender as the registry lists them, and
-  // connection.Sdp, the transport file the receiver was given.
-  DtNmosConnection_Clear(&connection);
+  // DtNmosConnection_Receiver() and _Sender() as the registry lists them, and
+  // DtNmosConnection_Sdp(), the transport file the receiver was given.
+  DtNmosConnection_Free(connection);
 }
 DtNmosQuery_Disconnect(query, "monitor", NULL);
 ```
@@ -243,7 +245,7 @@ if (DtNmos_Discover(&config, &list) == DTNMOS_OK)
   for (size_t i = 0; i < DtNmosRegistryList_Count(list); ++i)
   {
     const DtNmosRegistryInfo* registry = DtNmosRegistryList_At(list, i);
-    // DtNmosString_Get(&registry->Url), e.g. "http://192.168.1.5:8080"
+    // registry->Url, e.g. "http://192.168.1.5:8080"
   }
   DtNmosRegistryList_Free(list);
 }

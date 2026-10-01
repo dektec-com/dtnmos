@@ -192,35 +192,35 @@ void query_lists_and_finds_receivers(void)
     const DtNmosReceiverInfo* monitor = DtNmosReceiverList_At(list, 0);
     CHECK_STR(monitor->Id.Text, MONITOR_ID);
     CHECK_STR(monitor->DeviceId.Text, DEVICE_ID);
-    CHECK_STR(DtNmosString_Get(&monitor->Label), "monitor");
+    CHECK_STR(monitor->Label, "monitor");
     CHECK_EQ(monitor->Media, DTNMOS_MEDIA_VIDEO);
-    CHECK_STR(DtNmosString_Get(&monitor->Transport), "urn:x-nmos:transport:rtp");
+    CHECK_STR(monitor->Transport, "urn:x-nmos:transport:rtp");
     CHECK_STR(monitor->SenderId.Text, "");
     CHECK_EQ(monitor->Active, 0);
     const DtNmosReceiverInfo* speaker = DtNmosReceiverList_At(list, 1);
     CHECK_EQ(speaker->Media, DTNMOS_MEDIA_AUDIO);
-    CHECK_STR(DtNmosString_Get(&speaker->Description), "booth");
+    CHECK_STR(speaker->Description, "booth");
     CHECK_STR(speaker->SenderId.Text, CAMERA_ID);
     CHECK_EQ(speaker->Active, 1);
     CHECK(DtNmosReceiverList_At(list, 2) == NULL);
 
-    // By ID and by label, and a copy that owns its strings.
+    // By ID and by label, each in a list of one that owns its strings.
     const char* const keys[] = {MONITOR_ID, "monitor"};
     for (size_t k = 0; k < 2; ++k)
     {
-        DtNmosReceiverInfo found = {0};
+        DtNmosReceiverList* found = NULL;
         REQUIRE(DtNmosQuery_FindReceiver(query, keys[k], &found) == DTNMOS_OK);
-        CHECK_STR(found.Id.Text, MONITOR_ID);
-        CHECK_EQ(found.Media, DTNMOS_MEDIA_VIDEO);
-        DtNmosReceiverInfo copy = {0};
-        REQUIRE(DtNmosReceiverInfo_Copy(&copy, &found) == DTNMOS_OK);
-        DtNmosReceiverInfo_Clear(&found);
-        CHECK_STR(DtNmosString_Get(&copy.Label), "monitor");
-        DtNmosReceiverInfo_Clear(&copy);
+        REQUIRE(DtNmosReceiverList_Count(found) == 1);
+        const DtNmosReceiverInfo* receiver = DtNmosReceiverList_At(found, 0);
+        CHECK_STR(receiver->Id.Text, MONITOR_ID);
+        CHECK_EQ(receiver->Media, DTNMOS_MEDIA_VIDEO);
+        CHECK_STR(receiver->Label, "monitor");
+        DtNmosReceiverList_Free(found);
     }
-    DtNmosReceiverInfo missing = {0};
+    DtNmosReceiverList* missing = NULL;
     CHECK(DtNmosQuery_FindReceiver(query, "nobody", &missing) == DTNMOS_E_NOT_FOUND);
     CHECK(strstr(DtNmos_GetLastError(), "no receiver labelled 'nobody'") != NULL);
+    CHECK(missing == NULL);
     DtNmosReceiverList_Free(list);
     DtNmosQuery_Destroy(query);
 }
@@ -232,7 +232,7 @@ void controller_connects_a_receiver(void)
     fake_network network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
-    DtNmosConnection connection = {0};
+    DtNmosConnection* connection = NULL;
     const DtNmosResult result =
         DtNmosQuery_Connect(query, "monitor", "camera 1", &connection);
     if (result != DTNMOS_OK)
@@ -240,9 +240,10 @@ void controller_connects_a_receiver(void)
         printf("  %s\n", DtNmos_GetLastError());
     }
     REQUIRE(result == DTNMOS_OK);
-    CHECK_STR(connection.Receiver.Id.Text, MONITOR_ID);
-    CHECK_STR(connection.Sender.Id.Text, CAMERA_ID);
-    CHECK_STR(DtNmosString_Get(&connection.Sdp), CAMERA_SDP);
+    CHECK_STR(DtNmosConnection_Receiver(connection)->Id.Text, MONITOR_ID);
+    CHECK_STR(DtNmosConnection_Receiver(connection)->Label, "monitor");
+    CHECK_STR(DtNmosConnection_Sender(connection)->Id.Text, CAMERA_ID);
+    CHECK_STR(DtNmosConnection_Sdp(connection), CAMERA_SDP);
 
     // The receiver and the sender, the flow of the sender, its SDP, the device of the
     // receiver, and the PATCH to the Connection API of v1.1 of that device.
@@ -271,7 +272,7 @@ void controller_connects_a_receiver(void)
     CHECK_STR(dtnmos_json_member_text(file, "data"), CAMERA_SDP);
     dtnmos_json_free(body);
     free(network.body);
-    DtNmosConnection_Clear(&connection);
+    DtNmosConnection_Free(connection);
     DtNmosQuery_Destroy(query);
 }
 
@@ -282,9 +283,10 @@ void controller_disconnects_a_receiver(void)
     fake_network network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
-    DtNmosReceiverInfo disconnected = {0};
+    DtNmosReceiverList* disconnected = NULL;
     REQUIRE(DtNmosQuery_Disconnect(query, MONITOR_ID, &disconnected) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&disconnected.Label), "monitor");
+    REQUIRE(DtNmosReceiverList_Count(disconnected) == 1);
+    CHECK_STR(DtNmosReceiverList_At(disconnected, 0)->Label, "monitor");
     REQUIRE(network.count == 3);
     CHECK_STR(network.requests[0], "GET " BASE "receivers/" MONITOR_ID);
     CHECK_STR(network.requests[1], "GET " BASE "devices/" DEVICE_ID);
@@ -298,7 +300,7 @@ void controller_disconnects_a_receiver(void)
     CHECK(dtnmos_json_member(body, "transport_file") == NULL);
     dtnmos_json_free(body);
     free(network.body);
-    DtNmosReceiverInfo_Clear(&disconnected);
+    DtNmosReceiverList_Free(disconnected);
     DtNmosQuery_Destroy(query);
 }
 
@@ -309,7 +311,7 @@ void controller_names_what_went_wrong(void)
     fake_network network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
-    DtNmosConnection connection = {0};
+    DtNmosConnection* connection = NULL;
 
     // A receiver the registry does not have.
     CHECK(DtNmosQuery_Connect(query, "nobody", "camera 1", &connection) ==
@@ -347,7 +349,7 @@ void controller_names_what_went_wrong(void)
     network.node_unreachable = 1;
     CHECK(DtNmosQuery_Disconnect(query, "monitor", NULL) == DTNMOS_E_HTTP);
     CHECK(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
-    CHECK(connection.Receiver.Id.Text[0] == '\0');
+    CHECK(connection == NULL);
     free(network.body);
     DtNmosQuery_Destroy(query);
 }
@@ -359,7 +361,7 @@ void controller_moves_a_sender(void)
     fake_network network;
     DtNmosQuery* query = make_network(&network);
     REQUIRE(query != NULL);
-    DtNmosSenderInfo moved = {0};
+    DtNmosSenderList* moved = NULL;
     const DtNmosResult result =
         DtNmosQuery_MoveSender(query, "encoder", "239.1.2.3", 5010, &moved);
     if (result != DTNMOS_OK)
@@ -367,8 +369,9 @@ void controller_moves_a_sender(void)
         printf("  %s\n", DtNmos_GetLastError());
     }
     REQUIRE(result == DTNMOS_OK);
-    CHECK_STR(moved.Id.Text, ENCODER_ID);
-    CHECK_STR(DtNmosString_Get(&moved.Label), "encoder");
+    REQUIRE(DtNmosSenderList_Count(moved) == 1);
+    CHECK_STR(DtNmosSenderList_At(moved, 0)->Id.Text, ENCODER_ID);
+    CHECK_STR(DtNmosSenderList_At(moved, 0)->Label, "encoder");
     // The sender, the device of the sender, and the PATCH of its staged parameters.
     REQUIRE(network.count == 3);
     CHECK_STR(network.requests[0], "GET " BASE "senders?label=encoder&paging.limit=100");
@@ -384,7 +387,7 @@ void controller_moves_a_sender(void)
               "activate_immediate");
     CHECK(dtnmos_json_member(body, "master_enable") == NULL);
     dtnmos_json_free(body);
-    DtNmosSenderInfo_Clear(&moved);
+    DtNmosSenderList_Free(moved);
 
     // A sender that does not send over RTP, one without a device, and no port.
     CHECK(DtNmosQuery_MoveSender(query, "player", "239.1.2.3", 5010, NULL) ==

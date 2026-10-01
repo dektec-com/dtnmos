@@ -140,8 +140,8 @@ typedef struct recorded_changes
 static void record_change(void* user, const DtNmosChange* change)
 {
     recorded_changes* recorded = user;
-    DtNmosSenderInfo before = {0};
-    DtNmosSenderInfo after = {0};
+    DtNmosSenderList* before = NULL;
+    DtNmosSenderList* after = NULL;
     if (change->Pre != NULL)
     {
         CHECK(DtNmosSenderInfo_Parse(change->Pre, change->PreLength, &before) ==
@@ -151,17 +151,18 @@ static void record_change(void* user, const DtNmosChange* change)
     {
         CHECK(DtNmosSenderInfo_Parse(change->Post, change->PostLength, &after) ==
               DTNMOS_OK);
-        CHECK_STR(after.Id.Text, change->Id);
+        CHECK(DtNmosSenderList_Count(after) == 1);
+        CHECK_STR(DtNmosSenderList_At(after, 0)->Id.Text, change->Id);
     }
     if (recorded->count < 8)
     {
         snprintf(recorded->lines[recorded->count++], sizeof(recorded->lines[0]),
                  "%s %s %s %s", DtNmosChangeKind_Name(change->Kind), change->Id,
-                 change->Pre != NULL ? DtNmosString_Get(&before.Label) : "-",
-                 change->Post != NULL ? DtNmosString_Get(&after.Label) : "-");
+                 before != NULL ? DtNmosSenderList_At(before, 0)->Label : "-",
+                 after != NULL ? DtNmosSenderList_At(after, 0)->Label : "-");
     }
-    DtNmosSenderInfo_Clear(&before);
-    DtNmosSenderInfo_Clear(&after);
+    DtNmosSenderList_Free(before);
+    DtNmosSenderList_Free(after);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- subscribe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

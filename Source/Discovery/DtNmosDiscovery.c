@@ -72,64 +72,13 @@ typedef struct search
     gathered found;
 } search;
 
+// A list owns the strings of its registries that are no arrays in its store.
 struct DtNmosRegistryList
 {
     DtNmosRegistryInfo* registries;
     size_t count;
+    dtnmos_store store;
 };
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryInfo_Clear -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void DtNmosRegistryInfo_Clear(DtNmosRegistryInfo* registry)
-{
-    if (registry == NULL)
-    {
-        return;
-    }
-    DtNmosString_Clear(&registry->Instance);
-    DtNmosString_Clear(&registry->Host);
-    DtNmosString_Clear(&registry->Address);
-    DtNmosString_Clear(&registry->Url);
-    DtNmosString_Clear(&registry->ApiProto);
-    DtNmosString_Clear(&registry->ApiVersions);
-    memset(registry, 0, sizeof(*registry));
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryInfo_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-DtNmosResult DtNmosRegistryInfo_Copy(DtNmosRegistryInfo* target,
-                                     const DtNmosRegistryInfo* source)
-{
-    if (target == NULL || source == NULL)
-    {
-        return DTNMOS_E_INVALID_ARGUMENT;
-    }
-    if (target == source)
-    {
-        return DTNMOS_OK;
-    }
-    DtNmosRegistryInfo copy;
-    memset(&copy, 0, sizeof(copy));
-    copy.Service = source->Service;
-    copy.Port = source->Port;
-    copy.Priority = source->Priority;
-    copy.Auth = source->Auth;
-    copy.Usable = source->Usable;
-    copy.FoundBy = source->FoundBy;
-    if (DtNmosString_Copy(&copy.Instance, &source->Instance) != DTNMOS_OK ||
-        DtNmosString_Copy(&copy.Host, &source->Host) != DTNMOS_OK ||
-        DtNmosString_Copy(&copy.Address, &source->Address) != DTNMOS_OK ||
-        DtNmosString_Copy(&copy.Url, &source->Url) != DTNMOS_OK ||
-        DtNmosString_Copy(&copy.ApiProto, &source->ApiProto) != DTNMOS_OK ||
-        DtNmosString_Copy(&copy.ApiVersions, &source->ApiVersions) != DTNMOS_OK)
-    {
-        DtNmosRegistryInfo_Clear(&copy);
-        return DTNMOS_E_NO_MEMORY;
-    }
-    DtNmosRegistryInfo_Clear(target);
-    *target = copy;
-    return DTNMOS_OK;
-}
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosRegistryList_Count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
@@ -154,10 +103,7 @@ void DtNmosRegistryList_Free(DtNmosRegistryList* list)
     {
         return;
     }
-    for (size_t i = 0; i < list->count; ++i)
-    {
-        DtNmosRegistryInfo_Clear(&list->registries[i]);
-    }
+    dtnmos_store_free(&list->store);
     free(list->registries);
     free(list);
 }
@@ -483,15 +429,16 @@ static int compare_registries(const void* a, const void* b)
     {
         return left->FoundBy == DTNMOS_SEARCH_UNICAST ? -1 : 1;
     }
-    return strcmp(DtNmosString_Get(&left->Instance), DtNmosString_Get(&right->Instance));
+    return strcmp(left->Instance, right->Instance);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- describe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Fills registry from a complete instance; returns 0 when out of memory.
+// Fills registry from a complete instance, its strings that are no arrays owned by
+// store; returns 0 when out of memory.
 //
 static int describe(const gathered* found, const instance* service, DtNmosService kind,
-                    DtNmosRegistryInfo* registry)
+                    dtnmos_store* store, DtNmosRegistryInfo* registry)
 {
     memset(registry, 0, sizeof(*registry));
     registry->Service = kind;
@@ -517,12 +464,16 @@ static int describe(const gathered* found, const instance* service, DtNmosServic
     char url[DTNMOS_DNS_NAME_SIZE + 32];
     snprintf(url, sizeof(url), "%s://%s:%u", proto,
              address[0] != '\0' && !https ? address : service->host, service->port);
-    return DtNmosString_SetText(&registry->Instance, label) == DTNMOS_OK &&
-           DtNmosString_SetText(&registry->Host, service->host) == DTNMOS_OK &&
-           DtNmosString_SetText(&registry->Address, address) == DTNMOS_OK &&
-           DtNmosString_SetText(&registry->Url, url) == DTNMOS_OK &&
-           DtNmosString_SetText(&registry->ApiProto, proto) == DTNMOS_OK &&
-           DtNmosString_SetText(&registry->ApiVersions, service->versions) == DTNMOS_OK;
+    // The host is a DNS name, and the protocol is kept in 16 bytes, so both fit.
+    snprintf(registry->Host, sizeof(registry->Host), "%s", service->host);
+    snprintf(registry->Address, sizeof(registry->Address), "%s", address);
+    snprintf(registry->ApiProto, sizeof(registry->ApiProto), "%s", proto);
+    registry->Instance = dtnmos_store_text(store, label, strlen(label));
+    registry->Url = dtnmos_store_text(store, url, strlen(url));
+    registry->ApiVersions =
+        dtnmos_store_text(store, service->versions, strlen(service->versions));
+    return registry->Instance != NULL && registry->Url != NULL &&
+           registry->ApiVersions != NULL;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- is_ipv4 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -667,9 +618,8 @@ static DtNmosResult list_registries(const DtNmosDiscoveryConfig* config,
                 continue;
             }
             DtNmosRegistryInfo* registry = &result_list->registries[result_list->count];
-            if (!describe(found, service, config->Service, registry))
+            if (!describe(found, service, config->Service, &result_list->store, registry))
             {
-                DtNmosRegistryInfo_Clear(registry);
                 DtNmosRegistryList_Free(result_list);
                 return dtnmos_fail_memory();
             }

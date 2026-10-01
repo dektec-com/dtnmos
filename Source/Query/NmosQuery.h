@@ -30,3 +30,8 @@ DtNmosResult dtnmos_query_request(DtNmosQuery* query, const char* method, const 
 // answer is 200, with DTNMOS_E_NOT_FOUND for 404.
 DtNmosResult dtnmos_query_get_json(DtNmosQuery* query, const char* url,
                                    dtnmos_json** json);
+
+// Fetches the SDP of sender from its manifest_href into a response, which the caller
+// frees; null when it fails. Fails as DtNmosQuery_SenderManifest() does.
+DtNmosResult dtnmos_query_manifest(DtNmosQuery* query, const DtNmosSenderInfo* sender,
+                                   DtNmosHttpResponse** response);

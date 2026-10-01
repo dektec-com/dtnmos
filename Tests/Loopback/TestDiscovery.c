@@ -545,33 +545,32 @@ void discovery_finds_registries_by_priority(void)
     REQUIRE(result == DTNMOS_OK);
     REQUIRE(DtNmosRegistryList_Count(list) == 4);
     const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
-    CHECK_STR(DtNmosString_Get(&first->Instance), "Registry A");
+    CHECK_STR(first->Instance, "Registry A");
     // https keeps the host name, for its certificate.
-    CHECK_STR(DtNmosString_Get(&first->Url), "https://registry-a.local:443");
-    CHECK_STR(DtNmosString_Get(&first->Address), "127.0.0.3");
+    CHECK_STR(first->Url, "https://registry-a.local:443");
+    CHECK_STR(first->Address, "127.0.0.3");
     CHECK_EQ(first->Priority, 0);
     CHECK(first->Usable);
     const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
-    CHECK_STR(DtNmosString_Get(&second->Instance), "Registry B");
-    CHECK_STR(DtNmosString_Get(&second->Url), "http://127.0.0.2:8080");
-    CHECK_STR(DtNmosString_Get(&second->ApiVersions), "v1.2,v1.3");
+    CHECK_STR(second->Instance, "Registry B");
+    CHECK_STR(second->Url, "http://127.0.0.2:8080");
+    CHECK_STR(second->ApiVersions, "v1.2,v1.3");
     CHECK_EQ(second->Service, DTNMOS_SERVICE_QUERY);
     const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
-    CHECK_STR(DtNmosString_Get(&third->Instance), "No priority");
+    CHECK_STR(third->Instance, "No priority");
     CHECK_EQ(third->Priority, -1);
-    CHECK_STR(DtNmosString_Get(&third->ApiProto), "http");
+    CHECK_STR(third->ApiProto, "http");
     CHECK(third->Usable);
     const DtNmosRegistryInfo* last = DtNmosRegistryList_At(list, 3);
-    CHECK_STR(DtNmosString_Get(&last->Instance), "Old");
+    CHECK_STR(last->Instance, "Old");
     CHECK(!last->Usable);
     CHECK(DtNmosRegistryList_At(list, 4) == NULL);
 
-    DtNmosRegistryInfo copy;
-    memset(&copy, 0, sizeof(copy));
-    REQUIRE(DtNmosRegistryInfo_Copy(&copy, second) == DTNMOS_OK);
+    // The arrays of an info are copied with it, and outlive the list.
+    const DtNmosRegistryInfo copy = *second;
     DtNmosRegistryList_Free(list);
-    CHECK_STR(DtNmosString_Get(&copy.Host), "registry-b.local");
-    DtNmosRegistryInfo_Clear(&copy);
+    CHECK_STR(copy.Host, "registry-b.local");
+    CHECK_STR(copy.Address, "127.0.0.2");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.- discovery_asks_again_for_what_is_missing -.-.-.-.-.-.-.-.-.-.-.-
@@ -592,8 +591,7 @@ void discovery_asks_again_for_what_is_missing(void)
     CHECK_EQ(queries, 4); // three sends of the first query, and the one that asks again
     CHECK(asked);
     REQUIRE(DtNmosRegistryList_Count(list) == 1);
-    CHECK_STR(DtNmosString_Get(&DtNmosRegistryList_At(list, 0)->Url),
-              "http://127.0.0.2:8080");
+    CHECK_STR(DtNmosRegistryList_At(list, 0)->Url, "http://127.0.0.2:8080");
     DtNmosRegistryList_Free(list);
 }
 
@@ -724,21 +722,16 @@ void discovery_asks_a_dns_server_too(void)
     CHECK(asked);
     REQUIRE(DtNmosRegistryList_Count(list) == 3);
     const DtNmosRegistryInfo* first = DtNmosRegistryList_At(list, 0);
-    CHECK_STR(DtNmosString_Get(&first->Instance), "Studio");
-    CHECK_STR(DtNmosString_Get(&first->Url), "http://127.0.0.3:8081");
+    CHECK_STR(first->Instance, "Studio");
+    CHECK_STR(first->Url, "http://127.0.0.3:8081");
     CHECK_EQ(first->FoundBy, DTNMOS_SEARCH_UNICAST);
     const DtNmosRegistryInfo* second = DtNmosRegistryList_At(list, 1);
-    CHECK_STR(DtNmosString_Get(&second->Instance), "On link");
+    CHECK_STR(second->Instance, "On link");
     CHECK_EQ(second->FoundBy, DTNMOS_SEARCH_MULTICAST);
     const DtNmosRegistryInfo* third = DtNmosRegistryList_At(list, 2);
-    CHECK_STR(DtNmosString_Get(&third->Instance), "Backup");
-    CHECK_STR(DtNmosString_Get(&third->Host), "backup.studio.example");
+    CHECK_STR(third->Instance, "Backup");
+    CHECK_STR(third->Host, "backup.studio.example");
     CHECK_EQ(third->FoundBy, DTNMOS_SEARCH_UNICAST);
-    DtNmosRegistryInfo copy;
-    memset(&copy, 0, sizeof(copy));
-    REQUIRE(DtNmosRegistryInfo_Copy(&copy, third) == DTNMOS_OK);
-    CHECK_EQ(copy.FoundBy, DTNMOS_SEARCH_UNICAST);
-    DtNmosRegistryInfo_Clear(&copy);
     DtNmosRegistryList_Free(list);
 
     // What it refuses.

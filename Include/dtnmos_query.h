@@ -37,24 +37,22 @@ typedef struct DtNmosQueryConfig
     void* LogUser;
 } DtNmosQueryConfig;
 
-// A sender as the registry lists it. Strings the registry leaves out are empty.
+// A sender as the registry lists it. Its strings belong to the list it is in and stay
+// valid until that list is freed; one the registry leaves out is empty, never null.
 typedef struct DtNmosSenderInfo
 {
     DtNmosId Id;
     DtNmosId FlowId; // empty when the sender has no flow
     DtNmosId DeviceId;
-    DtNmosString Label;
-    DtNmosString Description;
-    DtNmosMedia Media;         // from its flow; DTNMOS_MEDIA_OTHER without one
-    DtNmosString Transport;    // e.g. "urn:x-nmos:transport:rtp.mcast"
-    DtNmosString ManifestHref; // the URL of its SDP; empty when it has none
+    const char* Label;
+    const char* Description;
+    DtNmosMedia Media;        // from its flow; DTNMOS_MEDIA_OTHER without one
+    const char* Transport;    // e.g. "urn:x-nmos:transport:rtp.mcast"
+    const char* ManifestHref; // the URL of its SDP; empty when it has none
 } DtNmosSenderInfo;
 
-DTNMOS_API void DtNmosSenderInfo_Clear(DtNmosSenderInfo* sender);
-DTNMOS_API DtNmosResult DtNmosSenderInfo_Copy(DtNmosSenderInfo* target,
-                                              const DtNmosSenderInfo* source);
-
-// The senders of a registry, which the list owns.
+// Senders of a registry, which the list owns with their strings. What finds or reads a
+// single sender returns a list of that one, at index 0.
 typedef struct DtNmosSenderList DtNmosSenderList;
 
 DTNMOS_API size_t DtNmosSenderList_Count(const DtNmosSenderList* list);
@@ -74,42 +72,44 @@ DTNMOS_API void DtNmosQuery_Destroy(DtNmosQuery* query);
 DTNMOS_API DtNmosResult DtNmosQuery_Senders(DtNmosQuery* query, DtNmosSenderList** list);
 
 // Finds the sender whose ID is id_or_label when it is a UUID, or else whose label it
-// is, into sender, which is cleared first and which the caller clears. Fails with
+// is, and returns it in a list of one, which the caller frees. Fails with
 // DTNMOS_E_NOT_FOUND, or DTNMOS_E_AMBIGUOUS when senders share the label, the message
 // listing their IDs.
 DTNMOS_API DtNmosResult DtNmosQuery_FindSender(DtNmosQuery* query,
                                                const char* id_or_label,
-                                               DtNmosSenderInfo* sender);
+                                               DtNmosSenderList** found);
 
-// Fetches the SDP of sender from its manifest_href into text, which is cleared first.
-// Fails with DTNMOS_E_NOT_FOUND when the sender has no manifest.
+// Fetches the SDP of sender from its manifest_href into the caller's buffer of *size
+// bytes, with a terminating null; *size is then its length. Its size is known only once
+// it is fetched, so a buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *size then
+// giving the bytes needed, and a second call fetches it again; DtNmosQuery_SenderSdp()
+// fetches and parses it at once. Fails with DTNMOS_E_NOT_FOUND when the sender has no
+// manifest.
 DTNMOS_API DtNmosResult DtNmosQuery_SenderManifest(DtNmosQuery* query,
                                                    const DtNmosSenderInfo* sender,
-                                                   DtNmosString* text);
+                                                   char* buffer, size_t* size);
 
 // Fetches the SDP of sender and parses it as DtNmosSdp_Parse() does.
 DTNMOS_API DtNmosResult DtNmosQuery_SenderSdp(DtNmosQuery* query,
                                               const DtNmosSenderInfo* sender,
                                               DtNmosSdp** sdp);
 
-// A receiver as the registry lists it. Strings the registry leaves out are empty.
+// A receiver as the registry lists it. Its strings belong to the list it is in and stay
+// valid until that list is freed; one the registry leaves out is empty, never null.
 typedef struct DtNmosReceiverInfo
 {
     DtNmosId Id;
     DtNmosId DeviceId;
-    DtNmosString Label;
-    DtNmosString Description;
-    DtNmosMedia Media;      // from its format; DTNMOS_MEDIA_OTHER for another one
-    DtNmosString Transport; // e.g. "urn:x-nmos:transport:rtp"
-    DtNmosId SenderId;      // the sender it is subscribed to; empty when none
-    int Active;             // whether that subscription is active
+    const char* Label;
+    const char* Description;
+    DtNmosMedia Media;     // from its format; DTNMOS_MEDIA_OTHER for another one
+    const char* Transport; // e.g. "urn:x-nmos:transport:rtp"
+    DtNmosId SenderId;     // the sender it is subscribed to; empty when none
+    int Active;            // whether that subscription is active
 } DtNmosReceiverInfo;
 
-DTNMOS_API void DtNmosReceiverInfo_Clear(DtNmosReceiverInfo* receiver);
-DTNMOS_API DtNmosResult DtNmosReceiverInfo_Copy(DtNmosReceiverInfo* target,
-                                                const DtNmosReceiverInfo* source);
-
-// The receivers of a registry, which the list owns.
+// Receivers of a registry, which the list owns with their strings. What finds a single
+// receiver returns a list of that one, at index 0.
 typedef struct DtNmosReceiverList DtNmosReceiverList;
 
 DTNMOS_API size_t DtNmosReceiverList_Count(const DtNmosReceiverList* list);
@@ -125,29 +125,29 @@ DTNMOS_API DtNmosResult DtNmosQuery_Receivers(DtNmosQuery* query,
 // is, as DtNmosQuery_FindSender() finds a sender, with the same errors.
 DTNMOS_API DtNmosResult DtNmosQuery_FindReceiver(DtNmosQuery* query,
                                                  const char* id_or_label,
-                                                 DtNmosReceiverInfo* receiver);
+                                                 DtNmosReceiverList** found);
 
 // +=+=+=+=+=+=+=+=+= A controller that connects receivers (IS-05 v1.1) +=+=+=+=+=+=+=+=+=
 
 // What DtNmosQuery_Connect() connected: the receiver and the sender as the registry lists
-// them, and the SDP of the sender that the receiver was given. Set to zero, it is empty;
-// DtNmosConnection_Clear() frees what it holds.
-typedef struct DtNmosConnection
-{
-    DtNmosReceiverInfo Receiver;
-    DtNmosSenderInfo Sender;
-    DtNmosString Sdp;
-} DtNmosConnection;
+// them, and the SDP of the sender that the receiver was given. It owns them, and what
+// its functions return stays valid until DtNmosConnection_Free().
+typedef struct DtNmosConnection DtNmosConnection;
 
-DTNMOS_API void DtNmosConnection_Clear(DtNmosConnection* connection);
+DTNMOS_API void DtNmosConnection_Free(DtNmosConnection* connection);
+DTNMOS_API const DtNmosReceiverInfo*
+DtNmosConnection_Receiver(const DtNmosConnection* connection);
+DTNMOS_API const char* DtNmosConnection_Sdp(const DtNmosConnection* connection);
+DTNMOS_API const DtNmosSenderInfo*
+DtNmosConnection_Sender(const DtNmosConnection* connection);
 
 // Connects the receiver of the registry of query to a sender, each given by its ID or
 // its label, as a controller of IS-05 does: it finds the Connection API of the receiver
 // through the control urn:x-nmos:control:sr-ctrl/v1.1 of its device, and activates at
 // once its staged parameters with the sender, master_enable true and the SDP of the
 // sender as its transport file. The requests to the node go through the HTTP function
-// of the query, with its timeout. connection, when not null, is cleared first and
-// receives what was connected.
+// of the query, with its timeout. connection, when not null, receives what was
+// connected, which the caller frees; it is set to null when the connect fails.
 //
 // Fails as DtNmosQuery_FindReceiver() and DtNmosQuery_FindSender() do; with
 // DTNMOS_E_INVALID_ARGUMENT when the flow of the sender is of another kind than the
@@ -156,26 +156,26 @@ DTNMOS_API void DtNmosConnection_Clear(DtNmosConnection* connection);
 // answers with another status than 200, the message holding the error it gave.
 DTNMOS_API DtNmosResult DtNmosQuery_Connect(DtNmosQuery* query, const char* receiver,
                                             const char* sender,
-                                            DtNmosConnection* connection);
+                                            DtNmosConnection** connection);
 
 // Disconnects the receiver of the registry of query, given by its ID or label: activates
 // at once its staged parameters with master_enable false and no sender. disconnected,
-// when not null, is cleared first and receives the receiver as the registry lists it.
-// Fails as DtNmosQuery_Connect() does.
+// when not null, receives the receiver as the registry lists it, in a list of one which
+// the caller frees. Fails as DtNmosQuery_Connect() does.
 DTNMOS_API DtNmosResult DtNmosQuery_Disconnect(DtNmosQuery* query, const char* receiver,
-                                               DtNmosReceiverInfo* disconnected);
+                                               DtNmosReceiverList** disconnected);
 
 // Moves a sender of the registry of query, given by its ID or label, to destination_ip
 // and destination_port, as a controller of IS-05 does: through the Connection API of the
 // sender, found as DtNmosQuery_Connect() finds that of a receiver, it activates at once
-// the staged parameters of its leg with the new destination. moved, when not null, is
-// cleared first and receives the sender as the registry lists it. Fails as
-// DtNmosQuery_Connect() does, and with DTNMOS_E_INVALID_ARGUMENT for a sender of another
-// transport than RTP.
+// the staged parameters of its leg with the new destination. moved, when not null,
+// receives the sender as the registry lists it, in a list of one which the caller frees.
+// Fails as DtNmosQuery_Connect() does, and with DTNMOS_E_INVALID_ARGUMENT for a sender of
+// another transport than RTP.
 DTNMOS_API DtNmosResult DtNmosQuery_MoveSender(DtNmosQuery* query, const char* sender,
                                                const char* destination_ip,
                                                uint16_t destination_port,
-                                               DtNmosSenderInfo* moved);
+                                               DtNmosSenderList** moved);
 
 // +=+=+=+=+=+=+=+=+=+= A subscription to the resources of a registry +=+=+=+=+=+=+=+=+=+=
 
@@ -243,11 +243,11 @@ DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* subscrip
 // that is not persistent when its last WebSocket closes.
 DTNMOS_API void DtNmosSubscription_Destroy(DtNmosSubscription* subscription);
 
-// Reads the JSON of a sender, as a change gives it, into sender, which is cleared first
-// and which the caller clears. Its media stays DTNMOS_MEDIA_OTHER: it is a property of
-// its flow. Fails with DTNMOS_E_PARSE for what is no JSON object.
+// Reads the JSON of a sender, as a change gives it, into a list of one, which the caller
+// frees. Its media stays DTNMOS_MEDIA_OTHER: it is a property of its flow. Fails with
+// DTNMOS_E_PARSE for what is no JSON object.
 DTNMOS_API DtNmosResult DtNmosSenderInfo_Parse(const char* json, size_t length,
-                                               DtNmosSenderInfo* sender);
+                                               DtNmosSenderList** sender);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+= Finding registries through DNS-SD +=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -290,33 +290,32 @@ typedef struct DtNmosDiscoveryConfig
     const char* DnsDomain;
 } DtNmosDiscoveryConfig;
 
-// A Query or Registration API that a registry announces. Strings an announcement leaves
-// out are empty.
+// A Query or Registration API that a registry announces. Its strings that are no arrays
+// belong to the list it is in and stay valid until that list is freed. A string an
+// announcement leaves out is empty, never null.
 typedef struct DtNmosRegistryInfo
 {
     DtNmosService Service;
-    DtNmosString Instance; // the name of the service instance, e.g. "Registry 1"
-    DtNmosString Host;     // the host of its SRV record, e.g. "registry-1.local"
-    DtNmosString Address;  // the IPv4 address of host, when the answers gave it
+    const char* Instance; // the name of the service instance, e.g. "Registry 1"
+    // The host of its SRV record, e.g. "registry-1.local".
+    char Host[DTNMOS_MAX_ADDRESS_SIZE];
+    char Address[DTNMOS_MAX_ADDRESS_SIZE]; // the IPv4 address of host, when given
     uint16_t Port;
     // The base URL of the API: "<api_proto>://<address>:<port>", with the host instead of
     // the address for https, or when the answers gave no address.
-    DtNmosString Url;
-    DtNmosString ApiProto;    // "http" or "https"
-    DtNmosString ApiVersions; // e.g. "v1.2,v1.3"
-    int Priority;             // pri: lower is preferred, 100 and up are for development;
-                              // -1 when the announcement has none
-    int Auth;                 // api_auth is true: the API asks for authorization (IS-10)
+    const char* Url;
+    char ApiProto[DTNMOS_MAX_SHORT_SIZE]; // "http" or "https"
+    const char* ApiVersions;              // e.g. "v1.2,v1.3"
+    int Priority; // pri: lower is preferred, 100 and up are for development;
+                  // -1 when the announcement has none
+    int Auth;     // api_auth is true: the API asks for authorization (IS-10)
     // The API offers v1.3 over http or https without authorization, as dtnmos can use it.
     int Usable;
     DtNmosSearch FoundBy; // the search that found it
 } DtNmosRegistryInfo;
 
-DTNMOS_API void DtNmosRegistryInfo_Clear(DtNmosRegistryInfo* registry);
-DTNMOS_API DtNmosResult DtNmosRegistryInfo_Copy(DtNmosRegistryInfo* target,
-                                                const DtNmosRegistryInfo* source);
-
-// The registries a search found, which the list owns: the usable ones first, each in the
+// The registries a search found, which the list owns with their strings: the usable ones
+// first, each in the
 // order of priority, those without a priority last, those of the DNS server before those
 // of multicast DNS, then by instance name. IS-04 has a client take one at random among
 // those of the same priority, which is for the caller.

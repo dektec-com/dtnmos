@@ -34,6 +34,7 @@
     DTNMOS_TEST(query_lists_the_senders_of_every_page)                                   \
     DTNMOS_TEST(query_finds_a_sender_and_its_sdp)                                        \
     DTNMOS_TEST(query_names_what_went_wrong)                                             \
+    DTNMOS_TEST(query_writes_a_manifest_into_the_callers_buffer)                         \
     DTNMOS_TEST(query_refuses_an_incomplete_config)                                      \
     DTNMOS_TEST(query_lists_and_finds_receivers)                                         \
     DTNMOS_TEST(controller_connects_a_receiver)                                          \
