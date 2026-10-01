@@ -86,7 +86,9 @@ struct DtNmosNode
     char* Hostname;
     char* ApiHost;
     uint16_t ApiPort;
-    char* Registration; // base URL of the Registration API, ending in /
+    // The base URL of the Registration API, ending in /; null while the node searches
+    // for its registry. The poll thread changes it, under the lock.
+    char* Registration;
     DtNmosHttpFunc Http;
     void* HttpUser;
     uint32_t TimeoutMs;
@@ -104,6 +106,14 @@ struct DtNmosNode
     void* RegistryFailedUser;
     uint32_t FailuresBeforeSwitch;
     uint32_t Failures; // polls that failed in a row; the poll thread's own
+    // The search for a registry of a node opened without one; the poll thread's own. The
+    // strings of Discovery are the node's copies.
+    int Searches;
+    DtNmosDiscoveryConfig Discovery;
+    DtNmosRegistryList* Found; // what the last search found
+    size_t FoundNext;          // the index in Found of the next to try
+    uint64_t NextSearchMs;     // of the monotonic clock
+    uint32_t SearchWaitMs;     // between searches that find none, doubling
     NmosNodeDevice* Devices;
     size_t DeviceCount;
     size_t DeviceCapacity;

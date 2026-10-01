@@ -10,6 +10,7 @@
 
 #include "dtnmos.h"
 #include "dtnmos_http.h"
+#include "dtnmos_query.h"
 #include "dtnmos_sdp.h"
 
 #ifdef __cplusplus
@@ -40,12 +41,15 @@ typedef struct DtNmosNodeConfig
     const char* Description;
     const char* Hostname;
     // The address the Node and the Connection API are reached at; null finds the address
-    // of this host on the way to the registry.
+    // of this host on the way to the registry, or, when the node searches for one, that
+    // of the interface it searches on.
     const char* ApiHost;
-    uint16_t ApiPort;            // 0 lets DtNmosNode_Serve() take any free port
-    const char* RegistrationUrl; // base URL of the registry, e.g. "http://registry.local"
-    const char* ApiVersion;      // of IS-04; "v1.3" when null, the only one accepted yet
-    DtNmosHttpFunc Http;         // for the requests to the registry
+    uint16_t ApiPort; // 0 lets DtNmosNode_Serve() take any free port
+    // The base URL of the registry, e.g. "http://registry.local"; null makes the node
+    // search for one itself with DNS-SD, as Discovery says.
+    const char* RegistrationUrl;
+    const char* ApiVersion; // of IS-04; "v1.3" when null, the only one accepted yet
+    DtNmosHttpFunc Http;    // for the requests to the registry
     void* HttpUser;
     uint32_t TimeoutMs;   // of each request to the registry; 5000 when 0
     uint32_t HeartbeatMs; // 5000 when 0
@@ -55,6 +59,14 @@ typedef struct DtNmosNodeConfig
     DtNmosRegistryFailedFunc RegistryFailed;
     void* RegistryFailedUser;
     uint32_t FailuresBeforeSwitch; // polls that fail in a row first; 3 when 0
+    // How a node without a RegistrationUrl searches for its registry, as
+    // DtNmos_Discover() does, for the Registration API whatever Service says; copied.
+    // Null searches through multicast DNS and the DNS server of the host, on the
+    // interface of the default route. The node registers with the most preferred usable
+    // registry it finds, moves to the next when one fails FailuresBeforeSwitch polls in a
+    // row, after asking RegistryFailed when that is set, and searches again when none is
+    // left, every second at first and every 8 seconds at most, as IS-04 asks of a node.
+    const DtNmosDiscoveryConfig* Discovery;
 } DtNmosNodeConfig;
 
 typedef struct DtNmosDeviceConfig
@@ -188,16 +200,19 @@ DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* Node,
 DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
 
 // Opens node with config, whose strings it copies; it registers nothing until it is
-// polled. Fails with DTNMOS_E_INVALID_ARGUMENT without an ID, a registration URL or an
-// HTTP function, and with DTNMOS_E_STATE when the node is open. A node closed can be
-// opened again, with another config, keeping its handle.
+// polled, nor searches for its registry. Fails with DTNMOS_E_INVALID_ARGUMENT without an
+// ID or an HTTP function, or for a Discovery of another size, and with DTNMOS_E_STATE
+// when the node is open. A node closed can be opened again, with another config, keeping
+// its handle.
 DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config);
 
-// Applies the scheduled activations that are due, registers what is not registered yet,
-// deletes what was removed, and sends a heartbeat when one is due, registering everything
-// again when the registry has lost the node. Sets NextMs, when it is not null, to when it
-// wants to be called again, which a scheduled activation brings forward. Fails with the
-// first request that failed; the next poll tries again.
+// Applies the scheduled activations that are due, searches for a registry when the node
+// has none and it is time to, registers what is not registered yet, deletes what was
+// removed, and sends a heartbeat when one is due, registering everything again when the
+// registry has lost the node. A search blocks for as long as DtNmos_Discover() does, and
+// finding no registry is no failure. Sets NextMs, when it is not null, to when it wants
+// to be called again, which a scheduled activation brings forward. Fails with the first
+// request that failed; the next poll tries again.
 DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 
 // Removes a device, sender or receiver, and the senders and receivers of a device; the

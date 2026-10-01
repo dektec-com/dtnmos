@@ -46,6 +46,15 @@ static char* CopyText(const char* Text)
     return Copy;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyOptional -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Copies Text, leaving null null, where CopyText() makes it an empty text.
+//
+static char* CopyOptional(const char* Text)
+{
+    return Text == NULL ? NULL : CopyText(Text);
+}
+
 static void NodeLog(DtNmosNode* Node, DtNmosLogLevel Level, const char* Format, ...)
     DTNMOS_PRINTF(3, 4);
 
@@ -149,12 +158,10 @@ DtNmosResult NmosNode_CheckOpen(const DtNmosNode* Node, const char* Function)
 DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
 {
     if (Node == NULL || Config == NULL || Config->Id.Text[0] == '\0' ||
-        Config->RegistrationUrl == NULL || Config->RegistrationUrl[0] == '\0' ||
         Config->Http == NULL)
     {
-        return NmosError_Fail(
-            DTNMOS_E_INVALID_ARGUMENT,
-            "A node needs an ID, the URL of a registry and an HTTP function.");
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A node needs an ID and an HTTP function.");
     }
     if (Node->Open)
     {
@@ -175,7 +182,47 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
                               "IS-04 %s is not supported; dtnmos speaks v1.3.",
                               Config->ApiVersion);
     }
+    // A config of an older header ends before the search for a registry.
+    const DtNmosDiscoveryConfig* Discovery =
+        Config->Size >= offsetof(DtNmosNodeConfig, Discovery) + sizeof(Config->Discovery)
+            ? Config->Discovery
+            : NULL;
+    if (Discovery != NULL)
+    {
+        const DtNmosResult DiscoverySized = DTNMOS_CHECK_SIZE(
+            Discovery, DtNmosDiscoveryConfig, sizeof(DtNmosDiscoveryConfig));
+        if (DiscoverySized != DTNMOS_OK)
+        {
+            return DiscoverySized;
+        }
+    }
+    const int Searches =
+        Config->RegistrationUrl == NULL || Config->RegistrationUrl[0] == '\0';
     DtNmosNode* Result = Node;
+    Result->Searches = Searches;
+    if (Discovery != NULL)
+    {
+        Result->Discovery = *Discovery;
+    }
+    Result->Discovery.Size = sizeof(Result->Discovery);
+    Result->Discovery.Service = DTNMOS_SERVICE_REGISTRATION;
+    // The strings of the search are the node's own; null stays null.
+    Result->Discovery.InterfaceAddress = CopyOptional(Result->Discovery.InterfaceAddress);
+    Result->Discovery.Destination = CopyOptional(Result->Discovery.Destination);
+    Result->Discovery.DnsServer = CopyOptional(Result->Discovery.DnsServer);
+    Result->Discovery.DnsDomain = CopyOptional(Result->Discovery.DnsDomain);
+    if (Result->Discovery.Log == NULL)
+    {
+        Result->Discovery.Log = Config->Log;
+        Result->Discovery.LogUser = Config->LogUser;
+    }
+    const int Copied =
+        (Discovery == NULL ||
+         ((Discovery->InterfaceAddress == NULL) ==
+              (Result->Discovery.InterfaceAddress == NULL) &&
+          (Discovery->Destination == NULL) == (Result->Discovery.Destination == NULL) &&
+          (Discovery->DnsServer == NULL) == (Result->Discovery.DnsServer == NULL) &&
+          (Discovery->DnsDomain == NULL) == (Result->Discovery.DnsDomain == NULL)));
     Result->Mutex = NmosOs_MutexCreate();
     Result->Id = Config->Id;
     Result->Label = CopyText(Config->Label);
@@ -187,17 +234,24 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     {
         snprintf(Host, sizeof(Host), "%s", Config->ApiHost);
     }
+    else if (Searches && Result->Discovery.InterfaceAddress != NULL)
+    {
+        snprintf(Host, sizeof(Host), "%s", Result->Discovery.InterfaceAddress);
+    }
     else
     {
-        char Registry[256];
-        if (!HostOfUrl(Config->RegistrationUrl, Registry, sizeof(Registry)) ||
+        // The address on the way to the registry, or, for a node that searches for one,
+        // on the way to the group of multicast DNS: that of the default route.
+        char Registry[256] = "224.0.0.251";
+        if ((!Searches &&
+             !HostOfUrl(Config->RegistrationUrl, Registry, sizeof(Registry))) ||
             !NmosOs_AddressToward(Registry, Host, sizeof(Host)))
         {
             snprintf(Host, sizeof(Host), "127.0.0.1");
         }
     }
     Result->ApiHost = CopyText(Host);
-    Result->Registration = RegistrationBase(Config->RegistrationUrl);
+    Result->Registration = Searches ? NULL : RegistrationBase(Config->RegistrationUrl);
     Result->Http = Config->Http;
     Result->HttpUser = Config->HttpUser;
     Result->TimeoutMs = Config->TimeoutMs == 0 ? 5000 : Config->TimeoutMs;
@@ -217,8 +271,8 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
         Result->FailuresBeforeSwitch = 3;
     }
     if (Result->Mutex == NULL || Result->Label == NULL || Result->Description == NULL ||
-        Result->Hostname == NULL || Result->ApiHost == NULL ||
-        Result->Registration == NULL)
+        Result->Hostname == NULL || Result->ApiHost == NULL || !Copied ||
+        (!Searches && Result->Registration == NULL))
     {
         NmosNode_Release(Result);
         return NmosError_FailMemory();
@@ -275,6 +329,11 @@ void NmosNode_Release(DtNmosNode* Node)
     free(Node->Hostname);
     free(Node->ApiHost);
     free(Node->Registration);
+    free((char*)Node->Discovery.InterfaceAddress);
+    free((char*)Node->Discovery.Destination);
+    free((char*)Node->Discovery.DnsServer);
+    free((char*)Node->Discovery.DnsDomain);
+    DtNmosRegistryList_Free(Node->Found);
     NmosOs_MutexFree(Node->Mutex);
     memset(Node, 0, sizeof(*Node));
 }
@@ -1436,6 +1495,85 @@ int DtNmosNode_IsRegistered(const DtNmosNode* Node)
     return All;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Moves the node to the registry at Url, or to none for null, with which it registers
+// everything from the start. Returns 0 when the memory ran out. On the poll thread.
+//
+static int TakeRegistry(DtNmosNode* Node, const char* Url)
+{
+    char* Base = NULL;
+    if (Url != NULL && (Base = RegistrationBase(Url)) == NULL)
+    {
+        return 0;
+    }
+    NmosNode_Lock(Node);
+    free(Node->Registration);
+    Node->Registration = Base;
+    ForgetRegistration(Node);
+    NmosNode_Unlock(Node);
+    Node->Failures = 0;
+    return 1;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeNextFound -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Moves the node to the next usable registry the last search found, in the order of the
+// list: the most preferred first. Returns 0 when none is left. On the poll thread.
+//
+static int TakeNextFound(DtNmosNode* Node)
+{
+    while (Node->FoundNext < DtNmosRegistryList_Count(Node->Found))
+    {
+        const DtNmosRegistryInfo* Info =
+            DtNmosRegistryList_At(Node->Found, Node->FoundNext);
+        ++Node->FoundNext;
+        if (Info->Usable && TakeRegistry(Node, Info->Url))
+        {
+            NodeLog(Node, DTNMOS_LOG_INFO, "The node registers with %s, of %s.",
+                    Info->Url, Info->Instance);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SearchRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Searches for a registry with DNS-SD, when it is time to, and takes the most preferred
+// usable one; finding none, searches again after a wait that doubles from a second to
+// eight, short enough for a registry that answers only once it saw the question. On the
+// poll thread.
+//
+static void SearchRegistry(DtNmosNode* Node)
+{
+    if (NmosOs_MonotonicMs() < Node->NextSearchMs)
+    {
+        return;
+    }
+    DtNmosRegistryList_Free(Node->Found);
+    Node->Found = NULL;
+    Node->FoundNext = 0;
+    if (DtNmos_Discover(&Node->Discovery, &Node->Found) != DTNMOS_OK)
+    {
+        NodeLog(Node, DTNMOS_LOG_WARNING, "The search for a registry failed: %s",
+                DtNmos_GetLastError());
+    }
+    if (TakeNextFound(Node))
+    {
+        Node->SearchWaitMs = 0;
+        return;
+    }
+    Node->SearchWaitMs =
+        Node->SearchWaitMs == 0
+            ? 1000
+            : (Node->SearchWaitMs >= 4000 ? 8000 : Node->SearchWaitMs * 2);
+    Node->NextSearchMs = NmosOs_MonotonicMs() + Node->SearchWaitMs;
+    NodeLog(Node, DTNMOS_LOG_DEBUG,
+            "No registry found; the node searches again in %u ms.",
+            (unsigned)Node->SearchWaitMs);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
@@ -1448,6 +1586,22 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     // Scheduled activations first, as they do not wait for the registry.
     uint32_t ScheduledMs = UINT32_MAX;
     NmosConnection_Poll(Node, &ScheduledMs);
+    // A node without a registry searches for one; until it finds one, it has nothing
+    // to register with, and that is no failure.
+    if (Node->Registration == NULL && Node->Searches && !Node->Closing)
+    {
+        SearchRegistry(Node);
+    }
+    if (Node->Registration == NULL)
+    {
+        if (NextMs != NULL)
+        {
+            const uint64_t Now = NmosOs_MonotonicMs();
+            const uint64_t Wait = Node->NextSearchMs > Now ? Node->NextSearchMs - Now : 0;
+            *NextMs = Wait < ScheduledMs ? (uint32_t)Wait : ScheduledMs;
+        }
+        return DTNMOS_OK;
+    }
     DtNmosResult Result = DTNMOS_OK;
     // Deletions first, children before parents as they were scheduled.
     for (;;)
@@ -1533,34 +1687,39 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
         Node->NextHeartbeatMs = NmosOs_MonotonicMs() + Node->HeartbeatMs;
         NmosNode_Unlock(Node);
     }
-    // A registry that fails polls in a row makes way for another one, when the caller
-    // gives one. The URL is swapped here, on the thread that reads it.
+    // A registry that fails polls in a row makes way for another one: the one the caller
+    // gives, when it gives one, or else, for a node that searches, the next one found,
+    // and when none is left, a new search. The URL is swapped here, on the thread that
+    // reads it.
     if (Result == DTNMOS_OK)
     {
         Node->Failures = 0;
     }
-    else if (++Node->Failures >= Node->FailuresBeforeSwitch &&
-             Node->RegistryFailed != NULL)
+    else if (++Node->Failures >= Node->FailuresBeforeSwitch && !Node->Closing)
     {
+        const uint32_t Failures = Node->Failures;
         char Next[DTNMOS_MAX_URL_SIZE] = "";
-        char* Base = NULL;
-        if (Node->RegistryFailed(Node->RegistryFailedUser, Node->Failures, Next,
-                                 sizeof(Next)) &&
-            memchr(Next, '\0', sizeof(Next)) != NULL && Next[0] != '\0')
-        {
-            Base = RegistrationBase(Next);
-        }
-        if (Base != NULL)
+        int Moved = Node->RegistryFailed != NULL &&
+                    Node->RegistryFailed(Node->RegistryFailedUser, Failures, Next,
+                                         sizeof(Next)) &&
+                    memchr(Next, '\0', sizeof(Next)) != NULL && Next[0] != '\0' &&
+                    TakeRegistry(Node, Next);
+        if (Moved)
         {
             NodeLog(Node, DTNMOS_LOG_WARNING,
                     "The registry failed %u polls in a row; the node registers with %s.",
-                    (unsigned)Node->Failures, Next);
-            NmosNode_Lock(Node);
-            free(Node->Registration);
-            Node->Registration = Base;
-            ForgetRegistration(Node);
-            NmosNode_Unlock(Node);
-            Node->Failures = 0;
+                    (unsigned)Failures, Next);
+        }
+        if (!Moved && Node->Searches)
+        {
+            NodeLog(Node, DTNMOS_LOG_WARNING,
+                    "The registry failed %u polls in a row; the node takes another.",
+                    (unsigned)Failures);
+            if (!TakeNextFound(Node) && TakeRegistry(Node, NULL))
+            {
+                Node->NextSearchMs = 0;
+                Node->SearchWaitMs = 0;
+            }
         }
     }
     if (NextMs != NULL)

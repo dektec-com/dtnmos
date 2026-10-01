@@ -6,7 +6,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 // Registers a node, its device, a video sender and a video receiver with a registry,
-// given with --registry or found with DNS-SD, and serves the Node API and the Connection
+// given with --registry or else one the node finds itself with DNS-SD, searching again
+// until it finds one, and serves the Node API and the Connection
 // API of IS-05 for --seconds. The sender sends the first flow of the SDP of --sdp, or a
 // flow of 1080p25 to 239.100.1.1:5004, from --address, which the receiver receives on:
 // with a card, the address of its network port. The IDs follow from --label, so that the
@@ -21,8 +22,8 @@
 //     unregistered
 //
 // Needs dtnmos built with libcurl and with the server; without the server it registers
-// the node but serves no Connection API. Exits with 0 when the time is over, 2 when no
-// registry was found, and 1 when a call failed.
+// the node but serves no Connection API. Exits with 0 when the time is over, and 1 when
+// a call failed.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
@@ -303,23 +304,8 @@ int main(int Argc, char** Argv)
         Flow = *DtNmosSdp_Flow(Sdp, 0);
     }
 
-    char Url[512];
-    const char* Given = Example_Value(Argc, Argv, "--registry");
-    if (Given != NULL)
-    {
-        snprintf(Url, sizeof(Url), "%s", Given);
-    }
-    else
-    {
-        const int Found =
-            Example_FindRegistry(DTNMOS_SERVICE_REGISTRATION, Url, sizeof(Url));
-        if (Found != EXAMPLE_OK)
-        {
-            DtNmosSdp_Free(Sdp);
-            return Found;
-        }
-    }
-
+    // Without --registry, the node searches for its registry itself, with DNS-SD.
+    const char* Url = Example_Value(Argc, Argv, "--registry");
     DtNmosNodeConfig Config;
     memset(&Config, 0, sizeof(Config));
     Config.Size = sizeof(Config);
@@ -329,7 +315,7 @@ int main(int Argc, char** Argv)
     Config.RegistrationUrl = Url;
     Config.Http = DtNmos_CurlHttp;
     Config.Log = Example_Log;
-    Config.LogUser = Example_HasFlag(Argc, Argv, "--verbose") ? (void*)Url : NULL;
+    Config.LogUser = Example_HasFlag(Argc, Argv, "--verbose") ? (void*)Label : NULL;
     DtNmosNode* Node = DtNmosNode_Alloc();
     DtNmosResult Result = Node == NULL ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
     if (Result == DTNMOS_OK)
@@ -342,7 +328,15 @@ int main(int Argc, char** Argv)
         DtNmosSdp_Free(Sdp);
         return Example_Failed("DtNmosNode_Open", Result);
     }
-    printf("node \"%s\" %s, registering with %s\n", Label, Config.Id.Text, Url);
+    if (Url != NULL)
+    {
+        printf("node \"%s\" %s, registering with %s\n", Label, Config.Id.Text, Url);
+    }
+    else
+    {
+        printf("node \"%s\" %s, searching for a registry with DNS-SD\n", Label,
+               Config.Id.Text);
+    }
     char Address[DTNMOS_MAX_ADDRESS_SIZE];
     const char* GivenAddress = Example_Value(Argc, Argv, "--address");
     if (GivenAddress != NULL)

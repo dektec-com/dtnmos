@@ -7,7 +7,8 @@
 // Built only with DTNMOS_INTEROP_TESTS, and run with "ctest -L interop" on a machine the
 // test bed reaches: DTNMOS_TESTING_TOOL is the base URL of the AMWA NMOS Testing Tool,
 // e.g. http://192.168.39.60:5000, and DTNMOS_TEST_REGISTRY that of a registry, such as
-// the one of nmos-cpp, e.g. http://192.168.39.60:8010.
+// the one of nmos-cpp, e.g. http://192.168.39.60:8010. DTNMOS_PAUSE_REGISTRY and
+// DTNMOS_RESUME_REGISTRY keep that registry off DNS-SD during IS-04-01.
 //
 // As a node: a node of dtnmos registers a device, a video sender and a video receiver
 // with the registry and serves its APIs, and the tool runs a suite against it, IS-04-01,
@@ -99,14 +100,16 @@ static void StopNode(void* Context)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Starts a node with a device, a video sender and a video receiver, registered with the
-// registry of DTNMOS_TEST_REGISTRY, and waits until the registry holds it. The sender
-// sends from the address the node serves at, so that its SDP has a source filter.
+// registry of DTNMOS_TEST_REGISTRY, and waits until the registry holds it; or, when it
+// Searches, one that searches for its registry with DNS-SD, which it does not wait for.
+// The sender sends from the address the node serves at, so that its SDP has a source
+// filter.
 //
-static void StartNode(NmosInteropNode* Interop)
+static void StartNode(NmosInteropNode* Interop, int Searches)
 {
     memset(Interop, 0, sizeof(*Interop));
-    const char* Registry = Getenv("DTNMOS_TEST_REGISTRY");
-    NMOS_ASSERT(Registry != NULL);
+    const char* Registry = Searches ? NULL : Getenv("DTNMOS_TEST_REGISTRY");
+    NMOS_ASSERT(Searches || Registry != NULL);
     DtNmosNodeConfig Config;
     memset(&Config, 0, sizeof(Config));
     Config.Size = sizeof(Config);
@@ -188,29 +191,31 @@ static void StartNode(NmosInteropNode* Interop)
     Interop->Receiver = Receiver.Id;
 
     // The poll thread of the server registers the node.
-    for (int Wait = 0; Wait < 100 && !DtNmosNode_IsRegistered(Interop->Node); Wait++)
+    for (int Wait = 0; !Searches && Wait < 100 && !DtNmosNode_IsRegistered(Interop->Node);
+         Wait++)
     {
         NmosOs_SleepMs(100);
     }
-    NMOS_ASSERT(DtNmosNode_IsRegistered(Interop->Node));
-    printf("    node at %s:%u\n", Interop->Host, (unsigned)Interop->Port);
+    NMOS_ASSERT(Searches || DtNmosNode_IsRegistered(Interop->Node));
+    printf("    node at %s:%u%s\n", Interop->Host, (unsigned)Interop->Port,
+           Searches ? ", searching for its registry" : "");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RunSuite -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Runs Suite of the Testing Tool against the node, with one API per version of
-// Versions, and counts the tests the tool fails into *Failed. Prints every result but a
-// pass and the tally of each state.
+// Versions, and counts the tests the tool fails into *Failed; a node that Searches finds
+// its registry itself. Prints every result but a pass and the tally of each state.
 //
 static void RunSuite(const char* Suite, const char* const* Versions, size_t Count,
-                     int* Failed)
+                     int Searches, int* Failed)
 {
     *Failed = -1;
     const char* Tool = Getenv("DTNMOS_TESTING_TOOL");
     NMOS_ASSERT(Tool != NULL);
     NmosInteropNode Interop;
-    StartNode(&Interop);
-    NMOS_ASSERT(Interop.Node != NULL && DtNmosNode_IsRegistered(Interop.Node));
+    StartNode(&Interop, Searches);
+    NMOS_ASSERT(Interop.Node != NULL);
 
     NmosBuffer Body;
     memset(&Body, 0, sizeof(Body));
@@ -305,16 +310,36 @@ static void RunSuite(const char* Suite, const char* const* Versions, size_t Coun
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodePassesIs0401 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RunCommand -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Runs the command of the variable Name, when it is set.
+//
+static void RunCommand(const char* Name)
+{
+    const char* Command = getenv(Name);
+    if (Command != NULL && Command[0] != '\0')
+    {
+        const int Status = system(Command);
+        printf("    %s: %s, %d\n", Name, Command, Status);
+    }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodePassesIs0401 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
 // IS-04-01, the Node API and registration. The tool announces mock registries of its
-// own with multicast DNS and waits for the node to register with them; the node of the
-// tests registers with DTNMOS_TEST_REGISTRY, as dtnmos does not search for a registry
-// itself, and the tests of registration fail for that.
+// own with DNS-SD, once it saw the node ask, and the node searches for them, registers
+// with the most preferred and moves to the next when one fails. No other registry may
+// answer meanwhile: DTNMOS_PAUSE_REGISTRY, when it is set, is a command that keeps the
+// registry of the test bed from answering on DNS-SD, e.g. "nmos-testbed pause", and
+// DTNMOS_RESUME_REGISTRY one that lets it answer again.
 //
 NMOS_TEST(NodePassesIs0401)
 {
     static const char* const Versions[] = {"v1.3"};
     int Failed = 0;
-    RunSuite("IS-04-01", Versions, 1, &Failed);
+    RunCommand("DTNMOS_PAUSE_REGISTRY");
+    RunSuite("IS-04-01", Versions, 1, 1, &Failed);
+    RunCommand("DTNMOS_RESUME_REGISTRY");
     NMOS_ASSERT_EQ(Failed, 0);
 }
 
@@ -326,7 +351,7 @@ NMOS_TEST(NodePassesIs0501)
 {
     static const char* const Versions[] = {"v1.1"};
     int Failed = 0;
-    RunSuite("IS-05-01", Versions, 1, &Failed);
+    RunSuite("IS-05-01", Versions, 1, 0, &Failed);
     NMOS_ASSERT_EQ(Failed, 0);
 }
 
@@ -339,7 +364,7 @@ NMOS_TEST(NodePassesIs0502)
 {
     static const char* const Versions[] = {"v1.3", "v1.1"};
     int Failed = 0;
-    RunSuite("IS-05-02", Versions, 2, &Failed);
+    RunSuite("IS-05-02", Versions, 2, 0, &Failed);
     NMOS_ASSERT_EQ(Failed, 0);
 }
 
@@ -360,7 +385,7 @@ static void OnChange(void* User, const DtNmosChange* Change)
 NMOS_TEST(ClientWorksWithTheRegistry)
 {
     NmosInteropNode Interop;
-    StartNode(&Interop);
+    StartNode(&Interop, 0);
     NMOS_ASSERT(Interop.Node != NULL && DtNmosNode_IsRegistered(Interop.Node));
 
     DtNmosQueryConfig Config;

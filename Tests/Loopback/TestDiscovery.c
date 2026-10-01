@@ -8,12 +8,14 @@
 
 #include "dtnmos_query.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "NmosDns.h"
 #include "NmosOs.h"
 #include "NmosTest.h"
+#include "dtnmos_node.h"
 
 // A DNS message the test builds.
 typedef struct NmosMessage
@@ -784,6 +786,126 @@ NMOS_TEST(DiscoveryTakesOnlyTheDnsServer)
     StopResponder(&Mdns);
 }
 
+// The registries a node that searches finds: how many requests went to each, and which
+// do not answer.
+typedef struct NmosFakeRegistries
+{
+    const char* Urls[2]; // the base URLs of the two
+    int Requests[2];
+    int Down[2];
+} NmosFakeRegistries;
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Answers a request of the node for the registry it goes to, or fails it as one that
+// does not answer.
+//
+static DtNmosResult FakeRegistry(void* User, const DtNmosHttpRequest* Request,
+                                 DtNmosHttpResponse* Response)
+{
+    NmosFakeRegistries* f = User;
+    for (int i = 0; i < 2; ++i)
+    {
+        if (strncmp(Request->Url, f->Urls[i], strlen(f->Urls[i])) == 0)
+        {
+            ++f->Requests[i];
+            if (f->Down[i])
+            {
+                return DtNmos_SetLastError(DTNMOS_E_HTTP,
+                                           "The registry does not answer.");
+            }
+        }
+    }
+    DtNmosHttpResponse_SetStatus(Response,
+                                 strstr(Request->Url, "/resource") != NULL ? 201 : 200);
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- NodeSearchesForItsRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A node without the URL of a registry searches for one, registers with the most
+// preferred, moves to the next when it fails, and searches again when none is left.
+//
+NMOS_TEST(NodeSearchesForItsRegistry)
+{
+    static const NmosAnnounced Instances[] = {
+        {"Second",
+         "second.local",
+         8080,
+         {"api_proto=http", "api_ver=v1.3", "api_auth=false", "pri=10"},
+         4,
+         {127, 0, 0, 2}},
+        {"First",
+         "first.local",
+         8081,
+         {"api_proto=http", "api_ver=v1.3", "api_auth=false", "pri=0"},
+         4,
+         {127, 0, 0, 3}},
+    };
+    NmosResponder r;
+    NMOS_ASSERT(StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", 0));
+    NmosFakeRegistries Fake;
+    memset(&Fake, 0, sizeof(Fake));
+    Fake.Urls[0] = "http://127.0.0.3:8081/";
+    Fake.Urls[1] = "http://127.0.0.2:8080/";
+    DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){"cccccccc-0000-4000-8000-000000000001"};
+    Config.Label = "searching node";
+    Config.Description = "";
+    Config.Hostname = "searching-node";
+    Config.ApiHost = "127.0.0.1";
+    Config.ApiPort = 8080;
+    Config.Http = FakeRegistry;
+    Config.HttpUser = &Fake;
+    Config.HeartbeatMs = 1;
+    Config.FailuresBeforeSwitch = 1;
+    Config.Discovery = &Discovery;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    NMOS_ASSERT(Node != NULL);
+    // A discovery config of another size is refused.
+    Discovery.Size = 4;
+    NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
+    Discovery.Size = sizeof(Discovery);
+    const DtNmosResult Opened = DtNmosNode_Open(Node, &Config);
+    if (Opened != DTNMOS_OK)
+    {
+        printf("  %s\n", DtNmos_GetLastError());
+    }
+    NMOS_ASSERT(Opened == DTNMOS_OK);
+
+    // The first poll finds both, and registers with the one of priority 0.
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(Fake.Requests[0] > 0);
+    NMOS_ASSERT_EQ(Fake.Requests[1], 0);
+
+    // When it fails, the node registers with the other.
+    Fake.Down[0] = 1;
+    NmosOs_SleepMs(5);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(Fake.Requests[1] > 0);
+
+    // When that fails too, none is left, and the node searches again.
+    Fake.Down[1] = 1;
+    NmosOs_SleepMs(5);
+    NmosOs_MutexLock(r.Mutex);
+    const int Queries = r.Queries;
+    NmosOs_MutexUnlock(r.Mutex);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) != DTNMOS_OK);
+    DtNmosNode_Poll(Node, NULL);
+    NmosOs_MutexLock(r.Mutex);
+    const int QueriesAfter = r.Queries;
+    NmosOs_MutexUnlock(r.Mutex);
+    NMOS_ASSERT(QueriesAfter > Queries);
+    DtNmosNode_Free(Node);
+    StopResponder(&r);
+}
+
 NMOS_TEST_MAIN("Discovery", NMOS_RUN(DnsWritesAQuery),
                NMOS_RUN(DnsReadsRecordsAndCompression),
                NMOS_RUN(DnsEscapesDotsWithinLabels),
@@ -792,4 +914,5 @@ NMOS_TEST_MAIN("Discovery", NMOS_RUN(DnsWritesAQuery),
                NMOS_RUN(DiscoveryAsksAgainForWhatIsMissing),
                NMOS_RUN(DiscoveryFindsNothingInSilence), NMOS_RUN(DnsReadsResolvConf),
                NMOS_RUN(DiscoveryAsksADnsServerToo),
-               NMOS_RUN(DiscoveryTakesOnlyTheDnsServer))
+               NMOS_RUN(DiscoveryTakesOnlyTheDnsServer),
+               NMOS_RUN(NodeSearchesForItsRegistry))
