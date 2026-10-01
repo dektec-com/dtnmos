@@ -69,8 +69,9 @@ typedef struct DtNmosNodeConfig
     // knows the registries it can fail over to, and without one every second at first
     // and every 8 seconds at most. It registers with the most preferred usable registry
     // it found; when one fails FailuresBeforeSwitch polls in a row, it asks
-    // RegistryFailed, when that is set, and else moves to the next one that has not
-    // failed since it last registered, with a heartbeat first, as IS-04 asks of a node.
+    // RegistryFailed, when that is set, and else moves to the most preferred one that has
+    // not failed yet, with a heartbeat first, as IS-04 asks of a node; once all have
+    // failed, it starts over from the most preferred.
     const DtNmosDiscoveryConfig* Discovery;
 } DtNmosNodeConfig;
 

@@ -1341,6 +1341,9 @@ DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* Node, const DtNmosId* Id,
 //
 static void ForgetRegistration(DtNmosNode* Node)
 {
+    // Registering everything again is a first registration, which a registry holding an
+    // old node of this ID answers with 200.
+    Node->FirstRegistration = 1;
     Node->NodeRegistered = 0;
     for (size_t i = 0; i < Node->DeviceCount; ++i)
     {
@@ -1539,7 +1542,6 @@ static int TakeRegistry(DtNmosNode* Node, const char* Url)
     ForgetRegistration(Node);
     NmosNode_Unlock(Node);
     Node->Failures = 0;
-    Node->FirstRegistration = 1;
     return 1;
 }
 
@@ -1609,7 +1611,7 @@ static void SearchLoop(void* Argument)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasFailed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Whether the registry of the base URL Base failed since the node last registered.
+// Whether the registry of the base URL Base failed since the node last started over.
 //
 static int HasFailed(const DtNmosNode* Node, const char* Base)
 {
@@ -1664,8 +1666,9 @@ static void MarkFailed(DtNmosNode* Node)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeFound -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Moves a node without a registry to the most preferred usable one its search found that
-// has not failed since it last registered; when all have, forgets that they failed and
-// starts over. A node registered before sends a heartbeat first, which tells it whether
+// has not failed yet, so that it goes down the list and never back to one that failed;
+// when all have, forgets that they failed and starts over from the most preferred. A
+// node registered before sends a heartbeat first, which tells it whether
 // the registry has it; another registers everything. Returns 0 when there is none. On the
 // poll thread.
 //
@@ -1703,7 +1706,6 @@ static int TakeFound(DtNmosNode* Node)
             else
             {
                 ForgetRegistration(Node);
-                Node->FirstRegistration = 1;
             }
         }
         NmosNode_Unlock(Node);
@@ -1852,7 +1854,6 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     if (Result == DTNMOS_OK)
     {
         Node->Failures = 0;
-        ForgetFailed(Node);
     }
     else if (++Node->Failures >= Node->FailuresBeforeSwitch && !Node->Closing)
     {

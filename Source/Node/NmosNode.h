@@ -113,8 +113,8 @@ struct DtNmosNode
     NmosThread* Searcher;      // the search thread, from the first poll on
     int StopSearching;         // under the lock
     DtNmosRegistryList* Found; // what the last search found, under the lock
-    // The base URLs of the registries that failed since the node last registered; the
-    // poll thread's own.
+    // The base URLs of the registries that failed since the node last started over from
+    // the most preferred; the poll thread's own.
     char* Failed[16];
     size_t FailedCount;
     // The node has not registered with its registry yet; a 200 to that first registration
