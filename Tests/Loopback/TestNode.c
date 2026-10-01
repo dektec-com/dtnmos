@@ -8,11 +8,13 @@
 
 #include "dtnmos_node.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "NmosInternal.h"
 #include "NmosJson.h"
+#include "NmosNode.h"
 #include "NmosOs.h"
 #include "check.h"
 #include "tests.h"
@@ -230,6 +232,49 @@ void node_is_opened_closed_and_opened_again(void)
     DtNmosNode_Freep(&node);
     CHECK(node == NULL);
     DtNmosNode_Freep(&node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- node_checks_the_size_of_a_config -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void node_checks_the_size_of_a_config(void)
+{
+    fake_registration registry;
+    memset(&registry, 0, sizeof(registry));
+    DtNmosNodeConfig config;
+    memset(&config, 0, sizeof(config));
+    config.Id = (DtNmosId){NODE_ID};
+    config.RegistrationUrl = "http://registry.test/";
+    config.Http = record_http;
+    config.HttpUser = &registry;
+    config.FailuresBeforeSwitch = 7;
+    DtNmosNode* node = DtNmosNode_Alloc();
+    REQUIRE(node != NULL);
+
+    // 0 is not the current version: it is a Size not set.
+    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "Size of the DtNmosNodeConfig is not set") !=
+          NULL);
+    // Smaller than the first version, and larger than this library knows.
+    config.Size = offsetof(DtNmosNodeConfig, RegistryFailed) - 1;
+    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "smaller than any version") != NULL);
+    config.Size = sizeof(config) + 8;
+    CHECK(DtNmosNode_Open(node, &config) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "older than the header") != NULL);
+    // The first version opens, without the fields that came after it.
+    config.Size = offsetof(DtNmosNodeConfig, RegistryFailed);
+    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
+    CHECK_EQ(node->failures_before_switch, 3);
+    REQUIRE(DtNmosNode_Close(node) == DTNMOS_OK);
+    config.Size = sizeof(config);
+    REQUIRE(DtNmosNode_Open(node, &config) == DTNMOS_OK);
+    CHECK_EQ(node->failures_before_switch, 7);
+
+    // A device the caller gives is checked the same way.
+    DtNmosDeviceConfig device = {0, {DEVICE_ID}, "a card", ""};
+    CHECK(DtNmosNode_AddDevice(node, &device) == DTNMOS_E_INVALID_ARGUMENT);
+    CHECK(strstr(DtNmos_GetLastError(), "DtNmosDeviceConfig") != NULL);
+    DtNmosNode_Free(node);
 }
 
 // .-.-.-.-.-.-.-.-.-.- node_deletes_what_is_removed_and_what_it_had -.-.-.-.-.-.-.-.-.-.-

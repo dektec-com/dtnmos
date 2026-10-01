@@ -646,13 +646,22 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* config,
     {
         *list = NULL;
     }
-    if (config == NULL || list == NULL || config->Size < sizeof(DtNmosDiscoveryConfig) ||
-        (config->Service != DTNMOS_SERVICE_QUERY &&
-         config->Service != DTNMOS_SERVICE_REGISTRATION))
+    if (config == NULL || list == NULL)
     {
-        return dtnmos_fail(
-            DTNMOS_E_INVALID_ARGUMENT,
-            "DtNmos_Discover() needs a config of a known service and a list.");
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "DtNmos_Discover() needs a config and a list.");
+    }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(config, DtNmosDiscoveryConfig, sizeof(DtNmosDiscoveryConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
+    if (config->Service != DTNMOS_SERVICE_QUERY &&
+        config->Service != DTNMOS_SERVICE_REGISTRATION)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "DtNmos_Discover() needs a config of a known service.");
     }
     if (config->InterfaceAddress != NULL && !is_ipv4(config->InterfaceAddress))
     {

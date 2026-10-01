@@ -45,6 +45,7 @@
     DTNMOS_TEST(node_registers_parents_before_children)                                  \
     DTNMOS_TEST(node_registers_again_when_the_registry_lost_it)                          \
     DTNMOS_TEST(node_is_opened_closed_and_opened_again)                                  \
+    DTNMOS_TEST(node_checks_the_size_of_a_config)                                        \
     DTNMOS_TEST(node_moves_to_the_next_registry)                                         \
     DTNMOS_TEST(node_deletes_what_is_removed_and_what_it_had)                            \
     DTNMOS_TEST(node_answers_its_node_api_and_transport_files)                           \

@@ -28,6 +28,16 @@ DtNmosResult dtnmos_fail(DtNmosResult code, const char* format, ...) DTNMOS_PRIN
 // Makes "Out of memory." the last error of this thread, and returns DTNMOS_E_NO_MEMORY.
 DtNmosResult dtnmos_fail_memory(void);
 
+// Checks the Size of a struct a caller gives, as rule 12 of CONTRIBUTING.md has it:
+// size, the struct's Size; first, the size of its first version; current, its sizeof
+// in this library; what, its name in the message. 0, a size below first and a size
+// above current fail with DTNMOS_E_INVALID_ARGUMENT; a size from first up to current is
+// a version whose later fields take their defaults.
+DtNmosResult dtnmos_check_size(size_t size, size_t first, size_t current,
+                               const char* what);
+#define DTNMOS_CHECK_SIZE(pointer, type, first)                                          \
+    dtnmos_check_size((pointer)->Size, (first), sizeof(type), #type)
+
 // Empties the last error of this thread, before a callback whose message is passed on,
 // so that a callback that fails without one does not pass on an older one.
 void dtnmos_clear_error(void);

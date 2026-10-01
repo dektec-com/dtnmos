@@ -160,6 +160,14 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* node, const DtNmosNodeConfig* config)
     {
         return dtnmos_fail(DTNMOS_E_STATE, "The node is open already; close it first.");
     }
+    // The first version of the config ends before the fields of moving to another
+    // registry.
+    const DtNmosResult sized = DTNMOS_CHECK_SIZE(
+        config, DtNmosNodeConfig, offsetof(DtNmosNodeConfig, RegistryFailed));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
@@ -723,6 +731,12 @@ DtNmosResult DtNmosNode_AddDevice(DtNmosNode* node, const DtNmosDeviceConfig* de
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A device needs an ID.");
     }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(device, DtNmosDeviceConfig, sizeof(DtNmosDeviceConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
     dtnmos_node_lock(node);
     DtNmosResult result = DTNMOS_OK;
     if (id_taken(node, &device->Id))
@@ -783,6 +797,18 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* node, const DtNmosSenderConfig* se
     if (sender == NULL || sender->Id.Text[0] == '\0' || sender->Flow == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A sender needs an ID and a flow.");
+    }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(sender, DtNmosSenderConfig, sizeof(DtNmosSenderConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
+    const DtNmosResult flow_sized =
+        DTNMOS_CHECK_SIZE(sender->Flow, DtNmosFlow, sizeof(DtNmosFlow));
+    if (flow_sized != DTNMOS_OK)
+    {
+        return flow_sized;
     }
     if (sender->Flow->Media != DTNMOS_MEDIA_VIDEO &&
         sender->Flow->Media != DTNMOS_MEDIA_AUDIO)
@@ -858,6 +884,12 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* node,
     if (receiver == NULL || receiver->Id.Text[0] == '\0')
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT, "A receiver needs an ID.");
+    }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(receiver, DtNmosReceiverConfig, sizeof(DtNmosReceiverConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
     }
     if (receiver->Media != DTNMOS_MEDIA_VIDEO && receiver->Media != DTNMOS_MEDIA_AUDIO)
     {
@@ -1035,6 +1067,11 @@ DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* node, const DtNmosId* id,
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_UpdateSender() needs an ID and a flow.");
+    }
+    const DtNmosResult sized = DTNMOS_CHECK_SIZE(flow, DtNmosFlow, sizeof(DtNmosFlow));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
     }
     dtnmos_node_lock(node);
     DtNmosResult result = DTNMOS_OK;
@@ -1678,6 +1715,12 @@ DtNmosResult DtNmosNode_Handle(DtNmosNode* node, const DtNmosHttpRequest* reques
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosNode_Handle() needs a node, a request and a response.");
+    }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(request, DtNmosHttpRequest, sizeof(DtNmosHttpRequest));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
     }
     // The path without its query, split into its segments.
     char path[512];

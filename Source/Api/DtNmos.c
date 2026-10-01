@@ -121,6 +121,33 @@ DtNmosResult dtnmos_fail(DtNmosResult code, const char* format, ...)
     return code;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_check_size -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult dtnmos_check_size(size_t size, size_t first, size_t current,
+                               const char* what)
+{
+    if (size == 0)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "The Size of the %s is not set; set it to sizeof(%s).", what,
+                           what);
+    }
+    if (size < first)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "The Size of the %s is %zu, smaller than any version of it.",
+                           what, size);
+    }
+    if (size > current)
+    {
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "The Size of the %s is %zu, larger than the %zu this library "
+                           "knows: the library is older than the header.",
+                           what, size, current);
+    }
+    return DTNMOS_OK;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_clear_error -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void dtnmos_clear_error(void)

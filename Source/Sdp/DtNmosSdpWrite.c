@@ -441,10 +441,26 @@ DtNmosResult dtnmos_sdp_write(const DtNmosSession* session, const DtNmosFlow* fl
 DtNmosResult DtNmosSdp_Write(const DtNmosSession* session, const DtNmosFlow* flows,
                              size_t count, char* buffer, size_t* size)
 {
-    if (size == NULL)
+    if (size == NULL || session == NULL || (flows == NULL && count > 0))
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
-                           "DtNmosSdp_Write() needs the size of the buffer.");
+                           "DtNmosSdp_Write() needs a session, its flows and the size of "
+                           "the buffer.");
+    }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(session, DtNmosSession, sizeof(DtNmosSession));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
+    for (size_t i = 0; i < count; ++i)
+    {
+        const DtNmosResult flow_sized =
+            DTNMOS_CHECK_SIZE(&flows[i], DtNmosFlow, sizeof(DtNmosFlow));
+        if (flow_sized != DTNMOS_OK)
+        {
+            return flow_sized;
+        }
     }
     dtnmos_buffer text;
     memset(&text, 0, sizeof(text));

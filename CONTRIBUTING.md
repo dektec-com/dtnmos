@@ -40,9 +40,21 @@ about structs is added.
     implementation.
 12. **A struct a caller fills in for the library begins with `Size`**, which the caller
     sets to the struct's `sizeof`, so that a later version can add fields without
-    breaking a program built against an earlier one.
+    breaking a program built against an earlier one. The library checks it with
+    `DTNMOS_CHECK_SIZE()` wherever it is given one, and a struct it fills in it sets
+    itself:
 
-Rules 10, 11 and 12 describe where the code is going. The renames of plan 0001 bring the
+    | `Size` | Result |
+    |---|---|
+    | 0 | `DTNMOS_E_INVALID_ARGUMENT`: not set |
+    | below the struct's first version | `DTNMOS_E_INVALID_ARGUMENT` |
+    | a version the library knows | the fields after it take their defaults |
+    | above the struct the library knows | `DTNMOS_E_INVALID_ARGUMENT`: the library is older than the header |
+
+    A field added to a struct goes at its end, and the code that reads it checks first
+    that `Size` reaches it.
+
+Rules 10 and 11 describe where the code is going. The renames of plan 0001 bring the
 existing code to them, a step at a time.
 
 ### File header

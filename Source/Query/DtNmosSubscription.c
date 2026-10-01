@@ -74,6 +74,22 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* subscription, DtNmosQue
     {
         return open;
     }
+    const DtNmosResult sized = DTNMOS_CHECK_SIZE(config, DtNmosSubscriptionConfig,
+                                                 sizeof(DtNmosSubscriptionConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
+    if (config->WebSocket != NULL)
+    {
+        const DtNmosResult transport_sized =
+            DTNMOS_CHECK_SIZE(config->WebSocket, DtNmosWebSocketTransport,
+                              sizeof(DtNmosWebSocketTransport));
+        if (transport_sized != DTNMOS_OK)
+        {
+            return transport_sized;
+        }
+    }
     const DtNmosWebSocketTransport* websocket =
         config->WebSocket != NULL ? config->WebSocket : DtNmos_CurlWebSocket();
     const char* base = dtnmos_query_base(query);

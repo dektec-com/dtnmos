@@ -94,6 +94,12 @@ DtNmosResult DtNmos_CurlHttp(void* user, const DtNmosHttpRequest* request,
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmos_CurlHttp() needs a request with a method and a URL.");
     }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(request, DtNmosHttpRequest, sizeof(DtNmosHttpRequest));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
     CURL* curl = curl_easy_init();
     if (curl == NULL)
     {

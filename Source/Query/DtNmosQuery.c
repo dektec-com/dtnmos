@@ -105,6 +105,12 @@ DtNmosResult DtNmosQuery_Open(DtNmosQuery* query, const DtNmosQueryConfig* confi
     {
         return dtnmos_fail(DTNMOS_E_STATE, "The query is open already; close it first.");
     }
+    const DtNmosResult sized =
+        DTNMOS_CHECK_SIZE(config, DtNmosQueryConfig, sizeof(DtNmosQueryConfig));
+    if (sized != DTNMOS_OK)
+    {
+        return sized;
+    }
     if (config->ApiVersion != NULL && strcmp(config->ApiVersion, "v1.3") != 0)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
