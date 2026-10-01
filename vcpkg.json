@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "dtnmos",
-  "version-semver": "0.2.0",
+  "version-semver": "0.3.0",
   "description": "The dependencies of dtnmos's own build with the presets windows-full and linux-full; a program takes dtnmos from the port in DekTec's vcpkg registry",
   "homepage": "https://github.com/dektec-com/dtnmos",
   "license": "BSD-3-Clause",
