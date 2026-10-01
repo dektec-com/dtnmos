@@ -40,7 +40,7 @@ static void put16(message* m, unsigned value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- put32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void put32(message* m, unsigned long value)
+static void put32(message* m, uint32_t value)
 {
     put16(m, (unsigned)(value >> 16));
     put16(m, (unsigned)value);
@@ -413,8 +413,8 @@ static void respond(void* argument)
         uint8_t bytes[1500];
         char from[64];
         uint16_t from_port = 0;
-        const long received = dtnmos_udp_receive(r->socket, bytes, sizeof(bytes), 50,
-                                                 from, sizeof(from), &from_port);
+        const int received = dtnmos_udp_receive(r->socket, bytes, sizeof(bytes), 50, from,
+                                                sizeof(from), &from_port);
         int asks_srv_txt = 0;
         if (received <= 0 || !read_query(bytes, (size_t)received, &asks_srv_txt))
         {

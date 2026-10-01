@@ -488,8 +488,8 @@ int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const v
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- dtnmos_udp_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
-                        char* from_address, size_t from_size, uint16_t* from_port)
+int dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
+                       char* from_address, size_t from_size, uint16_t* from_port)
 {
     fd_set readable;
     FD_ZERO(&readable);
@@ -508,9 +508,9 @@ long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t tim
     }
     struct sockaddr_in from;
     socklen_t from_length = sizeof(from);
-    const long received =
-        (long)recvfrom(udp->socket, (char*)buffer, DTNMOS_SOCKET_LENGTH(size), 0,
-                       (struct sockaddr*)&from, &from_length);
+    const int received =
+        (int)recvfrom(udp->socket, (char*)buffer, DTNMOS_SOCKET_LENGTH(size), 0,
+                      (struct sockaddr*)&from, &from_length);
     if (received < 0)
     {
         return -1;

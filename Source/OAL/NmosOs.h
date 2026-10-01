@@ -62,8 +62,8 @@ int dtnmos_udp_send(dtnmos_udp* udp, const char* address, uint16_t port, const v
 // Waits up to timeout_ms for a datagram and receives it into buffer; returns its length,
 // 0 when none came in time, or -1 on failure. from_address, when not null, receives the
 // address of the sender as text, and from_port its port.
-long dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
-                        char* from_address, size_t from_size, uint16_t* from_port);
+int dtnmos_udp_receive(dtnmos_udp* udp, void* buffer, size_t size, uint32_t timeout_ms,
+                       char* from_address, size_t from_size, uint16_t* from_port);
 
 void dtnmos_udp_close(dtnmos_udp* udp);
 

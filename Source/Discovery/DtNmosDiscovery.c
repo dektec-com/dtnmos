@@ -321,7 +321,7 @@ static void collect(const dtnmos_discovery_config* config, dtnmos_udp* udp,
         }
         char from[64];
         uint16_t from_port = 0;
-        const long received =
+        const int received =
             dtnmos_udp_receive(udp, buffer, max_message, (uint32_t)(deadline_ms - now),
                                from, sizeof(from), &from_port);
         if (received < 0)
