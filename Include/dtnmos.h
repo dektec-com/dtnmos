@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* dtnmos.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - Results, errors, strings, ids and logging, which every header uses
+// dtnmos - Results, errors, ids and logging, which every header uses
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -70,44 +70,6 @@ DTNMOS_API const char* DtNmos_GetLastError(void);
 // way: it returns DtNmos_SetLastError(DTNMOS_E_..., "what failed"), and the library
 // passes the message on, as the answer of the node to a controller for one.
 DTNMOS_API DtNmosResult DtNmos_SetLastError(DtNmosResult result, const char* message);
-
-// A string the library hands out. A DtNmosString set to zero is valid and empty, so a
-// struct that holds strings needs nothing but = {0} before the library fills it. Short
-// strings live in the struct itself and longer ones on the heap; the members are
-// private, the functions below reach them.
-//
-// A struct that holds strings has a _clear() that frees them and a _copy() that copies
-// them. Copying such a struct with = shares its heap strings, so that clearing both
-// frees them twice: use its _copy().
-typedef struct DtNmosString
-{
-    size_t Length;
-    char* Heap;
-    char Local[24];
-} DtNmosString;
-
-// Returns the text of string, ending in a null character; never null, "" when string is
-// empty or null. Valid until the string is changed or cleared.
-DTNMOS_API const char* DtNmosString_Get(const DtNmosString* string);
-
-// Returns the length of string in bytes, without the null character; 0 when string is
-// null.
-DTNMOS_API size_t DtNmosString_Length(const DtNmosString* string);
-
-// Makes string the length bytes of text, which need not end in a null character and may
-// lie in string itself. Fails with DTNMOS_E_NO_MEMORY, leaving string as it was.
-DTNMOS_API DtNmosResult DtNmosString_Set(DtNmosString* string, const char* text,
-                                         size_t length);
-
-// Makes string the text up to the null character of text; null makes it empty.
-DTNMOS_API DtNmosResult DtNmosString_SetText(DtNmosString* string, const char* text);
-
-// Makes target a copy of source.
-DTNMOS_API DtNmosResult DtNmosString_Copy(DtNmosString* target,
-                                          const DtNmosString* source);
-
-// Frees what string holds and leaves it empty.
-DTNMOS_API void DtNmosString_Clear(DtNmosString* string);
 
 // An NMOS resource ID: a UUID in its text form, lower case, e.g.
 // "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01".

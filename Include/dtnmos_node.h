@@ -19,14 +19,18 @@ extern "C"
 
 typedef struct DtNmosNode DtNmosNode;
 
+// The size of the buffer a DtNmosRegistryFailedFunc writes the URL of a registry into.
+#define DTNMOS_MAX_URL_SIZE 2048
+
 // Called by DtNmosNode_Poll(), on its thread and without the lock of the node, when the
 // registry has failed failures polls in a row: requests that got no answer, or an error
 // status. A registry that answers a heartbeat with 404 has lost the node, which registers
-// again with it, and that is no failure. The function returns 1 after setting next_url
-// to the base URL of another registry, which the node then registers with from the start,
-// or 0 to stay with the one it has.
-typedef int (*DtNmosRegistryFailedFunc)(void* user, uint32_t failures,
-                                        DtNmosString* next_url);
+// again with it, and that is no failure. The function returns 1 after writing into
+// next_url, of size bytes, DTNMOS_MAX_URL_SIZE, the base URL of another registry and its
+// null character, which the node then registers with from the start, or 0 to stay with
+// the one it has. A URL without its null character within size bytes is ignored.
+typedef int (*DtNmosRegistryFailedFunc)(void* user, uint32_t failures, char* next_url,
+                                        size_t size);
 
 typedef struct DtNmosNodeConfig
 {
@@ -175,8 +179,12 @@ DTNMOS_API int DtNmos_HasServer(void);
 // Returns the port the node is reached at: api_port, or the one DtNmosNode_Serve() took.
 DTNMOS_API uint16_t DtNmosNode_ApiPort(const DtNmosNode* node);
 
-// Writes the base URL of the APIs of the node into url, e.g. "http://192.168.1.5:8080".
-DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, DtNmosString* url);
+// Writes the base URL of the APIs of the node, e.g. "http://192.168.1.5:8080", into the
+// caller's buffer of *size bytes, with a terminating null; *size is then its length. A
+// buffer too small fails with DTNMOS_E_BUFFER_TOO_SMALL, *size then giving the bytes
+// needed.
+DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, char* buffer,
+                                          size_t* size);
 
 #ifdef __cplusplus
 }

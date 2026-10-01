@@ -103,7 +103,7 @@ static DtNmosResult fake_connect(void* user, const char* url, uint32_t timeout_m
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- fake_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_ms,
-                                 DtNmosString* message)
+                                 const char** message, size_t* length)
 {
     (void)connection;
     fake_subscription* fake = user;
@@ -115,7 +115,10 @@ static DtNmosResult fake_receive(void* user, void* connection, uint32_t timeout_
             return dtnmos_fail(DTNMOS_E_TIMEOUT, "No message came within %u ms.",
                                (unsigned)timeout_ms);
         }
-        return DtNmosString_SetText(message, text);
+        // The messages of the fake outlive its connection.
+        *message = text;
+        *length = strlen(text);
+        return DTNMOS_OK;
     }
     return dtnmos_fail(DTNMOS_E_NETWORK, "The server closed the WebSocket.");
 }
@@ -525,16 +528,18 @@ void websocket_on_curl_reads_messages(void)
     }
     if (connected == DTNMOS_OK)
     {
-        DtNmosString message = {0};
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
+        const char* message = NULL;
+        size_t length = 0;
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
               DTNMOS_OK);
-        CHECK_STR(DtNmosString_Get(&message), "hello world");
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
+        CHECK_STR(message, "hello world");
+        CHECK_EQ(length, 11);
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
               DTNMOS_OK);
-        CHECK_EQ(DtNmosString_Length(&message), 70000);
-        CHECK(websocket->Receive(websocket->User, connection, 2000, &message) ==
+        CHECK_EQ(length, 70000);
+        CHECK_EQ(strlen(message), 70000);
+        CHECK(websocket->Receive(websocket->User, connection, 2000, &message, &length) ==
               DTNMOS_E_NETWORK);
-        DtNmosString_Clear(&message);
         websocket->Close(websocket->User, connection);
     }
     CHECK(connected == DTNMOS_OK);

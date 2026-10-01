@@ -39,9 +39,18 @@ gives a message that says what failed, kept for each thread. A callback the libr
 calls, the activation of a node or an HTTP function, fails with
 `return DtNmos_SetLastError(DTNMOS_E_..., "what failed");`.
 
-Strings the library hands out are `DtNmosString`: read them with `DtNmosString_Get()`,
-and free a struct that holds them with its `_clear()`. A struct set to zero is valid and
-empty, and must not be copied with `=`: use its `_copy()`.
+Every string has an owner, so no struct needs a function to free or copy it, and every
+struct is copied with `=`:
+
+- a string the caller gives is a `const char*` in the caller's memory, and the library
+  copies what it keeps;
+- a value the standards bound, an encoding or an address, is a `char` array of a named
+  size, `DTNMOS_MAX_..._SIZE`;
+- any other string in a result is a `const char*` into the object that returned it, a
+  `DtNmosSdp` or a list, valid until that object is freed;
+- text the library makes, an SDP, a manifest or a URL, goes into the caller's buffer of
+  `*size` bytes. Too small a buffer fails with `DTNMOS_E_BUFFER_TOO_SMALL`, and `*size`
+  then gives the bytes needed.
 
 Reading an SDP gives a handle that owns its flows:
 
@@ -304,7 +313,7 @@ static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
 {
   if (activation->HasFlow)
   {
-    // Receive activation->Flow, e.g. DtNmosString_Get(&activation->Flow.DestinationIp).
+    // Receive activation->Flow, e.g. activation->Flow.DestinationIp.
   }
   // Receive, or stop receiving, as activation->MasterEnable says.
   return DTNMOS_OK;

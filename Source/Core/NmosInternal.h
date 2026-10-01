@@ -79,9 +79,6 @@ int dtnmos_parse_milliseconds(dtnmos_span span, uint32_t* nanoseconds);
 // Reads a number in decimal or in hexadecimal after 0x, as in DID_SDID={0x61,0x02}.
 int dtnmos_parse_byte(dtnmos_span span, uint8_t* value);
 
-// Sets string to span.
-DtNmosResult dtnmos_string_set_span(DtNmosString* string, dtnmos_span span);
-
 // Copies span into the array target of size bytes with its terminating null; returns 0,
 // leaving target empty, when it does not fit.
 int dtnmos_copy_span(char* target, size_t size, dtnmos_span span);

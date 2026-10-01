@@ -1317,18 +1317,19 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms)
     else if (++node->failures >= node->failures_before_switch &&
              node->registry_failed != NULL)
     {
-        DtNmosString next = {0};
+        char next[DTNMOS_MAX_URL_SIZE] = "";
         char* base = NULL;
-        if (node->registry_failed(node->registry_failed_user, node->failures, &next) &&
-            DtNmosString_Length(&next) > 0)
+        if (node->registry_failed(node->registry_failed_user, node->failures, next,
+                                  sizeof(next)) &&
+            memchr(next, '\0', sizeof(next)) != NULL && next[0] != '\0')
         {
-            base = registration_base(DtNmosString_Get(&next));
+            base = registration_base(next);
         }
         if (base != NULL)
         {
             node_log(node, DTNMOS_LOG_WARNING,
                      "The registry failed %u polls in a row; the node registers with %s.",
-                     (unsigned)node->failures, DtNmosString_Get(&next));
+                     (unsigned)node->failures, next);
             dtnmos_node_lock(node);
             free(node->registration);
             node->registration = base;
@@ -1336,7 +1337,6 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* node, uint32_t* next_ms)
             dtnmos_node_unlock(node);
             node->failures = 0;
         }
-        DtNmosString_Clear(&next);
     }
     if (next_ms != NULL)
     {
@@ -1410,17 +1410,19 @@ uint16_t DtNmosNode_ApiPort(const DtNmosNode* node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_ApiUrl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, DtNmosString* url)
+DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* node, char* buffer, size_t* size)
 {
-    if (node == NULL || url == NULL)
+    if (node == NULL || size == NULL)
     {
-        return DTNMOS_E_INVALID_ARGUMENT;
+        return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
+                           "DtNmosNode_ApiUrl() needs a node and a size.");
     }
     dtnmos_buffer b;
     memset(&b, 0, sizeof(b));
     dtnmos_node_write_base_url(node, &b);
-    const DtNmosResult result =
-        b.failed ? DTNMOS_E_NO_MEMORY : DtNmosString_Set(url, b.data, b.length);
+    const DtNmosResult result = b.failed
+                                    ? dtnmos_fail_memory()
+                                    : dtnmos_copy_text(buffer, size, b.data, b.length);
     dtnmos_buffer_free(&b);
     return result;
 }

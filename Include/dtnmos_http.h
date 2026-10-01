@@ -114,11 +114,13 @@ typedef struct DtNmosWebSocketTransport
     DtNmosResult (*Connect)(void* user, const char* url, uint32_t timeout_ms,
                             void** connection);
 
-    // Waits at most timeout_ms for a whole text message and sets message to it. Fails
-    // with DTNMOS_E_TIMEOUT when none came, keeping a part that did for the next call,
-    // and with DTNMOS_E_NETWORK when the connection closed or failed.
+    // Waits at most timeout_ms for a whole text message and sets *message to it, ending
+    // in a null character, and *length to its length. The message belongs to connection
+    // and stays valid until the next Receive or Close of it. Fails with DTNMOS_E_TIMEOUT
+    // when none came, keeping a part that did for the next call, and with
+    // DTNMOS_E_NETWORK when the connection closed or failed.
     DtNmosResult (*Receive)(void* user, void* connection, uint32_t timeout_ms,
-                            DtNmosString* message);
+                            const char** message, size_t* length);
 
     // Closes connection and frees it.
     void (*Close)(void* user, void* connection);

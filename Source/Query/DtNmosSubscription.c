@@ -22,7 +22,6 @@ struct DtNmosSubscription
     char* url; // of the WebSocket
     DtNmosChangeFunc on_change;
     void* on_change_user;
-    DtNmosString message;
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosChangeKind_Name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -215,9 +214,11 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "DtNmosSubscription_Poll() needs a subscription.");
     }
-    DtNmosResult result = subscription->websocket.Receive(
-        subscription->websocket.User, subscription->connection, timeout_ms,
-        &subscription->message);
+    const char* message = NULL;
+    size_t length = 0;
+    DtNmosResult result = subscription->websocket.Receive(subscription->websocket.User,
+                                                          subscription->connection,
+                                                          timeout_ms, &message, &length);
     if (result != DTNMOS_OK)
     {
         return result;
@@ -226,9 +227,7 @@ DtNmosResult DtNmosSubscription_Poll(DtNmosSubscription* subscription,
     // "data": [{"path": ..., "pre": ..., "post": ...}]}}.
     dtnmos_json* json = NULL;
     const dtnmos_json* data = NULL;
-    if (dtnmos_json_parse(DtNmosString_Get(&subscription->message),
-                          DtNmosString_Length(&subscription->message),
-                          &json) == DTNMOS_OK)
+    if (dtnmos_json_parse(message, length, &json) == DTNMOS_OK)
     {
         data = dtnmos_json_member(dtnmos_json_member(json, "grain"), "data");
     }
@@ -263,7 +262,6 @@ void DtNmosSubscription_Destroy(DtNmosSubscription* subscription)
         return;
     }
     subscription->websocket.Close(subscription->websocket.User, subscription->connection);
-    DtNmosString_Clear(&subscription->message);
     free(subscription->url);
     free(subscription);
 }

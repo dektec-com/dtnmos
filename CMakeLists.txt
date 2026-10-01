@@ -60,7 +60,6 @@ endfunction()
 add_library(
   dtnmos
   Source/Api/DtNmos.c
-  Source/Api/DtNmosString.c
   Source/Core/NmosJson.c
   Source/Core/NmosSha1.c
   Source/Core/NmosText.c

@@ -204,16 +204,17 @@ typedef struct next_registry
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- give_next_registry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int give_next_registry(void* user, uint32_t failures, DtNmosString* next_url)
+static int give_next_registry(void* user, uint32_t failures, char* next_url, size_t size)
 {
     next_registry* next = user;
     ++next->calls;
     next->failures = failures;
+    CHECK_EQ(size, DTNMOS_MAX_URL_SIZE);
     if (next->url == NULL)
     {
         return 0;
     }
-    DtNmosString_SetText(next_url, next->url);
+    snprintf(next_url, size, "%s", next->url);
     return 1;
 }
 
@@ -418,10 +419,16 @@ void node_serves_itself_over_http(void)
     }
     REQUIRE(served == DTNMOS_OK);
     CHECK(DtNmosNode_ApiPort(node) != 0);
-    DtNmosString base = {0};
-    REQUIRE(DtNmosNode_ApiUrl(node, &base) == DTNMOS_OK);
+    // Too small a buffer tells the size it needs.
+    char base[64];
+    size_t size = 4;
+    CHECK(DtNmosNode_ApiUrl(node, base, &size) == DTNMOS_E_BUFFER_TOO_SMALL);
+    CHECK(size > 4 && size <= sizeof(base));
+    size = sizeof(base);
+    REQUIRE(DtNmosNode_ApiUrl(node, base, &size) == DTNMOS_OK);
+    CHECK_EQ(size, strlen(base));
     char url[256];
-    snprintf(url, sizeof(url), "%s/x-nmos/node/v1.3/self", DtNmosString_Get(&base));
+    snprintf(url, sizeof(url), "%s/x-nmos/node/v1.3/self", base);
     DtNmosHttpRequest request = {sizeof(request), "GET", url, NULL, NULL, 0, 3000};
     DtNmosHttpResponse* response = DtNmosHttpResponse_Create();
     REQUIRE(DtNmos_CurlHttp(NULL, &request, response) == DTNMOS_OK);
@@ -434,6 +441,5 @@ void node_serves_itself_over_http(void)
         dtnmos_sleep_ms(20);
     }
     CHECK(DtNmosNode_IsRegistered(node));
-    DtNmosString_Clear(&base);
     DtNmosNode_Destroy(node);
 }

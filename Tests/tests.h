@@ -7,9 +7,6 @@
 #pragma once
 
 #define DTNMOS_TESTS                                                                     \
-    DTNMOS_TEST(string_keeps_short_and_long_texts)                                       \
-    DTNMOS_TEST(string_sets_from_its_own_text)                                           \
-    DTNMOS_TEST(string_copies_and_clears)                                                \
     DTNMOS_TEST(id_is_the_uuid_of_version_5)                                             \
     DTNMOS_TEST(id_refuses_a_namespace_of_no_uuid)                                       \
     DTNMOS_TEST(names_results_and_media)                                                 \

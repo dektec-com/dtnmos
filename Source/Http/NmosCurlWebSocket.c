@@ -20,11 +20,13 @@
         #include <sys/select.h>
     #endif
 
-// A connection: the handle of libcurl, and the part of a message that has come so far.
+// A connection: the handle of libcurl, the part of a message that has come so far, and
+// the last whole message, which Receive hands out.
 typedef struct curl_connection
 {
     CURL* curl;
     dtnmos_buffer partial;
+    dtnmos_buffer message;
 } curl_connection;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- has_ws_protocol -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -141,15 +143,17 @@ static int wait_readable(CURL* curl, uint32_t timeout_ms)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                               DtNmosString* message)
+                               const char** message, size_t* length)
 {
     (void)user;
     curl_connection* c = connection;
-    if (c == NULL || message == NULL)
+    if (c == NULL || message == NULL || length == NULL)
     {
         return dtnmos_fail(DTNMOS_E_INVALID_ARGUMENT,
                            "A WebSocket receives on a connection into a message.");
     }
+    // The message handed out before is valid until this call.
+    dtnmos_buffer_free(&c->message);
     const uint64_t deadline = dtnmos_monotonic_ms() + timeout_ms;
     for (;;)
     {
@@ -192,11 +196,11 @@ static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms
         // The message is whole at the end of a frame that is not followed by another.
         if (frame->bytesleft == 0 && (frame->flags & CURLWS_CONT) == 0)
         {
-            const DtNmosResult result =
-                DtNmosString_Set(message, c->partial.data == NULL ? "" : c->partial.data,
-                                 c->partial.length);
-            dtnmos_buffer_free(&c->partial);
-            return result == DTNMOS_OK ? DTNMOS_OK : dtnmos_fail_memory();
+            c->message = c->partial;
+            memset(&c->partial, 0, sizeof(c->partial));
+            *message = c->message.data == NULL ? "" : c->message.data;
+            *length = c->message.length;
+            return DTNMOS_OK;
         }
     }
 }
@@ -215,6 +219,7 @@ static void ws_close(void* user, void* connection)
     curl_ws_send(c->curl, "", 0, &sent, 0, CURLWS_CLOSE);
     curl_easy_cleanup(c->curl);
     dtnmos_buffer_free(&c->partial);
+    dtnmos_buffer_free(&c->message);
     free(c);
 }
 
@@ -247,12 +252,13 @@ static DtNmosResult ws_connect(void* user, const char* url, uint32_t timeout_ms,
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ws_receive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static DtNmosResult ws_receive(void* user, void* connection, uint32_t timeout_ms,
-                               DtNmosString* message)
+                               const char** message, size_t* length)
 {
     (void)user;
     (void)connection;
     (void)timeout_ms;
     (void)message;
+    (void)length;
     return dtnmos_fail(DTNMOS_E_STATE, "dtnmos was built without libcurl.");
 }
 

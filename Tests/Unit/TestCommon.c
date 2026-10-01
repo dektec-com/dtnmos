@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#* TestCommon.c *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - Tests of the string type, name-based IDs and the names of results and media
+// dtnmos - Tests of name-based IDs and of the names of results and media
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -13,71 +13,6 @@
 #include "check.h"
 #include "dtnmos_sdp.h"
 #include "tests.h"
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.- string_keeps_short_and_long_texts -.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-void string_keeps_short_and_long_texts(void)
-{
-    DtNmosString string = {0};
-    CHECK_STR(DtNmosString_Get(&string), "");
-    CHECK_EQ(DtNmosString_Length(&string), 0);
-    CHECK_STR(DtNmosString_Get(NULL), "");
-
-    // 23 bytes fit the struct, 24 need the heap.
-    const char* fits = "0123456789abcdefghijklm";
-    const char* heap = "0123456789abcdefghijklmn";
-    REQUIRE(DtNmosString_SetText(&string, fits) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), fits);
-    CHECK(string.Heap == NULL);
-    REQUIRE(DtNmosString_SetText(&string, heap) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), heap);
-    CHECK(string.Heap != NULL);
-    CHECK_EQ(DtNmosString_Length(&string), 24);
-
-    // A text of a given length need not end in a null character, and may hold one.
-    REQUIRE(DtNmosString_Set(&string, "abcdef", 3) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), "abc");
-    CHECK(string.Heap == NULL);
-    DtNmosString_Clear(&string);
-    CHECK_STR(DtNmosString_Get(&string), "");
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- string_sets_from_its_own_text -.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-void string_sets_from_its_own_text(void)
-{
-    DtNmosString string = {0};
-    REQUIRE(DtNmosString_SetText(&string, "a text long enough for the heap") ==
-            DTNMOS_OK);
-    // From the heap it holds, into itself and into the struct.
-    REQUIRE(DtNmosString_Set(&string, DtNmosString_Get(&string) + 2, 20) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), "text long enough for");
-    REQUIRE(DtNmosString_Set(&string, DtNmosString_Get(&string), 4) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), "text");
-    REQUIRE(DtNmosString_Copy(&string, &string) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&string), "text");
-    DtNmosString_Clear(&string);
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- string_copies_and_clears -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void string_copies_and_clears(void)
-{
-    DtNmosString source = {0};
-    DtNmosString target = {0};
-    REQUIRE(DtNmosString_SetText(&source, "a text long enough for the heap") ==
-            DTNMOS_OK);
-    REQUIRE(DtNmosString_Copy(&target, &source) == DTNMOS_OK);
-    CHECK(target.Heap != source.Heap);
-    DtNmosString_Clear(&source);
-    CHECK_STR(DtNmosString_Get(&target), "a text long enough for the heap");
-    REQUIRE(DtNmosString_SetText(&target, NULL) == DTNMOS_OK);
-    CHECK_STR(DtNmosString_Get(&target), "");
-    CHECK(DtNmosString_Set(NULL, "x", 1) == DTNMOS_E_INVALID_ARGUMENT);
-    CHECK(DtNmosString_Set(&target, NULL, 1) == DTNMOS_E_INVALID_ARGUMENT);
-    DtNmosString_Clear(&target);
-    DtNmosString_Clear(NULL);
-}
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- id_is_the_uuid_of_version_5 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
