@@ -143,18 +143,31 @@ void NmosConnection_ClearSender(NmosNodeSender* Sender)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_InitReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver)
+DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver,
+                                         const DtNmosReceiverConfig* Config)
 {
     NmosConnection* c = calloc(1, sizeof(*c));
     if (c == NULL)
     {
         return DTNMOS_E_NO_MEMORY;
     }
-    // A receiver receives what its element was given until a controller connects it: from
-    // any source, on its port, at the port of RTP.
+    // A receiver receives what the program gave it until a controller connects it: by
+    // default from any source, on its port, at the port of RTP.
     NmosLeg* t = &c->Active.Transport;
     snprintf(t->InterfaceIp, sizeof(t->InterfaceIp), "%s", Receiver->InterfaceIp);
     t->DestinationPort = NMOS_RTP_PORT;
+    if (Config->Size >=
+        offsetof(DtNmosReceiverConfig, DestinationPort) + sizeof(Config->DestinationPort))
+    {
+        snprintf(t->SourceIp, sizeof(t->SourceIp), "%s",
+                 Config->SourceIp != NULL ? Config->SourceIp : "");
+        snprintf(t->MulticastIp, sizeof(t->MulticastIp), "%s",
+                 Config->MulticastIp != NULL ? Config->MulticastIp : "");
+        if (Config->DestinationPort != 0)
+        {
+            t->DestinationPort = Config->DestinationPort;
+        }
+    }
     t->RtpEnabled = true;
     c->Active.MasterEnable = true;
     c->Staged = c->Active;

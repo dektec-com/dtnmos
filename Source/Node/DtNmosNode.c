@@ -1103,6 +1103,21 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "A receiver needs the address of the port it receives on.");
     }
+    if (Receiver->Size >= offsetof(DtNmosReceiverConfig, DestinationPort) +
+                              sizeof(Receiver->DestinationPort))
+    {
+        const char* const Addresses[2] = {Receiver->SourceIp, Receiver->MulticastIp};
+        for (int i = 0; i < 2; i++)
+        {
+            if (Addresses[i] != NULL && Addresses[i][0] != '\0' &&
+                !NmosNode_IsAddress(Addresses[i]))
+            {
+                return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                      "A receiver's %s is not an address: '%s'.",
+                                      i == 0 ? "SourceIp" : "MulticastIp", Addresses[i]);
+            }
+        }
+    }
     if (Receiver->Media != DTNMOS_MEDIA_VIDEO && Receiver->Media != DTNMOS_MEDIA_AUDIO)
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
@@ -1144,7 +1159,8 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
             Added->LeadNs = (uint64_t)Receiver->ActivationLeadMs * 1000000u;
         }
         if (Added->Label == NULL || Added->Description == NULL ||
-            Added->InterfaceIp == NULL || NmosConnection_InitReceiver(Added) != DTNMOS_OK)
+            Added->InterfaceIp == NULL ||
+            NmosConnection_InitReceiver(Added, Receiver) != DTNMOS_OK)
         {
             FreeReceiver(Added);
             Result = NmosError_FailMemory();

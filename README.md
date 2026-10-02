@@ -380,7 +380,9 @@ function runs, a PATCH of the same sender or receiver is answered with 423, as w
 applies cannot be taken back. The bulk interface applies each of its
 patches as a PATCH of its own would. The active parameters hold no `"auto"`: a sender's
 `source_ip` is its `SourceIp`, a receiver's `interface_ip` its `InterfaceIp`, and a
-receiver given a transport file takes the group, source and port of its flow.
+receiver given a transport file takes the group, source and port of its flow. Until a
+controller connects it, a receiver's active parameters are the `SourceIp`,
+`MulticastIp` and `DestinationPort` of its config: what the program has it receive.
 
 The AMWA NMOS Testing Tool passes the node in IS-04-01, IS-05-01 and IS-05-02 without a
 failure; the interop tests (`DTNMOS_INTEROP_TESTS`, run with `ctest -L interop`) run

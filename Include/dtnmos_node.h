@@ -124,6 +124,12 @@ typedef struct DtNmosReceiverConfig
     const char* InterfaceIp;
     // As in DtNmosSenderConfig.
     uint32_t ActivationLeadMs;
+    // The stream the receiver receives from the start, until a controller connects it,
+    // which the node gives as its active transport parameters. NULL or empty: any
+    // source, or no group, which is unicast to InterfaceIp.
+    const char* SourceIp;     // The one source it takes
+    const char* MulticastIp;  // The group it has joined
+    uint16_t DestinationPort; // The UDP port it receives on; 0 for 5004
 } DtNmosReceiverConfig;
 
 // What a controller asks of a receiver: whether to receive, and which stream.

@@ -195,7 +195,8 @@ void NmosNode_AnswerJson(DtNmosHttpResponse* Response, NmosBuffer* b);
 // lock itself.
 DtNmosResult NmosConnection_InitSender(NmosNodeSender* Sender);
 void NmosConnection_ClearSender(NmosNodeSender* Sender);
-DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver);
+DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver,
+                                         const DtNmosReceiverConfig* Config);
 void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver);
 DtNmosResult NmosConnection_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Request,
                                    char** Segments, size_t Count,

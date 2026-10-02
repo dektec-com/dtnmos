@@ -19,6 +19,7 @@
 #define SENDER_ID "bbbbbbbb-0000-4000-8000-000000000003"
 #define RECEIVER_ID "bbbbbbbb-0000-4000-8000-000000000004"
 #define PEER_ID "bbbbbbbb-0000-4000-8000-000000000005"
+#define FIXED_ID "bbbbbbbb-0000-4000-8000-000000000006"
 
 #define CONNECTION "/x-nmos/connection/v1.1/single/"
 
@@ -173,6 +174,9 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
                                      "",
                                      DTNMOS_MEDIA_AUDIO,
                                      "192.168.1.5",
+                                     0,
+                                     NULL,
+                                     NULL,
                                      0};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, Seen) ==
                 DTNMOS_OK);
@@ -941,6 +945,50 @@ NMOS_TEST(ConnectionAnswersBulk)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionStartsWithTheTransport -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A receiver given the stream it receives at the start has that stream as its active
+// transport parameters: source 192.168.1.9, group 239.2.2.2 and port 5010 on its port
+// 192.168.1.5. One given a source that is not an address is refused.
+//
+NMOS_TEST(ConnectionStartsWithTheTransport)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    DtNmosReceiverConfig Receiver;
+    memset(&Receiver, 0, sizeof(Receiver));
+    Receiver.Size = sizeof(Receiver);
+    Receiver.Id = (DtNmosId){FIXED_ID};
+    Receiver.DeviceId = (DtNmosId){DEVICE_ID};
+    Receiver.Label = "fixed";
+    Receiver.Media = DTNMOS_MEDIA_VIDEO;
+    Receiver.InterfaceIp = "192.168.1.5";
+    Receiver.SourceIp = "192.168.1.9";
+    Receiver.MulticastIp = "239.2.2.2";
+    Receiver.DestinationPort = 5010;
+    NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, &Seen) ==
+                DTNMOS_OK);
+
+    NmosJson* Json = NULL;
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" FIXED_ID "/active", NULL, &Json), 200);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_ASSERT(NmosJson_Member(Json, "master_enable")->Type == DTNMOS_JSON_TRUE);
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "source_ip")), "192.168.1.9");
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "multicast_ip")), "239.2.2.2");
+    NMOS_ASSERT_STR(NmosJson_Text(LegMember(Json, "interface_ip")), "192.168.1.5");
+    NMOS_ASSERT_EQ(LegMember(Json, "destination_port")->Number, 5010);
+    NmosJson_Free(Json);
+
+    Receiver.Id = (DtNmosId){PEER_ID};
+    Receiver.SourceIp = "a camera";
+    NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, &Seen) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosNode_Free(Node);
+}
+
 NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
                NMOS_RUN(ConnectionRefusesBadPatches),
@@ -949,4 +997,5 @@ NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionAnswersBulk),
                NMOS_RUN(ConnectionRefusesAPatchWhileApplying),
                NMOS_RUN(ConnectionCallsItsLeadEarly),
-               NMOS_RUN(ConnectionGivesTheTransportWithoutAFile))
+               NMOS_RUN(ConnectionGivesTheTransportWithoutAFile),
+               NMOS_RUN(ConnectionStartsWithTheTransport))

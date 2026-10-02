@@ -139,6 +139,9 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
                                      "",
                                      DTNMOS_MEDIA_AUDIO,
                                      Host,
+                                     0,
+                                     NULL,
+                                     NULL,
                                      0};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, NULL, NULL) == DTNMOS_OK);
     return Node;
@@ -176,6 +179,9 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                    "",
                                    DTNMOS_MEDIA_VIDEO,
                                    "192.168.1.5",
+                                   0,
+                                   NULL,
+                                   NULL,
                                    0};
     NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Orphan, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
@@ -186,6 +192,9 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                      "x",
                                      "",
                                      DTNMOS_MEDIA_VIDEO,
+                                     NULL,
+                                     0,
+                                     NULL,
                                      NULL,
                                      0};
     NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Portless, NULL, NULL) ==
