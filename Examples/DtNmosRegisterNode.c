@@ -138,7 +138,7 @@ static void DefaultFlow(DtNmosFlow* Flow)
     Flow->RefClock.Kind = DTNMOS_REFCLOCK_LOCALMAC;
     snprintf(Flow->RefClock.LocalMac, sizeof(Flow->RefClock.LocalMac),
              "00-00-00-00-00-00");
-    Flow->MediaClockDirect = 1;
+    Flow->MediaClockDirect = true;
     DtNmosVideoFormat* Video = &Flow->Format.Video;
     Video->Width = 1920;
     Video->Height = 1080;
@@ -215,7 +215,7 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
 //
 static int Run(DtNmosNode* Node, int64_t Seconds)
 {
-    const bool Serves = DtNmos_HasServer() != 0;
+    const bool Serves = DtNmos_HasServer();
     if (Serves)
     {
         const DtNmosResult Result = DtNmosNode_Serve(Node);

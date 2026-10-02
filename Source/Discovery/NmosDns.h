@@ -8,6 +8,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -39,10 +40,10 @@ typedef struct NmosDnsQuestion
 size_t NmosDns_WriteQuery(uint8_t* Buffer, size_t Size, uint16_t Id, uint16_t Flags,
                           const NmosDnsQuestion* Questions, size_t Count);
 
-// Reads the ID and the response code (RCODE) of the header of a message; returns 0 when
-// it is shorter than a header.
-int NmosDns_ReadHeader(const uint8_t* Message, size_t Length, uint16_t* Id,
-                       unsigned* Rcode);
+// Reads the ID and the response code (RCODE) of the header of a message; returns false
+// when it is shorter than a header.
+bool NmosDns_ReadHeader(const uint8_t* Message, size_t Length, uint16_t* Id,
+                        unsigned* Rcode);
 
 // Reads the text of a resolv.conf: the first IPv4 address of a nameserver line into
 // server, and the first domain of the last search or domain line into domain, as the
@@ -69,17 +70,17 @@ typedef struct NmosDnsRecord
 } NmosDnsRecord;
 
 // Reads a response of length bytes and calls Record() for each record of its answer,
-// authority and additional sections, of any type. Returns 0, having called Record() for
-// the records before, when the message is no response or is malformed.
-int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
-                         void (*Record)(void* User, const NmosDnsRecord* Found),
-                         void* User);
+// authority and additional sections, of any type. Returns false, having called Record()
+// for the records before, when the message is no response or is malformed.
+bool NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
+                          void (*Record)(void* User, const NmosDnsRecord* Found),
+                          void* User);
 
-// Writes the value of key in the data of a TXT record into value; returns 0 when the
+// Writes the value of key in the data of a TXT record into value; returns false when the
 // record has no such key, or when the value does not fit. Keys compare without regard
 // to case; a key without "=" has an empty value.
-int NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* Value,
-                     size_t Size);
+bool NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* Value,
+                      size_t Size);
 
 // Whether two names are equal, comparing ASCII letters without regard to case.
-int NmosDns_SameName(const char* a, const char* b);
+bool NmosDns_SameName(const char* a, const char* b);

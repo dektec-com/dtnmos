@@ -26,7 +26,7 @@ typedef struct NmosLeg
     char InterfaceIp[DTNMOS_MAX_ADDRESS_SIZE];   // of a receiver
     int SourcePort;                              // of a sender
     int DestinationPort;
-    int RtpEnabled;
+    bool RtpEnabled;
 } NmosLeg;
 
 // The staged or active parameters of a sender or receiver, with the activation of IS-05:
@@ -34,7 +34,7 @@ typedef struct NmosLeg
 // took place. A scheduled activation is pending while the staged parameters have DueNs.
 typedef struct NmosParameters
 {
-    int MasterEnable;
+    bool MasterEnable;
     char PeerId[37]; // receiver_id of a sender, sender_id of a receiver; "" for null
     NmosLeg Transport;
     char* TransportFile;     // of a receiver: the SDP it was given, or null
@@ -48,7 +48,7 @@ typedef struct NmosConnection
 {
     NmosParameters Staged;
     NmosParameters Active;
-    int Applying; // An activation's callback runs, which a PATCH meanwhile is refused for
+    bool Applying; // A callback applies an activation; a PATCH meanwhile is refused
 } NmosConnection;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -72,26 +72,27 @@ static char* CopyText(const char* Text)
 //
 // Whether an address the node chooses is left to it: "auto", or null.
 //
-static int IsAuto(const char* Address)
+static bool IsAuto(const char* Address)
 {
     return Address[0] == '\0' || strcmp(Address, "auto") == 0;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyParameters -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Makes target a copy of source; returns 0 when out of memory, leaving target as it was.
+// Makes target a copy of source; returns false when out of memory, leaving target as it
+// was.
 //
-static int CopyParameters(NmosParameters* Target, const NmosParameters* Source)
+static bool CopyParameters(NmosParameters* Target, const NmosParameters* Source)
 {
     char* File = CopyText(Source->TransportFile);
     if (Source->TransportFile != NULL && File == NULL)
     {
-        return 0;
+        return false;
     }
     free(Target->TransportFile);
     *Target = *Source;
     Target->TransportFile = File;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FreeConnection -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -125,8 +126,8 @@ DtNmosResult NmosConnection_InitSender(NmosNodeSender* Sender)
              Sender->Flow.DestinationIp);
     t->SourcePort = Sender->Flow.DestinationPort;
     t->DestinationPort = Sender->Flow.DestinationPort;
-    t->RtpEnabled = 1;
-    c->Active.MasterEnable = 1;
+    t->RtpEnabled = true;
+    c->Active.MasterEnable = true;
     c->Staged = c->Active;
     Sender->Connection = c;
     return DTNMOS_OK;
@@ -154,11 +155,11 @@ DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver)
     NmosLeg* t = &c->Active.Transport;
     snprintf(t->InterfaceIp, sizeof(t->InterfaceIp), "%s", Receiver->InterfaceIp);
     t->DestinationPort = NMOS_RTP_PORT;
-    t->RtpEnabled = 1;
-    c->Active.MasterEnable = 1;
+    t->RtpEnabled = true;
+    c->Active.MasterEnable = true;
     c->Staged = c->Active;
     Receiver->Connection = c;
-    Receiver->MasterEnable = 1;
+    Receiver->MasterEnable = true;
     return DTNMOS_OK;
 }
 
@@ -206,8 +207,8 @@ static void WritePort(NmosBuffer* b, int Port)
 // of p, which staged parameters show in the answer to their PATCH and while it is
 // scheduled.
 //
-static void WriteParameters(NmosBuffer* b, const NmosParameters* p, int Sender,
-                            int WithActivation)
+static void WriteParameters(NmosBuffer* b, const NmosParameters* p, bool Sender,
+                            bool WithActivation)
 {
     NmosBuffer_Printf(b, "{\"%s\": ", Sender ? "receiver_id" : "sender_id");
     WriteTextOrNull(b, p->PeerId);
@@ -282,61 +283,61 @@ static void AnswerText(DtNmosHttpResponse* Response, const char* Text)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadAddress -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Reads an address: a string, or null into "". Returns 0 for another type.
+// Reads an address: a string, or null into "". Returns false for another type.
 //
-static int ReadAddress(const NmosJson* Value, char* Target, size_t Size)
+static bool ReadAddress(const NmosJson* Value, char* Target, size_t Size)
 {
     if (Value->Type == DTNMOS_JSON_NULL)
     {
         Target[0] = '\0';
-        return 1;
+        return true;
     }
     if (Value->Type != DTNMOS_JSON_STRING || Value->StringLength >= Size)
     {
-        return 0;
+        return false;
     }
     memcpy(Target, Value->String, Value->StringLength + 1);
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadPort -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads a port: a whole number of 0 to 65535, or "auto" into -1.
 //
-static int ReadPort(const NmosJson* Value, int* Port)
+static bool ReadPort(const NmosJson* Value, int* Port)
 {
     if (Value->Type == DTNMOS_JSON_STRING && strcmp(Value->String, "auto") == 0)
     {
         *Port = -1;
-        return 1;
+        return true;
     }
     if (Value->Type != DTNMOS_JSON_NUMBER || Value->Number < 0 || Value->Number > 65535 ||
         (double)(int)Value->Number != Value->Number)
     {
-        return 0;
+        return false;
     }
     *Port = (int)Value->Number;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadBool -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int ReadBool(const NmosJson* Value, int* Target)
+static bool ReadBool(const NmosJson* Value, bool* Target)
 {
     if (Value->Type != DTNMOS_JSON_TRUE && Value->Type != DTNMOS_JSON_FALSE)
     {
-        return 0;
+        return false;
     }
     *Target = Value->Type == DTNMOS_JSON_TRUE;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadTime -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Reads a time of IS-05, "<seconds>:<nanoseconds>", into nanoseconds; returns 0 for
+// Reads a time of IS-05, "<seconds>:<nanoseconds>", into nanoseconds; returns false for
 // another text, or one too far out to count in nanoseconds.
 //
-static int ReadTime(const char* Text, uint64_t* Ns)
+static bool ReadTime(const char* Text, uint64_t* Ns)
 {
     uint64_t Seconds = 0;
     const char* p = Text;
@@ -344,13 +345,13 @@ static int ReadTime(const char* Text, uint64_t* Ns)
     {
         if (Seconds > 1000000000000u)
         {
-            return 0;
+            return false;
         }
         Seconds = Seconds * 10 + (uint64_t)(*p - '0');
     }
     if (p == Text || *p != ':')
     {
-        return 0;
+        return false;
     }
     const char* Fraction = ++p;
     uint64_t Nanoseconds = 0;
@@ -359,15 +360,15 @@ static int ReadTime(const char* Text, uint64_t* Ns)
         Nanoseconds = Nanoseconds * 10 + (uint64_t)(*p - '0');
         if (Nanoseconds >= 1000000000u)
         {
-            return 0;
+            return false;
         }
     }
     if (p == Fraction || *p != '\0')
     {
-        return 0;
+        return false;
     }
     *Ns = Seconds * 1000000000u + Nanoseconds;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteTime -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -419,7 +420,7 @@ static const char* ReadActivation(const char* Name, const NmosJson* Requested,
             return "A scheduled activation has a requested_time of "
                    "\"<seconds>:<nanoseconds>\".";
         }
-        const int Relative = strcmp(Name, "activate_scheduled_relative") == 0;
+        const bool Relative = strcmp(Name, "activate_scheduled_relative") == 0;
         Staged->DueNs = Relative ? NmosOs_TaiNowNs() + Ns : Ns;
         // A time of 0 is that of the epoch, long past, and due at once like it.
         Staged->DueNs += Staged->DueNs == 0 ? 1 : 0;
@@ -440,7 +441,7 @@ static const char* ReadActivation(const char* Name, const NmosJson* Requested,
 //
 // Merges the transport parameters of the one leg into t; returns a message on failure.
 //
-static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
+static const char* MergeLeg(const NmosJson* Value, bool Sender, NmosLeg* t)
 {
     if (Value->Type != DTNMOS_JSON_ARRAY || Value->Count != 1 ||
         Value->Items[0].Type != DTNMOS_JSON_OBJECT)
@@ -458,7 +459,7 @@ static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
         {
             return "The source_ip and multicast_ip of a receiver are an address or null.";
         }
-        int Valid = 0;
+        bool Valid = false;
         if (strcmp(Name, "source_ip") == 0)
         {
             Valid = ReadAddress(Member, t->SourceIp, sizeof(t->SourceIp));
@@ -502,17 +503,17 @@ static const char* MergeLeg(const NmosJson* Value, int Sender, NmosLeg* t)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Copies into flow, whose strings and arrays store then holds, the flow of media on the
-// first leg of the SDP text. Returns 0 when text is no SDP or describes no such flow.
+// first leg of the SDP text. Returns false when text is no SDP or describes no such flow.
 //
-static int FindFlow(DtNmosMedia Media, const char* Text, NmosStore* Store,
-                    DtNmosFlow* Flow)
+static bool FindFlow(DtNmosMedia Media, const char* Text, NmosStore* Store,
+                     DtNmosFlow* Flow)
 {
     DtNmosSdp* Sdp = NULL;
     if (DtNmosSdp_Parse(Text, strlen(Text), &Sdp) != DTNMOS_OK)
     {
-        return 0;
+        return false;
     }
-    int Found = 0;
+    bool Found = false;
     for (size_t i = 0; !Found && i < DtNmosSdp_FlowCount(Sdp); ++i)
     {
         const DtNmosFlow* Candidate = DtNmosSdp_Flow(Sdp, i);
@@ -529,15 +530,15 @@ static int FindFlow(DtNmosMedia Media, const char* Text, NmosStore* Store,
 //
 // Sets the transport parameters t of a receiver of media to those of the flow that its
 // transport file describes, as IS-05 asks of a receiver given one: the multicast group,
-// the source and the port. Returns 0 when the file describes no such flow.
+// the source and the port. Returns false when the file describes no such flow.
 //
-static int TakeTransportFile(DtNmosMedia Media, const char* File, NmosLeg* t)
+static bool TakeTransportFile(DtNmosMedia Media, const char* File, NmosLeg* t)
 {
     NmosStore Store;
     memset(&Store, 0, sizeof(Store));
     DtNmosFlow Flow;
     memset(&Flow, 0, sizeof(Flow));
-    const int Found = FindFlow(Media, File, &Store, &Flow);
+    const bool Found = FindFlow(Media, File, &Store, &Flow);
     if (Found)
     {
         snprintf(t->MulticastIp, sizeof(t->MulticastIp), "%s",
@@ -555,7 +556,7 @@ static int TakeTransportFile(DtNmosMedia Media, const char* File, NmosLeg* t)
 // activate when it asks for an immediate activation. Returns a message on failure, with
 // its status in status.
 //
-static const char* MergePatch(const NmosJson* Body, int Sender, DtNmosMedia Media,
+static const char* MergePatch(const NmosJson* Body, bool Sender, DtNmosMedia Media,
                               NmosParameters* Staged, int* Activate, int* Status)
 {
     *Status = 400;
@@ -563,7 +564,7 @@ static const char* MergePatch(const NmosJson* Body, int Sender, DtNmosMedia Medi
     {
         return "The body of a PATCH is a JSON object.";
     }
-    int TookFile = 0;
+    bool TookFile = false;
     const NmosJson* Params = NULL;
     for (size_t i = 0; i < Body->Count; ++i)
     {
@@ -639,7 +640,7 @@ static const char* MergePatch(const NmosJson* Body, int Sender, DtNmosMedia Medi
 //
 // Finds the sender or receiver id; returns its connection, or null.
 //
-static NmosConnection* FindConnection(DtNmosNode* Node, const char* Id, int Sender,
+static NmosConnection* FindConnection(DtNmosNode* Node, const char* Id, bool Sender,
                                       NmosNodeSender** s, NmosNodeReceiver** r)
 {
     *s = NULL;
@@ -664,14 +665,15 @@ static NmosConnection* FindConnection(DtNmosNode* Node, const char* Id, int Send
 //
 // Fills flow with what a receiver of media receives by staged: the flow of that media in
 // its transport file, with the transport parameters over it, which took the values of the
-// transport file when it was staged. Returns 0 when the transport file describes none.
+// transport file when it was staged. Returns false when the transport file describes
+// none.
 //
-static int ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged, NmosStore* Store,
-                        DtNmosFlow* Flow)
+static bool ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged,
+                         NmosStore* Store, DtNmosFlow* Flow)
 {
     if (!FindFlow(Media, Staged->TransportFile, Store, Flow))
     {
-        return 0;
+        return false;
     }
     const NmosLeg* t = &Staged->Transport;
     if (t->MulticastIp[0] != '\0')
@@ -683,7 +685,7 @@ static int ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged, NmosSto
     {
         Flow->DestinationPort = (uint16_t)t->DestinationPort;
     }
-    return 1;
+    return true;
 }
 
 // What an activation hands to the callback of a sender or receiver, gathered under the
@@ -715,7 +717,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
                                     const NmosParameters* Staged, NmosActivation* a)
 {
     const NmosLeg* t = &Staged->Transport;
-    const int Enabled = Staged->MasterEnable && t->RtpEnabled;
+    const bool Enabled = Staged->MasterEnable && t->RtpEnabled;
     if (s != NULL)
     {
         a->SenderCallback = s->Activate;
@@ -723,7 +725,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
         a->Resource = s->Id;
         a->Sender.MasterEnable = Enabled;
         a->Sender.AtNs = Staged->DueNs != 0 ? Staged->DueNs : NmosOs_TaiNowNs();
-        const int Automatic =
+        const bool Automatic =
             t->DestinationIp[0] == '\0' || strcmp(t->DestinationIp, "auto") == 0;
         snprintf(a->Sender.DestinationIp, sizeof(a->Sender.DestinationIp), "%s",
                  Automatic ? s->Flow.DestinationIp : t->DestinationIp);
@@ -800,7 +802,7 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
                  s->MasterEnable ? Staged->PeerId : "");
         ++s->SessionVersion;
         NmosOs_VersionNow(&Node->LastVersion, s->Version, sizeof(s->Version));
-        s->Registered = 0;
+        s->Registered = false;
     }
     else
     {
@@ -829,7 +831,7 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
         snprintf(r->SenderId.Text, sizeof(r->SenderId.Text), "%s",
                  r->MasterEnable ? Staged->PeerId : "");
         NmosOs_VersionNow(&Node->LastVersion, r->Version, sizeof(r->Version));
-        r->Registered = 0;
+        r->Registered = false;
     }
 }
 
@@ -840,7 +842,7 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
 // one is scheduled, only a PATCH that cancels it is taken; while a callback applies one,
 // none is, as what it applies cannot be taken back (423).
 //
-static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJson* Body,
+static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJson* Body,
                       DtNmosHttpResponse* Response)
 {
     const NmosJson* Asked =
@@ -848,7 +850,7 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
     const NmosJson* AskedMode = Asked != NULL && Asked->Type == DTNMOS_JSON_OBJECT
                                     ? NmosJson_Member(Asked, "mode")
                                     : NULL;
-    const int Cancels = AskedMode != NULL && AskedMode->Type == DTNMOS_JSON_NULL;
+    const bool Cancels = AskedMode != NULL && AskedMode->Type == DTNMOS_JSON_NULL;
     NmosParameters Staged;
     memset(&Staged, 0, sizeof(Staged));
     NmosActivation a;
@@ -894,18 +896,18 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
         // Checked now, applied when it is due, by the poll that the node wakes for it.
         ClearActivation(&a);
         memset(&a, 0, sizeof(a));
-        Node->Wake = 1;
+        Node->Wake = true;
     }
     if (Failure == NULL && !CopyParameters(&c->Staged, &Staged))
     {
         Status = 500;
         Failure = "Out of memory.";
     }
-    const int Calls =
+    const bool Calls =
         Failure == NULL && (a.SenderCallback != NULL || a.ReceiverCallback != NULL);
     if (Calls)
     {
-        c->Applying = 1;
+        c->Applying = true;
     }
     NmosNode_Unlock(Node);
 
@@ -937,7 +939,7 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
         c = FindConnection(Node, Id, Sender, &s, &r);
         if (c != NULL)
         {
-            c->Applying = 0;
+            c->Applying = false;
         }
         if (Failure == NULL && c == NULL)
         {
@@ -975,7 +977,7 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
 //
 // Answers a PATCH of the staged parameters of the sender or receiver Id.
 //
-static void PatchStaged(DtNmosNode* Node, const char* Id, int Sender,
+static void PatchStaged(DtNmosNode* Node, const char* Id, bool Sender,
                         const DtNmosHttpRequest* Request, DtNmosHttpResponse* Response)
 {
     NmosJson* Body = NULL;
@@ -995,7 +997,7 @@ static void PatchStaged(DtNmosNode* Node, const char* Id, int Sender,
 // patches, each with the ID of what it patches and its params, which are applied in turn
 // as a PATCH of each would be, and answered with the status and the error of each.
 //
-static void PostBulk(DtNmosNode* Node, int Sender, const DtNmosHttpRequest* Request,
+static void PostBulk(DtNmosNode* Node, bool Sender, const DtNmosHttpRequest* Request,
                      DtNmosHttpResponse* Response)
 {
     NmosJson* Body = NULL;
@@ -1014,13 +1016,13 @@ static void PostBulk(DtNmosNode* Node, int Sender, const DtNmosHttpRequest* Requ
     for (size_t i = 0; i < Body->Count; ++i)
     {
         const NmosJson* Item = &Body->Items[i];
-        const int Object = Item->Type == DTNMOS_JSON_OBJECT;
+        const bool Object = Item->Type == DTNMOS_JSON_OBJECT;
         const char* Id = Object ? NmosJson_MemberText(Item, "id") : NULL;
         const NmosJson* Params = Object ? NmosJson_Member(Item, "params") : NULL;
         DtNmosHttpResponse* One = DtNmosHttpResponse_Alloc();
         if (One == NULL)
         {
-            b.Failed = 1;
+            b.Failed = true;
             break;
         }
         if (Id == NULL || Params == NULL)
@@ -1079,7 +1081,7 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
     NmosConnection* Due = NULL;
     for (size_t i = 0; i < Node->SenderCount + Node->ReceiverCount; ++i)
     {
-        const int IsSender = i < Node->SenderCount;
+        const bool IsSender = i < Node->SenderCount;
         NmosConnection* c = IsSender ? Node->Senders[i].Connection
                                      : Node->Receivers[i - Node->SenderCount].Connection;
         const uint64_t Lead = IsSender ? Node->Senders[i].LeadNs
@@ -1127,7 +1129,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
     for (;;)
     {
         NmosNode_Lock(Node);
-        Node->Wake = 0;
+        Node->Wake = false;
         const uint64_t Now = NmosOs_TaiNowNs();
         uint64_t Next = 0;
         NmosNodeSender* s = NULL;
@@ -1154,7 +1156,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
             return;
         }
         // The activation is taken off the schedule before it is applied, once.
-        const int Sender = s != NULL;
+        const bool Sender = s != NULL;
         const DtNmosId Id = Sender ? s->Id : r->Id;
         NmosParameters Staged;
         memset(&Staged, 0, sizeof(Staged));
@@ -1200,7 +1202,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
         if (c != NULL)
         {
             // The staged parameters show no activation once it took place, or failed.
-            c->Applying = 0;
+            c->Applying = false;
             c->Staged.Mode[0] = '\0';
             c->Staged.RequestedTime[0] = '\0';
             c->Staged.ActivationTime[0] = '\0';
@@ -1240,7 +1242,7 @@ static void AnswerTransportFile(const NmosNodeSender* s, DtNmosHttpResponse* Res
 //
 // Answers the IDs of the senders or the receivers, each followed by a slash.
 //
-static void AnswerIds(const DtNmosNode* Node, int Sender, DtNmosHttpResponse* Response)
+static void AnswerIds(const DtNmosNode* Node, bool Sender, DtNmosHttpResponse* Response)
 {
     NmosBuffer b;
     memset(&b, 0, sizeof(b));
@@ -1264,8 +1266,8 @@ static void AnswerIds(const DtNmosNode* Node, int Sender, DtNmosHttpResponse* Re
 static void AnswerSingle(DtNmosNode* Node, char** Segments, size_t Count,
                          DtNmosHttpResponse* Response)
 {
-    const int Sender = Count >= 1 && strcmp(Segments[0], "senders") == 0;
-    const int Receiver = Count >= 1 && strcmp(Segments[0], "receivers") == 0;
+    const bool Sender = Count >= 1 && strcmp(Segments[0], "senders") == 0;
+    const bool Receiver = Count >= 1 && strcmp(Segments[0], "receivers") == 0;
     if (Count == 0)
     {
         AnswerText(Response, "[\"senders/\", \"receivers/\"]");
@@ -1307,7 +1309,7 @@ static void AnswerSingle(DtNmosNode* Node, char** Segments, size_t Count,
     }
     else if (strcmp(Leaf, "staged") == 0 || strcmp(Leaf, "active") == 0)
     {
-        const int Active = strcmp(Leaf, "active") == 0;
+        const bool Active = strcmp(Leaf, "active") == 0;
         NmosBuffer b;
         memset(&b, 0, sizeof(b));
         // The staged parameters show their activation while it is scheduled.
@@ -1332,8 +1334,8 @@ DtNmosResult NmosConnection_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Re
                                    char** Segments, size_t Count,
                                    DtNmosHttpResponse* Response)
 {
-    const int Single = Count >= 1 && strcmp(Segments[0], "single") == 0;
-    const int Bulk = Count >= 1 && strcmp(Segments[0], "bulk") == 0;
+    const bool Single = Count >= 1 && strcmp(Segments[0], "single") == 0;
+    const bool Bulk = Count >= 1 && strcmp(Segments[0], "bulk") == 0;
     if (strcmp(Request->Method, "PATCH") == 0)
     {
         if (Single && Count == 4 && strcmp(Segments[3], "staged") == 0 &&

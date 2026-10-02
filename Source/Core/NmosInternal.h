@@ -9,6 +9,7 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -50,7 +51,7 @@ typedef struct NmosBuffer
     char* Data;
     size_t Length;
     size_t Capacity;
-    int Failed;
+    bool Failed;
 } NmosBuffer;
 
 void NmosBuffer_Append(NmosBuffer* Buffer, const char* Text, size_t Length);
@@ -72,26 +73,27 @@ NmosSpan NmosSpan_Of(const char* Text);
 // Returns span without the spaces and tabs at both ends.
 NmosSpan NmosSpan_Trim(NmosSpan Span);
 // Whether span is text, comparing ASCII letters without regard to case when fold is set.
-int NmosSpan_Equals(NmosSpan Span, const char* Text, int Fold);
+bool NmosSpan_Equals(NmosSpan Span, const char* Text, bool Fold);
 // Whether span starts with prefix, exactly.
-int NmosSpan_StartsWith(NmosSpan Span, const char* Prefix);
+bool NmosSpan_StartsWith(NmosSpan Span, const char* Prefix);
 // Splits span at the first separator: head is what lies before it, and the return value
 // what follows it, empty with a null data when there is no separator.
 NmosSpan NmosSpan_Split(NmosSpan Span, char Separator, NmosSpan* Head);
 
-// Reads span, all of it, as a decimal number of at most maximum; returns 0 on failure.
-int NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value);
-int NmosText_ParseU32(NmosSpan Span, uint32_t Maximum, uint32_t* Value);
-// Reads a rate, "25" or "30000/1001"; returns 0 on failure or a zero denominator.
-int NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator);
+// Reads span, all of it, as a decimal number of at most maximum; returns false on
+// failure.
+bool NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value);
+bool NmosText_ParseU32(NmosSpan Span, uint32_t Maximum, uint32_t* Value);
+// Reads a rate, "25" or "30000/1001"; returns false on failure or a zero denominator.
+bool NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator);
 // Reads a time in milliseconds with up to six decimals, "1" or "0.125", as nanoseconds.
-int NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds);
+bool NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds);
 // Reads a number in decimal or in hexadecimal after 0x, as in DID_SDID={0x61,0x02}.
-int NmosText_ParseByte(NmosSpan Span, uint8_t* Value);
+bool NmosText_ParseByte(NmosSpan Span, uint8_t* Value);
 
-// Copies span into the array target of size bytes with its terminating null; returns 0,
-// leaving target empty, when it does not fit.
-int NmosText_CopySpan(char* Target, size_t Size, NmosSpan Span);
+// Copies span into the array target of size bytes with its terminating null; returns
+// false, leaving target empty, when it does not fit.
+bool NmosText_CopySpan(char* Target, size_t Size, NmosSpan Span);
 
 // Copies the length bytes of data and a null into the caller's buffer of *Size bytes,
 // and sets *Size to length. When they do not fit, or buffer is null, it fails with

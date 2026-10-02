@@ -352,10 +352,10 @@ typedef struct NmosResponder
     NmosUdp* Socket;
     NmosThread* Thread;
     NmosMutex* Mutex;
-    int Stop;        // guarded by mutex
-    int Queries;     // queries received, guarded by mutex
-    int AskedSrvTxt; // a query asked for SRV and TXT records, guarded by mutex
-    int Faults;      // queries a DNS server counts as faults, guarded by mutex
+    bool Stop;        // guarded by mutex
+    int Queries;      // queries received, guarded by mutex
+    bool AskedSrvTxt; // a query asked for SRV and TXT records, guarded by mutex
+    int Faults;       // queries a DNS server counts as faults, guarded by mutex
     // Set before the thread starts and only read by it afterwards.
     const NmosAnnounced* Instances;
     size_t Count;
@@ -364,22 +364,22 @@ typedef struct NmosResponder
     const char* Service; // that it announces
     // A DNS server, which counts a query without recursion desired or of more than one
     // question as a fault, and answers it with FORMERR.
-    int Dns;
+    bool Dns;
 } NmosResponder;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadQuery -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Reads the type of the first question of a query and whether any asks for SRV or TXT.
 //
-static int ReadQuery(const uint8_t* Bytes, size_t Length, int* AsksSrvTxt)
+static bool ReadQuery(const uint8_t* Bytes, size_t Length, bool* AsksSrvTxt)
 {
     if (Length < 12 || (Bytes[2] & 0x80) != 0)
     {
-        return 0;
+        return false;
     }
     const unsigned Questions = ((unsigned)Bytes[4] << 8) | Bytes[5];
     size_t At = 12;
-    *AsksSrvTxt = 0;
+    *AsksSrvTxt = false;
     for (unsigned q = 0; q < Questions; ++q)
     {
         while (At < Length && Bytes[At] != 0)
@@ -388,13 +388,13 @@ static int ReadQuery(const uint8_t* Bytes, size_t Length, int* AsksSrvTxt)
         }
         if (At + 5 > Length)
         {
-            return 0;
+            return false;
         }
         const unsigned Type = ((unsigned)Bytes[At + 1] << 8) | Bytes[At + 2];
         *AsksSrvTxt |= Type == DTNMOS_DNS_TYPE_SRV || Type == DTNMOS_DNS_TYPE_TXT;
         At += 5;
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Respond -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -405,7 +405,7 @@ static void Respond(void* Argument)
     for (;;)
     {
         NmosOs_MutexLock(r->Mutex);
-        const int Stop = r->Stop;
+        const bool Stop = r->Stop;
         NmosOs_MutexUnlock(r->Mutex);
         if (Stop)
         {
@@ -416,17 +416,17 @@ static void Respond(void* Argument)
         uint16_t FromPort = 0;
         const int Received = NmosOs_UdpReceive(r->Socket, Bytes, sizeof(Bytes), 50, From,
                                                sizeof(From), &FromPort);
-        int AsksSrvTxt = 0;
+        bool AsksSrvTxt = false;
         if (Received <= 0 || !ReadQuery(Bytes, (size_t)Received, &AsksSrvTxt))
         {
             continue;
         }
-        const int Fault =
+        const bool Fault =
             r->Dns && ((Bytes[2] & 0x01) == 0 || Bytes[4] != 0 || Bytes[5] != 1);
         NmosOs_MutexLock(r->Mutex);
         ++r->Queries;
         r->AskedSrvTxt |= AsksSrvTxt;
-        r->Faults += Fault;
+        r->Faults += Fault ? 1 : 0;
         NmosOs_MutexUnlock(r->Mutex);
         if (Fault)
         {
@@ -452,8 +452,8 @@ static void Respond(void* Argument)
 // Starts a responder that announces service, as a DNS server when dns is set. Everything
 // the thread reads without the mutex is set before it starts.
 //
-static int StartResponderAs(NmosResponder* r, const NmosAnnounced* Instances,
-                            size_t Count, int Answer, const char* Service, int Dns)
+static bool StartResponderAs(NmosResponder* r, const NmosAnnounced* Instances,
+                             size_t Count, int Answer, const char* Service, bool Dns)
 {
     memset(r, 0, sizeof(*r));
     r->Instances = Instances;
@@ -465,7 +465,7 @@ static int StartResponderAs(NmosResponder* r, const NmosAnnounced* Instances,
     r->Mutex = NmosOs_MutexCreate();
     if (r->Socket == NULL || r->Mutex == NULL)
     {
-        return 0;
+        return false;
     }
     snprintf(r->Destination, sizeof(r->Destination), "127.0.0.1:%u",
              NmosOs_UdpPort(r->Socket));
@@ -477,10 +477,10 @@ static int StartResponderAs(NmosResponder* r, const NmosAnnounced* Instances,
 //
 // Starts a responder that announces "_nmos-query._tcp.local" over multicast DNS.
 //
-static int StartResponder(NmosResponder* r, const NmosAnnounced* Instances, size_t Count,
-                          int Answer)
+static bool StartResponder(NmosResponder* r, const NmosAnnounced* Instances, size_t Count,
+                           int Answer)
 {
-    return StartResponderAs(r, Instances, Count, Answer, "_nmos-query._tcp.local", 0);
+    return StartResponderAs(r, Instances, Count, Answer, "_nmos-query._tcp.local", false);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StopResponder -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -490,7 +490,7 @@ static void StopResponder(NmosResponder* r)
     if (r->Thread != NULL)
     {
         NmosOs_MutexLock(r->Mutex);
-        r->Stop = 1;
+        r->Stop = true;
         NmosOs_MutexUnlock(r->Mutex);
         NmosOs_ThreadJoin(r->Thread);
     }
@@ -585,7 +585,7 @@ NMOS_TEST(DiscoveryAsksAgainForWhatIsMissing)
     const DtNmosResult Result = DtNmos_Discover(&Config, &List);
     NmosOs_MutexLock(r.Mutex);
     const int Queries = r.Queries;
-    const int Asked = r.AskedSrvTxt;
+    const bool Asked = r.AskedSrvTxt;
     NmosOs_MutexUnlock(r.Mutex);
     StopResponder(&r);
     NMOS_ASSERT(Result == DTNMOS_OK);
@@ -706,7 +706,7 @@ NMOS_TEST(DiscoveryAsksADnsServerToo)
     NMOS_ASSERT(StartResponder(&Mdns, &OnLink, 1, 1));
     NmosResponder Dns;
     NMOS_ASSERT(
-        StartResponderAs(&Dns, InDns, 2, 2, "_nmos-query._tcp.studio.example", 1));
+        StartResponderAs(&Dns, InDns, 2, 2, "_nmos-query._tcp.studio.example", true));
 
     DtNmosDiscoveryConfig Config = ConfigFor(&Mdns, 300);
     Config.Searches = 0;
@@ -716,7 +716,7 @@ NMOS_TEST(DiscoveryAsksADnsServerToo)
     const DtNmosResult Result = DtNmos_Discover(&Config, &List);
     NmosOs_MutexLock(Dns.Mutex);
     const int Faults = Dns.Faults;
-    const int Asked = Dns.AskedSrvTxt;
+    const bool Asked = Dns.AskedSrvTxt;
     NmosOs_MutexUnlock(Dns.Mutex);
     StopResponder(&Dns);
     StopResponder(&Mdns);
@@ -756,8 +756,8 @@ NMOS_TEST(DiscoveryTakesOnlyTheDnsServer)
     NmosResponder Mdns;
     NMOS_ASSERT(StartResponder(&Mdns, &RegistryB, 1, 1));
     NmosResponder Dns;
-    NMOS_ASSERT(
-        StartResponderAs(&Dns, &RegistryB, 1, 1, "_nmos-query._tcp.studio.example", 1));
+    NMOS_ASSERT(StartResponderAs(&Dns, &RegistryB, 1, 1,
+                                 "_nmos-query._tcp.studio.example", true));
     DtNmosDiscoveryConfig Config = ConfigFor(&Mdns, 200);
     Config.Searches = DTNMOS_SEARCH_UNICAST;
     Config.DnsServer = Dns.Destination;
@@ -793,7 +793,7 @@ typedef struct NmosFakeRegistries
     const char* Urls[2]; // the base URLs of the two
     int Requests[2];
     int Registrations[2]; // POSTs of a resource
-    int Down[2];
+    bool Down[2];
 } NmosFakeRegistries;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -828,7 +828,7 @@ static DtNmosResult FakeRegistry(void* User, const DtNmosHttpRequest* Request,
 // Polls the node every 20 ms, for two seconds at most, until *Count exceeds Above;
 // returns whether it did.
 //
-static int PollUntil(DtNmosNode* Node, const int* Count, int Above)
+static bool PollUntil(DtNmosNode* Node, const int* Count, int Above)
 {
     for (int i = 0; i < 100 && *Count <= Above; ++i)
     {
@@ -861,7 +861,8 @@ NMOS_TEST(NodeSearchesForItsRegistry)
          {127, 0, 0, 3}},
     };
     NmosResponder r;
-    NMOS_ASSERT(StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", 0));
+    NMOS_ASSERT(
+        StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", false));
     NmosFakeRegistries Fake;
     memset(&Fake, 0, sizeof(Fake));
     Fake.Urls[0] = "http://127.0.0.3:8081/";
@@ -907,7 +908,7 @@ NMOS_TEST(NodeSearchesForItsRegistry)
 
     // When it fails, the node moves to the other, with a heartbeat: what it registered
     // stays registered.
-    Fake.Down[0] = 1;
+    Fake.Down[0] = true;
     NMOS_ASSERT(PollUntil(Node, &Fake.Requests[1], 0));
     for (int i = 0; i < 5; ++i)
     {
@@ -917,13 +918,13 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
 
     // When that fails too, the node starts over with the first, once it answers again.
-    Fake.Down[1] = 1;
+    Fake.Down[1] = true;
     for (int i = 0; i < 10; ++i)
     {
         DtNmosNode_Poll(Node, NULL);
         NmosOs_SleepMs(5);
     }
-    Fake.Down[0] = 0;
+    Fake.Down[0] = false;
     const int Before = Fake.Requests[0];
     NMOS_ASSERT(PollUntil(Node, &Fake.Requests[0], Before));
     // The node goes before the search it borrows.
@@ -949,7 +950,7 @@ NMOS_TEST(RegistrySearchIsFed)
     Config.Size = sizeof(Config);
     NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_E_INVALID_ARGUMENT);
     Config.Finds = DTNMOS_FINDS_REGISTRATION;
-    Config.Fed = 1;
+    Config.Fed = true;
     NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_OK);
     NMOS_ASSERT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION, &List) ==
                 DTNMOS_OK);
@@ -1008,7 +1009,8 @@ NMOS_TEST(RegistrySearchSearches)
          {127, 0, 0, 3}},
     };
     NmosResponder r;
-    NMOS_ASSERT(StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", 0));
+    NMOS_ASSERT(
+        StartResponderAs(&r, Instances, 2, 1, "_nmos-register._tcp.local", false));
     const DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
     DtNmosRegistrySearchConfig Config;
     memset(&Config, 0, sizeof(Config));

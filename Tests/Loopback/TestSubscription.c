@@ -59,11 +59,11 @@ typedef struct NmosFakeSubscription
     char Body[512];      // of the POST
     char Url[256];       // of the POST
     char Connected[256]; // the URL the WebSocket connected to
-    int ConnectFails;
+    bool ConnectFails;
     const char* const* Messages; // what the WebSocket gives, then it closes
     size_t Count;
     size_t Next;
-    int Closed;
+    bool Closed;
 } NmosFakeSubscription;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -127,7 +127,7 @@ static DtNmosResult FakeReceive(void* User, void* Connection, uint32_t TimeoutMs
 static void FakeClose(void* User, void* Connection)
 {
     (void)Connection;
-    ((NmosFakeSubscription*)User)->Closed = 1;
+    ((NmosFakeSubscription*)User)->Closed = true;
 }
 
 // What the changes were, as "<kind> <id> <label before> <label after>".
@@ -272,7 +272,7 @@ NMOS_TEST(SubscriptionReportsWhatChanges)
         NMOS_ASSERT_STR(Recorded.Lines[i], Expected[i]);
     }
     DtNmosSubscription_Free(Subscription);
-    NMOS_ASSERT_EQ(Fake.Closed, 1);
+    NMOS_ASSERT(Fake.Closed);
     DtNmosQuery_Free(Query);
 }
 
@@ -304,14 +304,14 @@ NMOS_TEST(SubscriptionNamesWhatWentWrong)
     DtNmosQuery_Free(Query);
     // A WebSocket that cannot be opened.
     Fake.Answer = "{\"id\": \"1\", \"ws_href\": \"" WS_HREF "\"}";
-    Fake.ConnectFails = 1;
+    Fake.ConnectFails = true;
     NMOS_ASSERT(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_E_NETWORK);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
     DtNmosQuery_Free(Query);
 
     // Messages that are no grain fail the poll and not the subscription, and an item
     // with neither pre nor post is no change.
-    Fake.ConnectFails = 0;
+    Fake.ConnectFails = false;
     Fake.Messages = Messages;
     Fake.Count = sizeof(Messages) / sizeof(Messages[0]);
     NMOS_ASSERT(Subscribe(&Fake, &Recorded, &Query, &Subscription) == DTNMOS_OK);
@@ -365,7 +365,7 @@ typedef struct NmosTestServer
 {
     NmosTestSocket Listener;
     uint16_t Port;
-    int HandshakeOk;
+    bool HandshakeOk;
 } NmosTestServer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Base64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -393,7 +393,7 @@ static void Base64(const uint8_t* Data, size_t Length, char* Text)
 // Sends a frame of a server, unmasked: opcode, whether it is the last of its message,
 // and its payload.
 //
-static void SendFrame(NmosTestSocket Client, int Opcode, int Last, const char* Payload,
+static void SendFrame(NmosTestSocket Client, int Opcode, bool Last, const char* Payload,
                       size_t Length)
 {
     uint8_t Header[10];
@@ -477,21 +477,21 @@ static void ServeClient(void* Argument)
                      "Connection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
                      AcceptKey);
         send(Client, Answer, TEST_LENGTH(AnswerLength), 0);
-        Server->HandshakeOk = 1;
+        Server->HandshakeOk = true;
 
         // A message in two fragments with a ping between them, one of 70000 bytes, and
         // the close.
-        SendFrame(Client, 0x1, 0, "hello ", 6);
-        SendFrame(Client, 0x9, 1, "", 0);
-        SendFrame(Client, 0x0, 1, "world", 5);
+        SendFrame(Client, 0x1, false, "hello ", 6);
+        SendFrame(Client, 0x9, true, "", 0);
+        SendFrame(Client, 0x0, true, "world", 5);
         char* Large = malloc(70000);
         if (Large != NULL)
         {
             memset(Large, 'x', 70000);
-            SendFrame(Client, 0x1, 1, Large, 70000);
+            SendFrame(Client, 0x1, true, Large, 70000);
             free(Large);
         }
-        SendFrame(Client, 0x8, 1, "\x03\xe8", 2);
+        SendFrame(Client, 0x8, true, "\x03\xe8", 2);
         // Wait for the client to close, so that nothing is lost in a reset.
         char Rest[256];
         while (recv(Client, Rest, TEST_LENGTH(sizeof(Rest)), 0) > 0)
@@ -559,7 +559,7 @@ NMOS_TEST(WebsocketOnCurlReadsMessages)
     }
     NMOS_ASSERT(Connected == DTNMOS_OK);
     NmosOs_ThreadJoin(Thread);
-    NMOS_ASSERT_EQ(Server.HandshakeOk, 1);
+    NMOS_ASSERT(Server.HandshakeOk);
     TestCloseSocket(Server.Listener);
 
     // Nobody listens any more: the WebSocket cannot be opened. Windows tries a refused

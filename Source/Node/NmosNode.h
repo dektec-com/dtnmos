@@ -21,8 +21,8 @@ typedef struct NmosNodeDevice
     char* Label;
     char* Description;
     char Version[32];
-    int Registered;    // the registry holds this version
-    int WasRegistered; // the registry held a version, which a removal deletes
+    bool Registered;    // the registry holds this version
+    bool WasRegistered; // the registry held a version, which a removal deletes
 } NmosNodeDevice;
 
 typedef struct NmosNodeSender
@@ -42,9 +42,9 @@ typedef struct NmosNodeSender
     DtNmosSenderActivateFunc Activate;
     void* User;
     char Version[32];
-    int Registered;    // with its source and flow
-    int WasRegistered; // the registry held a version, which a removal deletes
-    int MasterEnable;
+    bool Registered;    // with its source and flow
+    bool WasRegistered; // the registry held a version, which a removal deletes
+    bool MasterEnable;
     uint64_t SessionId; // of its SDP
     uint64_t SessionVersion;
     uint64_t LeadNs;  // how long before a scheduled activation its callback is called
@@ -63,9 +63,9 @@ typedef struct NmosNodeReceiver
     DtNmosReceiverActivateFunc Activate;
     void* User;
     char Version[32];
-    int Registered;
-    int WasRegistered;
-    int MasterEnable;
+    bool Registered;
+    bool WasRegistered;
+    bool MasterEnable;
     uint64_t LeadNs;  // how long before a scheduled activation its callback is called
     void* Connection; // the staged and active parameters of IS-05, of NmosConnection.c
 } NmosNodeReceiver;
@@ -80,7 +80,7 @@ typedef struct NmosNodeRemoval
 // DtNmosNode_Close() empties it again.
 struct DtNmosNode
 {
-    int Open;
+    bool Open;
     NmosMutex* Mutex;
     DtNmosId Id;
     char* Label;
@@ -99,18 +99,18 @@ struct DtNmosNode
     void* LogUser;
     char Version[32];
     uint64_t LastVersion;
-    int NodeRegistered;    // the registry holds this version
-    int NodeWasRegistered; // the registry held a version, which closing deletes
-    int Closing; // the node deletes what it registered and registers nothing more
+    bool NodeRegistered;    // the registry holds this version
+    bool NodeWasRegistered; // the registry held a version, which closing deletes
+    bool Closing; // the node deletes what it registered and registers nothing more
     uint64_t NextHeartbeatMs;
-    int Wake; // an activation was scheduled, which the next poll may have to apply
+    bool Wake; // an activation was scheduled, which the next poll may have to apply
     DtNmosRegistryFailedFunc RegistryFailed;
     void* RegistryFailedUser;
     uint32_t FailuresBeforeSwitch;
     uint32_t Failures; // polls that failed in a row; the poll thread's own
     // A node opened without a registry takes its registries from the search of the
     // application, which it borrows.
-    int Searches;
+    bool Searches;
     DtNmosRegistrySearch* Search;
     // The base URLs of the registries that failed since the node last started over from
     // the most preferred; the poll thread's own.
@@ -118,7 +118,7 @@ struct DtNmosNode
     size_t FailedCount;
     // The node has not registered with its registry yet; a 200 to that first registration
     // says the registry holds an old node of its ID. The poll thread's own.
-    int FirstRegistration;
+    bool FirstRegistration;
     NmosNodeDevice* Devices;
     size_t DeviceCount;
     size_t DeviceCapacity;
@@ -149,9 +149,9 @@ NmosNodeSender* NmosNode_FindSender(DtNmosNode* Node, const DtNmosId* Id);
 NmosNodeReceiver* NmosNode_FindReceiver(DtNmosNode* Node, const DtNmosId* Id);
 
 // Whether address is an address of IPv4 or IPv6 that fits DTNMOS_MAX_ADDRESS_SIZE.
-int NmosNode_IsAddress(const char* Address);
+bool NmosNode_IsAddress(const char* Address);
 // Whether address is a multicast address of IPv4 or IPv6.
-int NmosNode_IsMulticast(const char* Address);
+bool NmosNode_IsMulticast(const char* Address);
 
 // Write the JSON of the resources of IS-04 v1.3; the caller holds the lock.
 void NmosNode_WriteBaseUrl(const DtNmosNode* Node, NmosBuffer* b);

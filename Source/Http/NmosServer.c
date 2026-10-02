@@ -23,14 +23,14 @@ typedef struct NmosServer
     struct mg_context* Context;
     NmosThread* Poller;
     NmosMutex* Mutex; // guards stopping
-    int Stopping;
+    bool Stopping;
 } NmosServer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasServer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int DtNmos_HasServer(void)
+bool DtNmos_HasServer(void)
 {
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HandleRequest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -108,10 +108,10 @@ static int HandleRequest(struct mg_connection* Connection, void* User)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Stopping -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int Stopping(NmosServer* s)
+static bool Stopping(NmosServer* s)
 {
     NmosOs_MutexLock(s->Mutex);
-    const int Result = s->Stopping;
+    const bool Result = s->Stopping;
     NmosOs_MutexUnlock(s->Mutex);
     return Result;
 }
@@ -120,10 +120,10 @@ static int Stopping(NmosServer* s)
 //
 // Whether an activation was scheduled since the last poll.
 //
-static int Woken(DtNmosNode* Node)
+static bool Woken(DtNmosNode* Node)
 {
     NmosNode_Lock(Node);
-    const int Result = Node->Wake;
+    const bool Result = Node->Wake;
     NmosNode_Unlock(Node);
     return Result;
 }
@@ -229,7 +229,7 @@ void NmosServer_Stop(DtNmosNode* Node)
         return;
     }
     NmosOs_MutexLock(s->Mutex);
-    s->Stopping = 1;
+    s->Stopping = true;
     NmosOs_MutexUnlock(s->Mutex);
     NmosOs_ThreadJoin(s->Poller);
     mg_stop(s->Context);
@@ -243,9 +243,9 @@ void NmosServer_Stop(DtNmosNode* Node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasServer -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int DtNmos_HasServer(void)
+bool DtNmos_HasServer(void)
 {
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

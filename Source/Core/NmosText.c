@@ -30,7 +30,7 @@ void NmosBuffer_Append(NmosBuffer* Buffer, const char* Text, size_t Length)
         char* Data = realloc(Buffer->Data, Capacity);
         if (Data == NULL)
         {
-            Buffer->Failed = 1;
+            Buffer->Failed = true;
             return;
         }
         Buffer->Data = Data;
@@ -52,7 +52,7 @@ void NmosBuffer_Printf(NmosBuffer* Buffer, const char* Format, ...)
     va_end(Arguments);
     if (Needed < 0)
     {
-        Buffer->Failed = 1;
+        Buffer->Failed = true;
         return;
     }
     if ((size_t)Needed < sizeof(Local))
@@ -63,7 +63,7 @@ void NmosBuffer_Printf(NmosBuffer* Buffer, const char* Format, ...)
     char* Text = malloc((size_t)Needed + 1);
     if (Text == NULL)
     {
-        Buffer->Failed = 1;
+        Buffer->Failed = true;
         return;
     }
     va_start(Arguments, Format);
@@ -115,12 +115,12 @@ static char Lower(char c)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_Equals -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosSpan_Equals(NmosSpan Span, const char* Text, int Fold)
+bool NmosSpan_Equals(NmosSpan Span, const char* Text, bool Fold)
 {
     const size_t Length = strlen(Text);
     if (Span.Length != Length)
     {
-        return 0;
+        return false;
     }
     for (size_t i = 0; i < Length; ++i)
     {
@@ -128,15 +128,15 @@ int NmosSpan_Equals(NmosSpan Span, const char* Text, int Fold)
         const char b = Fold ? Lower(Text[i]) : Text[i];
         if (a != b)
         {
-            return 0;
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosSpan_StartsWith -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosSpan_StartsWith(NmosSpan Span, const char* Prefix)
+bool NmosSpan_StartsWith(NmosSpan Span, const char* Prefix)
 {
     const size_t Length = strlen(Prefix);
     return Span.Length >= Length && memcmp(Span.Data, Prefix, Length) == 0;
@@ -162,11 +162,11 @@ NmosSpan NmosSpan_Split(NmosSpan Span, char Separator, NmosSpan* Head)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU64 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value)
+bool NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value)
 {
     if (Span.Length == 0)
     {
-        return 0;
+        return false;
     }
     uint64_t Result = 0;
     for (size_t i = 0; i < Span.Length; ++i)
@@ -174,35 +174,35 @@ int NmosText_ParseU64(NmosSpan Span, uint64_t Maximum, uint64_t* Value)
         const char c = Span.Data[i];
         if (c < '0' || c > '9')
         {
-            return 0;
+            return false;
         }
         const uint64_t Digit = (uint64_t)(c - '0');
         if (Result > (Maximum - Digit) / 10)
         {
-            return 0;
+            return false;
         }
         Result = Result * 10 + Digit;
     }
     *Value = Result;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseU32 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_ParseU32(NmosSpan Span, uint32_t Maximum, uint32_t* Value)
+bool NmosText_ParseU32(NmosSpan Span, uint32_t Maximum, uint32_t* Value)
 {
     uint64_t Result = 0;
     if (!NmosText_ParseU64(Span, Maximum, &Result))
     {
-        return 0;
+        return false;
     }
     *Value = (uint32_t)Result;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseRate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator)
+bool NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator)
 {
     NmosSpan Head;
     const NmosSpan Rest = NmosSpan_Split(Span, '/', &Head);
@@ -210,39 +210,39 @@ int NmosText_ParseRate(NmosSpan Span, uint32_t* Numerator, uint32_t* Denominator
     uint32_t d = 1;
     if (!NmosText_ParseU32(Head, UINT32_MAX, &n))
     {
-        return 0;
+        return false;
     }
     if (Rest.Data != NULL && (!NmosText_ParseU32(Rest, UINT32_MAX, &d) || d == 0))
     {
-        return 0;
+        return false;
     }
     *Numerator = n;
     *Denominator = d;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseMilliseconds -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds)
+bool NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds)
 {
     NmosSpan Whole;
     const NmosSpan Fraction = NmosSpan_Split(Span, '.', &Whole);
     uint32_t Milliseconds = 0;
     if (!NmosText_ParseU32(Whole, 4000, &Milliseconds))
     {
-        return 0;
+        return false;
     }
     uint32_t Result = Milliseconds * 1000000u;
     if (Fraction.Data != NULL)
     {
         if (Fraction.Length == 0 || Fraction.Length > 6)
         {
-            return 0;
+            return false;
         }
         uint32_t Digits = 0;
         if (!NmosText_ParseU32(Fraction, 999999, &Digits))
         {
-            return 0;
+            return false;
         }
         for (size_t i = Fraction.Length; i < 6; ++i)
         {
@@ -251,12 +251,12 @@ int NmosText_ParseMilliseconds(NmosSpan Span, uint32_t* Nanoseconds)
         Result += Digits;
     }
     *Nanoseconds = Result;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_ParseByte -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosText_ParseByte(NmosSpan Span, uint8_t* Value)
+bool NmosText_ParseByte(NmosSpan Span, uint8_t* Value)
 {
     if (Span.Length > 2 && Span.Data[0] == '0' &&
         (Span.Data[1] == 'x' || Span.Data[1] == 'X'))
@@ -276,45 +276,45 @@ int NmosText_ParseByte(NmosSpan Span, uint8_t* Value)
             }
             else
             {
-                return 0;
+                return false;
             }
             Result = Result * 16 + Digit;
             if (Result > 255)
             {
-                return 0;
+                return false;
             }
         }
         *Value = (uint8_t)Result;
-        return 1;
+        return true;
     }
     uint32_t Result = 0;
     if (!NmosText_ParseU32(Span, 255, &Result))
     {
-        return 0;
+        return false;
     }
     *Value = (uint8_t)Result;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosText_CopySpan -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int NmosText_CopySpan(char* Target, size_t Size, NmosSpan Span)
+bool NmosText_CopySpan(char* Target, size_t Size, NmosSpan Span)
 {
     if (Size == 0)
     {
-        return 0;
+        return false;
     }
     if (Span.Length >= Size)
     {
         Target[0] = '\0';
-        return 0;
+        return false;
     }
     if (Span.Length > 0)
     {
         memcpy(Target, Span.Data, Span.Length);
     }
     Target[Span.Length] = '\0';
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StorePiece -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

@@ -48,10 +48,10 @@ static uint32_t Get32(const uint8_t* At)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Writes name, in which "\." and "\\" stand for a dot and a backslash within a label, as
-// labels at buffer + *Offset; returns 0 when it does not fit or a label is empty or
+// labels at buffer + *Offset; returns false when it does not fit or a label is empty or
 // longer than 63 bytes.
 //
-static int WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* Name)
+static bool WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* Name)
 {
     const char* At = Name;
     while (*At != '\0')
@@ -67,13 +67,13 @@ static int WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* N
             }
             if (Length == sizeof(Label))
             {
-                return 0;
+                return false;
             }
             Label[Length++] = (uint8_t)c;
         }
         if (Length == 0 || *Offset + 1 + Length > Size)
         {
-            return 0;
+            return false;
         }
         if (*At == '.')
         {
@@ -85,10 +85,10 @@ static int WriteName(uint8_t* Buffer, size_t Size, size_t* Offset, const char* N
     }
     if (*Offset + 1 > Size)
     {
-        return 0;
+        return false;
     }
     Buffer[(*Offset)++] = 0;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_WriteQuery -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -122,39 +122,39 @@ size_t NmosDns_WriteQuery(uint8_t* Buffer, size_t Size, uint16_t Id, uint16_t Fl
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Reads the name at *Offset into text, following compression pointers, and moves *Offset
-// past the name as it stands there. Returns 0 when the name is malformed or too long.
+// past the name as it stands there. Returns false when the name is malformed or too long.
 //
-static int ReadName(const uint8_t* Message, size_t Length, size_t* Offset, char* Text)
+static bool ReadName(const uint8_t* Message, size_t Length, size_t* Offset, char* Text)
 {
     size_t At = *Offset;
     size_t Used = 0;
     int Pointers = 0;
-    int Jumped = 0;
+    bool Jumped = false;
     for (;;)
     {
         if (At >= Length)
         {
-            return 0;
+            return false;
         }
         const uint8_t First = Message[At];
         if ((First & 0xC0) == 0xC0)
         {
             if (At + 1 >= Length || ++Pointers > NMOS_MAX_POINTERS)
             {
-                return 0;
+                return false;
             }
             const size_t Target = ((size_t)(First & 0x3F) << 8) | Message[At + 1];
             if (!Jumped)
             {
                 *Offset = At + 2;
-                Jumped = 1;
+                Jumped = true;
             }
             At = Target;
             continue;
         }
         if ((First & 0xC0) != 0)
         {
-            return 0; // the extended label types are not used
+            return false; // the extended label types are not used
         }
         if (First == 0)
         {
@@ -163,11 +163,11 @@ static int ReadName(const uint8_t* Message, size_t Length, size_t* Offset, char*
                 *Offset = At + 1;
             }
             Text[Used] = '\0';
-            return 1;
+            return true;
         }
         if (At + 1 + First > Length)
         {
-            return 0;
+            return false;
         }
         if (Used > 0)
         {
@@ -179,7 +179,7 @@ static int ReadName(const uint8_t* Message, size_t Length, size_t* Offset, char*
             const char c = (char)Message[At + 1 + i];
             if (Used + 3 >= DTNMOS_DNS_NAME_SIZE)
             {
-                return 0;
+                return false;
             }
             if (c == '.' || c == '\\')
             {
@@ -193,9 +193,9 @@ static int ReadName(const uint8_t* Message, size_t Length, size_t* Offset, char*
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_ReadResponse -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
-                         void (*Record)(void* User, const NmosDnsRecord* Found),
-                         void* User)
+bool NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
+                          void (*Record)(void* User, const NmosDnsRecord* Found),
+                          void* User)
 {
     // The flags of the header are tested in their bytes rather than through Get16(): QR
     // is the top bit of the third byte (RFC 1035, 4.1.1). MSVC 19.51, of Visual Studio
@@ -204,7 +204,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
     if (Message == NULL || Length < NMOS_HEADER_SIZE ||
         (Message[2] & NMOS_FLAG_QR_BYTE) == 0)
     {
-        return 0;
+        return false;
     }
     const unsigned Questions = Get16(Message + 4);
     const unsigned Records =
@@ -215,7 +215,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
     {
         if (!ReadName(Message, Length, &Offset, Name) || Offset + 4 > Length)
         {
-            return 0;
+            return false;
         }
         Offset += 4;
     }
@@ -225,7 +225,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
         memset(&Found, 0, sizeof(Found));
         if (!ReadName(Message, Length, &Offset, Found.Name) || Offset + 10 > Length)
         {
-            return 0;
+            return false;
         }
         Found.Type = Get16(Message + Offset);
         Found.Ttl = Get32(Message + Offset + 4);
@@ -233,7 +233,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
         const size_t Data = Offset + 10;
         if (Data + DataLength > Length)
         {
-            return 0;
+            return false;
         }
         size_t At = Data;
         switch (Found.Type)
@@ -241,13 +241,13 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
         case DTNMOS_DNS_TYPE_PTR:
             if (!ReadName(Message, Length, &At, Found.Target))
             {
-                return 0;
+                return false;
             }
             break;
         case DTNMOS_DNS_TYPE_SRV:
             if (DataLength < 7)
             {
-                return 0;
+                return false;
             }
             Found.Priority = Get16(Message + Data);
             Found.Weight = Get16(Message + Data + 2);
@@ -255,13 +255,13 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
             At = Data + 6;
             if (!ReadName(Message, Length, &At, Found.Target))
             {
-                return 0;
+                return false;
             }
             break;
         case DTNMOS_DNS_TYPE_A:
             if (DataLength != 4)
             {
-                return 0;
+                return false;
             }
             memcpy(Found.Address, Message + Data, 4);
             break;
@@ -275,7 +275,7 @@ int NmosDns_ReadResponse(const uint8_t* Message, size_t Length,
         Record(User, &Found);
         Offset = Data + DataLength;
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Lower -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -287,7 +287,7 @@ static int Lower(int c)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_SameName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosDns_SameName(const char* a, const char* b)
+bool NmosDns_SameName(const char* a, const char* b)
 {
     while (*a != '\0' && Lower((unsigned char)*a) == Lower((unsigned char)*b))
     {
@@ -299,8 +299,8 @@ int NmosDns_SameName(const char* a, const char* b)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_TxtValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* Value,
-                     size_t Size)
+bool NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* Value,
+                      size_t Size)
 {
     const size_t KeyLength = strlen(Key);
     size_t At = 0;
@@ -310,14 +310,14 @@ int NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* V
         const uint8_t* String = Txt + At + 1;
         if (At + 1 + StringLength > Length)
         {
-            return 0;
+            return false;
         }
         At += 1 + StringLength;
         if (StringLength < KeyLength)
         {
             continue;
         }
-        int Same = 1;
+        bool Same = true;
         for (size_t i = 0; Same && i < KeyLength; ++i)
         {
             Same = Lower(String[i]) == Lower((unsigned char)Key[i]);
@@ -330,35 +330,35 @@ int NmosDns_TxtValue(const uint8_t* Txt, size_t Length, const char* Key, char* V
             StringLength > KeyLength ? StringLength - KeyLength - 1 : 0;
         if (ValueLength + 1 > Size)
         {
-            return 0;
+            return false;
         }
         memcpy(Value, String + KeyLength + (StringLength > KeyLength ? 1 : 0),
                ValueLength);
         Value[ValueLength] = '\0';
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosDns_ReadHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosDns_ReadHeader(const uint8_t* Message, size_t Length, uint16_t* Id,
-                       unsigned* Rcode)
+bool NmosDns_ReadHeader(const uint8_t* Message, size_t Length, uint16_t* Id,
+                        unsigned* Rcode)
 {
     if (Message == NULL || Length < NMOS_HEADER_SIZE)
     {
-        return 0;
+        return false;
     }
     *Id = Get16(Message);
     // RCODE is the low four bits of the fourth byte, read there for the reason
     // NmosDns_ReadResponse() gives.
     *Rcode = Message[3] & NMOS_RCODE_MASK;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsSpace -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int IsSpace(char c)
+static bool IsSpace(char c)
 {
     return c == ' ' || c == '\t' || c == '\r';
 }
@@ -393,7 +393,7 @@ static size_t NextWord(const char** At, char* Word, size_t Size)
 //
 // Whether text is an IPv4 address in dotted decimal, four numbers up to 255.
 //
-static int IsIpv4Text(const char* Text)
+static bool IsIpv4Text(const char* Text)
 {
     unsigned Parts[4];
     char Rest = '\0';
@@ -430,7 +430,7 @@ void NmosDns_ReadResolvConf(const char* Text, char* Server, size_t ServerSize,
                 {
                     Word[--Length] = '\0';
                 }
-                const int Fits = Length < DomainSize && strcmp(Word, ".") != 0;
+                const bool Fits = Length < DomainSize && strcmp(Word, ".") != 0;
                 memcpy(Domain, Fits ? Word : "", Fits ? Length + 1 : 1);
             }
         }

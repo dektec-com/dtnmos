@@ -48,9 +48,9 @@ typedef struct DtNmosVideoFormat
     uint32_t Height;
     uint32_t RateNumerator; // exactframerate, e.g. 30000/1001, or 25/1
     uint32_t RateDenominator;
-    int Interlaced; // interlace
-    int Segmented;  // segmented, PsF
-    uint32_t Depth; // bits per sample
+    bool Interlaced; // interlace
+    bool Segmented;  // segmented, PsF
+    uint32_t Depth;  // bits per sample
     char Sampling[DTNMOS_MAX_VALUE_SIZE];
     char Colorimetry[DTNMOS_MAX_VALUE_SIZE];
     char Tcs[DTNMOS_MAX_VALUE_SIZE];             // TCS
@@ -82,8 +82,8 @@ typedef struct DtNmosCompressedVideoFormat
     uint32_t Height;
     uint32_t RateNumerator;
     uint32_t RateDenominator;
-    int Interlaced;
-    int Segmented;
+    bool Interlaced;
+    bool Segmented;
     uint32_t Depth;
     char Sampling[DTNMOS_MAX_VALUE_SIZE];
     char Colorimetry[DTNMOS_MAX_VALUE_SIZE];
@@ -143,7 +143,7 @@ typedef struct DtNmosRefClock
     DtNmosRefClockKind Kind;
     char PtpVersion[DTNMOS_MAX_VALUE_SIZE];  // e.g. "IEEE1588-2008"
     char Grandmaster[DTNMOS_MAX_EUI64_SIZE]; // its EUI-64; empty when traceable
-    int Traceable;                           // ptp=<version>:traceable
+    bool Traceable;                          // ptp=<version>:traceable
     int Domain;                              // 0 to 127; -1 when absent
     char LocalMac[DTNMOS_MAX_EUI48_SIZE];    // of DTNMOS_REFCLOCK_LOCALMAC
     const char* Text; // of DTNMOS_REFCLOCK_OTHER: the value of a=ts-refclk
@@ -164,7 +164,7 @@ typedef struct DtNmosFlow
     uint8_t PayloadType;     // the first of m=
     uint32_t ClockRate;      // a=rtpmap: 90000 for video, the sample rate for audio
     DtNmosRefClock RefClock; // a=ts-refclk
-    int MediaClockDirect;    // a=mediaclk:direct=<offset> is present
+    bool MediaClockDirect;   // a=mediaclk:direct=<offset> is present
     uint32_t MediaClockOffset;
     uint32_t Leg; // 0, or 1 for the second path of ST 2022-7 (a=group:DUP)
     union

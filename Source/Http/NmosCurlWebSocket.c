@@ -33,7 +33,7 @@ typedef struct NmosCurlConnection
 //
 // Whether the libcurl the library runs with carries the ws protocol.
 //
-static int HasWsProtocol(void)
+static bool HasWsProtocol(void)
 {
     const curl_version_info_data* Info = curl_version_info(CURLVERSION_NOW);
     for (const char* const* Protocol = Info->protocols;
@@ -41,15 +41,15 @@ static int HasWsProtocol(void)
     {
         if (strcmp(*Protocol, "ws") == 0)
         {
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int DtNmos_HasCurlWebSocket(void)
+bool DtNmos_HasCurlWebSocket(void)
 {
     return HasWsProtocol();
 }
@@ -119,13 +119,13 @@ static DtNmosResult WsConnect(void* User, const char* Url, uint32_t TimeoutMs,
 // Waits at most timeout_ms for the socket of curl to have something to read; returns
 // whether it has.
 //
-static int WaitReadable(CURL* Curl, uint32_t TimeoutMs)
+static bool WaitReadable(CURL* Curl, uint32_t TimeoutMs)
 {
     curl_socket_t Socket = CURL_SOCKET_BAD;
     if (curl_easy_getinfo(Curl, CURLINFO_ACTIVESOCKET, &Socket) != CURLE_OK ||
         Socket == CURL_SOCKET_BAD)
     {
-        return 0;
+        return false;
     }
     fd_set Readable;
     FD_ZERO(&Readable);
@@ -227,9 +227,9 @@ static void WsClose(void* User, void* Connection)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int DtNmos_HasCurlWebSocket(void)
+bool DtNmos_HasCurlWebSocket(void)
 {
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WsConnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

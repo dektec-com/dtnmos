@@ -56,7 +56,7 @@ DTNMOS_API DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Req
                                         DtNmosHttpResponse* Response);
 
 // Whether the library was built with the transport on libcurl.
-DTNMOS_API int DtNmos_HasCurl(void);
+DTNMOS_API bool DtNmos_HasCurl(void);
 
 // Adds a header, whose name and value it copies.
 DTNMOS_API DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* Response,
@@ -142,7 +142,7 @@ DTNMOS_API const DtNmosWebSocketTransport* DtNmos_CurlWebSocket(void);
 
 // Whether the library was built with the WebSocket on libcurl, and the libcurl it runs
 // with carries WebSockets.
-DTNMOS_API int DtNmos_HasCurlWebSocket(void);
+DTNMOS_API bool DtNmos_HasCurlWebSocket(void);
 
 #ifdef __cplusplus
 }

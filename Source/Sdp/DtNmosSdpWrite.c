@@ -15,7 +15,7 @@
 //
 // Whether address is IPv6, which holds a colon where IPv4 has none.
 //
-static int IsIpv6(const char* Address)
+static bool IsIpv6(const char* Address)
 {
     return strchr(Address, ':') != NULL;
 }
@@ -24,7 +24,7 @@ static int IsIpv6(const char* Address)
 //
 // Whether address is an IPv4 multicast address, 224.0.0.0 to 239.255.255.255.
 //
-static int IsIpv4Multicast(const char* Address)
+static bool IsIpv4Multicast(const char* Address)
 {
     NmosSpan First;
     NmosSpan_Split(NmosSpan_Of(Address), '.', &First);
@@ -110,7 +110,7 @@ static void WriteRate(NmosFmtpWriter* Writer, uint32_t Numerator, uint32_t Denom
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteFlag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static void WriteFlag(NmosFmtpWriter* Writer, const char* Name, int Set)
+static void WriteFlag(NmosFmtpWriter* Writer, const char* Name, bool Set)
 {
     if (!Set)
     {
@@ -448,7 +448,7 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
     size_t Pair = 0;
     for (size_t i = 0; i < Count; ++i)
     {
-        const int Paired = i + 1 < Count && Flows[i + 1].Leg == 1;
+        const bool Paired = i + 1 < Count && Flows[i + 1].Leg == 1;
         if (Paired)
         {
             ++Pair;

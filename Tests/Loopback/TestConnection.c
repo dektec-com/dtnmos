@@ -26,13 +26,13 @@
 typedef struct NmosActivations
 {
     int SenderCalls;
-    int SenderEnabled;
+    bool SenderEnabled;
     char Destination[DTNMOS_MAX_ADDRESS_SIZE];
     int DestinationPort;
     char Source[DTNMOS_MAX_ADDRESS_SIZE];
     int ReceiverCalls;
-    int ReceiverEnabled;
-    int HasFlow;
+    bool ReceiverEnabled;
+    bool HasFlow;
     DtNmosMedia Media;
     char Receives[DTNMOS_MAX_ADDRESS_SIZE];
     int ReceivesPort;
@@ -468,10 +468,10 @@ NMOS_TEST(ConnectionAnswersCorsAndTheTarget)
         const int Status = DtNmosHttpResponse_Status(Response);
         const char* Allowed =
             DtNmosHttpResponse_FindHeader(Response, "Access-Control-Allow-Methods");
-        const int HasPatch = Allowed != NULL && strstr(Allowed, "PATCH") != NULL;
+        const bool HasPatch = Allowed != NULL && strstr(Allowed, "PATCH") != NULL;
         const char* Origin =
             DtNmosHttpResponse_FindHeader(Response, "Access-Control-Allow-Origin");
-        const int AnyOrigin = Origin != NULL && strcmp(Origin, "*") == 0;
+        const bool AnyOrigin = Origin != NULL && strcmp(Origin, "*") == 0;
         DtNmosHttpResponse_Free(Response);
         NMOS_ASSERT_EQ(Status, 200);
         NMOS_ASSERT(HasPatch);
@@ -704,7 +704,7 @@ NMOS_TEST(ConnectionResolvesAuto)
     size_t Length = 0;
     const char* Text = DtNmosHttpResponse_Body(Response, &Length);
     DtNmosSdp* Sdp = NULL;
-    const int Parsed = DtNmosSdp_Parse(Text, Length, &Sdp) == DTNMOS_OK;
+    const bool Parsed = DtNmosSdp_Parse(Text, Length, &Sdp) == DTNMOS_OK;
     DtNmosHttpResponse_Free(Response);
     NMOS_ASSERT(Parsed);
     char Origin[DTNMOS_MAX_ADDRESS_SIZE];

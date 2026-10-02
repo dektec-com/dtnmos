@@ -30,20 +30,20 @@ enum
 
 static const char* const MdnsAddress = "224.0.0.251";
 
-static int IsIpv4(const char* Text);
+static bool IsIpv4(const char* Text);
 
 // A service instance as its records describe it.
 typedef struct NmosInstance
 {
     char Name[DTNMOS_DNS_NAME_SIZE]; // e.g. "Registry 1._nmos-query._tcp.local"
-    int HasSrv;
-    int HasTxt;
+    bool HasSrv;
+    bool HasTxt;
     char Host[DTNMOS_DNS_NAME_SIZE];
     uint16_t Port;
     int Priority;
     char Proto[16];
     char Versions[128];
-    int Auth;
+    bool Auth;
 } NmosInstance;
 
 typedef struct NmosHostAddress
@@ -65,12 +65,12 @@ typedef struct NmosGathered
 // One of the searches: where its queries go, and what its answers told.
 typedef struct NmosSearch
 {
-    int Active;
+    bool Active;
     DtNmosSearch Kind;
     char Address[64];
     uint16_t Port;
     uint16_t Flags;                     // of its queries
-    int Answered;                       // the DNS server answered its first query
+    bool Answered;                      // the DNS server answered its first query
     char Service[DTNMOS_DNS_NAME_SIZE]; // e.g. "_nmos-query._tcp.local"
     NmosGathered Found;
 } NmosSearch;
@@ -173,7 +173,7 @@ DtNmosResult NmosRegistryList_FromUrls(DtNmosService Service, const char* const*
         // "<http or https>://<host>[:<port>]", the host an address between brackets for
         // IPv6.
         const char* Url = Urls[i] != NULL ? Urls[i] : "";
-        const int Https = strncmp(Url, "https://", 8) == 0;
+        const bool Https = strncmp(Url, "https://", 8) == 0;
         if (!Https && strncmp(Url, "http://", 7) != 0)
         {
             DtNmosRegistryList_Free(List);
@@ -181,9 +181,9 @@ DtNmosResult NmosRegistryList_FromUrls(DtNmosService Service, const char* const*
                                   "%s is no URL of http or https.", Url);
         }
         const char* Host = Url + (Https ? 8 : 7);
-        const int Bracketed = Host[0] == '[';
+        const bool Bracketed = Host[0] == '[';
         const char* HostEnd = Bracketed ? strchr(Host, ']') : Host + strcspn(Host, ":/");
-        if (HostEnd == NULL || HostEnd == Host + Bracketed ||
+        if (HostEnd == NULL || HostEnd == Host + (Bracketed ? 1 : 0) ||
             (size_t)(HostEnd - Host) >= DTNMOS_MAX_ADDRESS_SIZE)
         {
             DtNmosRegistryList_Free(List);
@@ -201,7 +201,7 @@ DtNmosResult NmosRegistryList_FromUrls(DtNmosService Service, const char* const*
         }
         DtNmosRegistryInfo* Registry = &List->Registries[List->Count++];
         Registry->Service = Service;
-        const char* Name = Host + Bracketed;
+        const char* Name = Host + (Bracketed ? 1 : 0);
         const size_t NameLength = (size_t)(HostEnd - Name);
         memcpy(Registry->Host, Name, NameLength);
         Registry->Host[NameLength] = '\0';
@@ -213,7 +213,7 @@ DtNmosResult NmosRegistryList_FromUrls(DtNmosService Service, const char* const*
         snprintf(Registry->ApiProto, sizeof(Registry->ApiProto), "%s",
                  Https ? "https" : "http");
         Registry->Priority = (int)i;
-        Registry->Usable = 1;
+        Registry->Usable = true;
         // The URL of an API is its base, without a path.
         size_t Length = strlen(Url);
         while (Length > 0 && Url[Length - 1] == '/')
@@ -258,7 +258,7 @@ static void LogMessage(const DtNmosDiscoveryConfig* Config, DtNmosLogLevel Level
 //
 // Whether name is an instance of the service, "<instance>.<service>".
 //
-static int IsInstanceOf(const char* Name, const char* Service)
+static bool IsInstanceOf(const char* Name, const char* Service)
 {
     const size_t NameLength = strlen(Name);
     const size_t ServiceLength = strlen(Service);
@@ -342,12 +342,12 @@ static void TakeRecord(void* User, const NmosDnsRecord* Record)
     }
     if (Record->Type == DTNMOS_DNS_TYPE_SRV)
     {
-        Service->HasSrv = 1;
+        Service->HasSrv = true;
         snprintf(Service->Host, sizeof(Service->Host), "%s", Record->Target);
         Service->Port = Record->Port;
         return;
     }
-    Service->HasTxt = 1;
+    Service->HasTxt = true;
     char Value[128];
     if (NmosDns_TxtValue(Record->Txt, Record->TxtLength, "pri", Value, sizeof(Value)))
     {
@@ -417,7 +417,7 @@ static void Collect(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
                            FromPort);
                 continue;
             }
-            Unicast->Answered = 1;
+            Unicast->Answered = true;
             if (Rcode != DTNMOS_DNS_NO_ERROR)
             {
                 // 3 is a name the server does not know, 5 a query it refuses.
@@ -445,8 +445,8 @@ static void Collect(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
 // Asks one search for the records its answers left out: multicast DNS in one query, and
 // the DNS server one question per query, as it answers no more. Returns whether it asked.
 //
-static int AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
-                      const NmosSearch* One, uint16_t Id)
+static bool AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
+                       const NmosSearch* One, uint16_t Id)
 {
     const NmosGathered* Found = &One->Found;
     NmosDnsQuestion Missing[2 * NMOS_MAX_INSTANCES];
@@ -472,13 +472,13 @@ static int AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
     }
     if (MissingCount == 0)
     {
-        return 0;
+        return false;
     }
     LogMessage(Config, DTNMOS_LOG_DEBUG, "Asking again for %zu records of %s.",
                MissingCount, One->Service);
     const size_t PerQuery = One->Kind == DTNMOS_SEARCH_UNICAST ? 1 : MissingCount;
     uint8_t* Query = malloc(NMOS_MAX_MESSAGE);
-    int Asked = 0;
+    bool Asked = false;
     for (size_t First = 0; Query != NULL && First < MissingCount; First += PerQuery)
     {
         const size_t Length = NmosDns_WriteQuery(Query, NMOS_MAX_MESSAGE, Id, One->Flags,
@@ -513,7 +513,7 @@ static void InstanceLabel(const char* Name, const char* Service, char* Label, si
 //
 // Whether versions, e.g. "v1.2,v1.3", holds version.
 //
-static int HasVersion(const char* Versions, const char* Version)
+static bool HasVersion(const char* Versions, const char* Version)
 {
     const size_t Length = strlen(Version);
     for (const char* At = Versions; *At != '\0';)
@@ -522,11 +522,11 @@ static int HasVersion(const char* Versions, const char* Version)
         const size_t Token = End != NULL ? (size_t)(End - At) : strlen(At);
         if (Token == Length && strncmp(At, Version, Length) == 0)
         {
-            return 1;
+            return true;
         }
         At += Token + (End != NULL ? 1 : 0);
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CompareRegistries -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -557,10 +557,10 @@ static int CompareRegistries(const void* a, const void* b)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Describe -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Fills registry from a complete instance, its strings that are no arrays owned by
-// store; returns 0 when out of memory.
+// store; returns false when out of memory.
 //
-static int Describe(const NmosGathered* Found, const NmosInstance* Service,
-                    DtNmosService Kind, NmosStore* Store, DtNmosRegistryInfo* Registry)
+static bool Describe(const NmosGathered* Found, const NmosInstance* Service,
+                     DtNmosService Kind, NmosStore* Store, DtNmosRegistryInfo* Registry)
 {
     memset(Registry, 0, sizeof(*Registry));
     Registry->Service = Kind;
@@ -569,7 +569,7 @@ static int Describe(const NmosGathered* Found, const NmosInstance* Service,
     Registry->Auth = Service->Auth;
     // IS-04 made api_proto required with v1.1; an announcement without it offers http.
     const char* Proto = Service->Proto[0] != '\0' ? Service->Proto : "http";
-    const int Https = strcmp(Proto, "https") == 0;
+    const bool Https = strcmp(Proto, "https") == 0;
     Registry->Usable = (Https || strcmp(Proto, "http") == 0) && !Service->Auth &&
                        HasVersion(Service->Versions, "v1.3");
 
@@ -602,7 +602,7 @@ static int Describe(const NmosGathered* Found, const NmosInstance* Service,
 //
 // Whether text is an IPv4 address in dotted decimal.
 //
-static int IsIpv4(const char* Text)
+static bool IsIpv4(const char* Text)
 {
     NmosSpan Rest = NmosSpan_Of(Text);
     for (int Part = 0; Part < 4; ++Part)
@@ -612,36 +612,37 @@ static int IsIpv4(const char* Text)
         uint32_t Value = 0;
         if (!NmosText_ParseU32(Number, 255, &Value) || (Part < 3) != (Rest.Data != NULL))
         {
-            return 0;
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadDestination -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Reads "<IPv4 address>:<port>" into address and port; returns 0 when it is malformed.
+// Reads "<IPv4 address>:<port>" into address and port; returns false when it is
+// malformed.
 //
-static int ReadDestination(const char* Text, char* Address, size_t Size, uint16_t* Port)
+static bool ReadDestination(const char* Text, char* Address, size_t Size, uint16_t* Port)
 {
     const char* Colon = strrchr(Text, ':');
     if (Colon == NULL || (size_t)(Colon - Text) >= Size)
     {
-        return 0;
+        return false;
     }
     memcpy(Address, Text, (size_t)(Colon - Text));
     Address[Colon - Text] = '\0';
     if (!IsIpv4(Address))
     {
-        return 0;
+        return false;
     }
     uint32_t Value = 0;
     if (!NmosText_ParseU32(NmosSpan_Of(Colon + 1), 65535, &Value) || Value == 0)
     {
-        return 0;
+        return false;
     }
     *Port = (uint16_t)Value;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PrepareUnicast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -703,7 +704,7 @@ static DtNmosResult PrepareUnicast(const DtNmosDiscoveryConfig* Config,
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "The domain %s is no domain.",
                               Domain);
     }
-    Unicast->Active = 1;
+    Unicast->Active = true;
     Unicast->Found.Service = Unicast->Service;
     LogMessage(Config, DTNMOS_LOG_DEBUG, "Asking the DNS server %s:%u for %s.",
                Unicast->Address, Unicast->Port, Unicast->Service);
@@ -867,7 +868,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
             LogMessage(Config, DTNMOS_LOG_WARNING,
                        "The query for %s could not be sent to the DNS server %s:%u.",
                        One->Service, One->Address, One->Port);
-            One->Active = 0;
+            One->Active = false;
         }
         if (Result == DTNMOS_OK)
         {
@@ -879,7 +880,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
     // One more query of each search for the records its answers left out.
     if (Result == DTNMOS_OK)
     {
-        int Asked = 0;
+        bool Asked = false;
         for (int s = 0; s < 2; ++s)
         {
             if (Searches[s].Active)

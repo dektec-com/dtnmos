@@ -30,8 +30,8 @@ typedef struct DtNmosNode DtNmosNode;
 // NextUrl, of size bytes, DTNMOS_MAX_URL_SIZE, the base URL of another registry and its
 // null character, which the node then registers with from the start, or 0 to stay with
 // the one it has. A URL without its null character within size bytes is ignored.
-typedef int (*DtNmosRegistryFailedFunc)(void* User, uint32_t Failures, char* NextUrl,
-                                        size_t Size);
+typedef bool (*DtNmosRegistryFailedFunc)(void* User, uint32_t Failures, char* NextUrl,
+                                         size_t Size);
 
 typedef struct DtNmosNodeConfig
 {
@@ -120,8 +120,8 @@ typedef struct DtNmosReceiverConfig
 // callback, valid during the callback; the callback copies what it keeps.
 typedef struct DtNmosReceiverActivation
 {
-    int MasterEnable;
-    int HasFlow;
+    bool MasterEnable;
+    bool HasFlow;
     DtNmosFlow Flow;
     DtNmosId SenderId; // empty when not given
     // When it takes place, in nanoseconds of TAI since the epoch of PTP: the time a
@@ -134,7 +134,7 @@ typedef struct DtNmosReceiverActivation
 // with "auto" resolved: to where it sends now, and to the SourceIp of its config.
 typedef struct DtNmosSenderActivation
 {
-    int MasterEnable;
+    bool MasterEnable;
     char DestinationIp[DTNMOS_MAX_ADDRESS_SIZE];
     uint16_t DestinationPort;
     char SourceIp[DTNMOS_MAX_ADDRESS_SIZE];
@@ -162,7 +162,7 @@ typedef DtNmosResult (*DtNmosSenderActivateFunc)(
 // node, and fails with DTNMOS_E_STATE on another; one that returns no result returns 0.
 
 // Whether the library was built with the server, DTNMOS_WITH_SERVER.
-DTNMOS_API int DtNmos_HasServer(void);
+DTNMOS_API bool DtNmos_HasServer(void);
 
 // Adds a device; the next poll registers it. Fails with DTNMOS_E_INVALID_ARGUMENT for an
 // ID the node has.
@@ -216,7 +216,7 @@ DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* Node,
                                           DtNmosHttpResponse* Response);
 
 // Whether the registry holds the node and everything it has.
-DTNMOS_API int DtNmosNode_IsRegistered(const DtNmosNode* Node);
+DTNMOS_API bool DtNmosNode_IsRegistered(const DtNmosNode* Node);
 
 // Opens node with config, whose strings it copies; it registers nothing until it is
 // polled. Fails with DTNMOS_E_INVALID_ARGUMENT without an ID or an HTTP function, or with

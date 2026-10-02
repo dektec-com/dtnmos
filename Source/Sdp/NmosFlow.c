@@ -21,15 +21,15 @@ typedef struct NmosOwnedFlow
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Sets *Target to a copy of text owned by store, or to null for null; returns 0 when the
-// memory ran out.
+// Sets *Target to a copy of text owned by store, or to null for null; returns false when
+// the memory ran out.
 //
-static int CopyText(const char** Target, NmosStore* Store, const char* Text)
+static bool CopyText(const char** Target, NmosStore* Store, const char* Text)
 {
     if (Text == NULL)
     {
         *Target = NULL;
-        return 1;
+        return true;
     }
     *Target = NmosStore_Text(Store, Text, strlen(Text));
     return *Target != NULL;
@@ -40,7 +40,7 @@ static int CopyText(const char** Target, NmosStore* Store, const char* Text)
 DtNmosResult NmosFlow_Copy(DtNmosFlow* Target, NmosStore* Store, const DtNmosFlow* Source)
 {
     DtNmosFlow Copy = *Source;
-    int Copied = CopyText(&Copy.RefClock.Text, Store, Source->RefClock.Text);
+    bool Copied = CopyText(&Copy.RefClock.Text, Store, Source->RefClock.Text);
     switch (Source->Media)
     {
     case DTNMOS_MEDIA_AUDIO:

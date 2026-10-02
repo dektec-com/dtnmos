@@ -8,6 +8,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -40,9 +41,9 @@ uint64_t NmosOs_TaiNowNs(void);
 // which the new one exceeds even within one tick of the clock; its owner guards it.
 void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size);
 
-// Writes the address of this host that reaches host into address, as text; returns 0 when
-// host cannot be resolved or reached.
-int NmosOs_AddressToward(const char* Host, char* Address, size_t Size);
+// Writes the address of this host that reaches host into address, as text; returns false
+// when host cannot be resolved or reached.
+bool NmosOs_AddressToward(const char* Host, char* Address, size_t Size);
 
 // An address of a network interface of the host, which is up: a port of a card of
 // DekTec among them, which the operating system has as a network interface too.
@@ -73,9 +74,9 @@ NmosUdp* NmosOs_UdpOpen(const char* BindAddress, const char* InterfaceAddress);
 // Returns the port the socket is bound to.
 uint16_t NmosOs_UdpPort(const NmosUdp* Udp);
 
-// Sends length bytes of data to address and port; returns 0 on failure.
-int NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
-                   size_t Length);
+// Sends length bytes of data to address and port; returns false on failure.
+bool NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
+                    size_t Length);
 
 // Waits up to timeout_ms for a datagram and receives it into buffer; returns its length,
 // 0 when none came in time, or -1 on failure. from_address, when not null, receives the

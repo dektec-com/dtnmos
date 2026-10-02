@@ -19,7 +19,7 @@
 // and DtNmosSubscription_Close() empties it again.
 struct DtNmosSubscription
 {
-    int Open;
+    bool Open;
     DtNmosWebSocketTransport Websocket;
     void* Connection;
     char* Url; // of the WebSocket
@@ -173,7 +173,7 @@ DtNmosResult DtNmosSubscription_Open(DtNmosSubscription* Subscription, DtNmosQue
         }
         return Result;
     }
-    Made->Open = 1;
+    Made->Open = true;
     return DTNMOS_OK;
 }
 
@@ -186,8 +186,8 @@ static DtNmosResult ReportChange(DtNmosSubscription* Subscription, const NmosJso
 {
     const NmosJson* Pre = NmosJson_Member(Item, "pre");
     const NmosJson* Post = NmosJson_Member(Item, "post");
-    const int HasPre = Pre != NULL && Pre->Type == DTNMOS_JSON_OBJECT;
-    const int HasPost = Post != NULL && Post->Type == DTNMOS_JSON_OBJECT;
+    const bool HasPre = Pre != NULL && Pre->Type == DTNMOS_JSON_OBJECT;
+    const bool HasPost = Post != NULL && Post->Type == DTNMOS_JSON_OBJECT;
     if (!HasPre && !HasPost)
     {
         return DTNMOS_OK;

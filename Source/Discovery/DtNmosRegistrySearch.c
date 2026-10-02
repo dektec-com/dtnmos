@@ -22,17 +22,17 @@
 
 struct DtNmosRegistrySearch
 {
-    int Open;
+    bool Open;
     NmosMutex* Mutex;
     unsigned Finds;
-    int Fed;
+    bool Fed;
     // How it searches; its strings are the search's copies, which do not change while it
     // runs.
     DtNmosDiscoveryConfig Discovery;
     DtNmosRegistryList* Lists[2]; // of the Query and the Registration API, under the lock
     NmosThread* Thread;
-    int Stop;    // under the lock
-    int Hurried; // a node had no registry since the last search; under the lock
+    bool Stop;    // under the lock
+    bool Hurried; // a node had no registry since the last search; under the lock
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IndexOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -48,7 +48,7 @@ static int IndexOf(DtNmosService Service)
 //
 // Whether the search finds the APIs of Service.
 //
-static int Finds(const DtNmosRegistrySearch* Search, DtNmosService Service)
+static bool Finds(const DtNmosRegistrySearch* Search, DtNmosService Service)
 {
     const unsigned Bit = Service == DTNMOS_SERVICE_QUERY ? DTNMOS_FINDS_QUERY
                          : Service == DTNMOS_SERVICE_REGISTRATION
@@ -77,7 +77,7 @@ static DtNmosResult CheckOpen(const DtNmosRegistrySearch* Search, const char* Fu
 //
 // Copies Text, leaving null null; sets *Failed when the memory ran out.
 //
-static char* CopyOptional(const char* Text, int* Failed)
+static char* CopyOptional(const char* Text, bool* Failed)
 {
     if (Text == NULL)
     {
@@ -87,7 +87,7 @@ static char* CopyOptional(const char* Text, int* Failed)
     char* Copy = malloc(Length + 1);
     if (Copy == NULL)
     {
-        *Failed = 1;
+        *Failed = true;
         return NULL;
     }
     memcpy(Copy, Text, Length + 1);
@@ -99,14 +99,14 @@ static char* CopyOptional(const char* Text, int* Failed)
 // Waits up to WaitMs, in steps, and returns whether the search is to stop. A wait that
 // Hurry may cut short ends as soon as a node has no registry.
 //
-static int Stops(DtNmosRegistrySearch* Search, uint32_t WaitMs, int Hurry)
+static bool Stops(DtNmosRegistrySearch* Search, uint32_t WaitMs, bool Hurry)
 {
     const uint64_t Until = NmosOs_MonotonicMs() + WaitMs;
     for (;;)
     {
         NmosOs_MutexLock(Search->Mutex);
-        const int Stop = Search->Stop;
-        const int Hurried = Search->Hurried;
+        const bool Stop = Search->Stop;
+        const bool Hurried = Search->Hurried;
         NmosOs_MutexUnlock(Search->Mutex);
         const uint64_t Now = NmosOs_MonotonicMs();
         if (Stop || Now >= Until || (Hurry && Hurried))
@@ -155,8 +155,8 @@ static void SearchLoop(void* Argument)
             NmosOs_MutexUnlock(Search->Mutex);
         }
         NmosOs_MutexLock(Search->Mutex);
-        const int Hurried = Search->Hurried;
-        Search->Hurried = 0;
+        const bool Hurried = Search->Hurried;
+        Search->Hurried = false;
         NmosOs_MutexUnlock(Search->Mutex);
         if (Hurried)
         {
@@ -208,7 +208,7 @@ DtNmosResult DtNmosRegistrySearch_Close(DtNmosRegistrySearch* Search)
     if (Search->Thread != NULL)
     {
         NmosOs_MutexLock(Search->Mutex);
-        Search->Stop = 1;
+        Search->Stop = true;
         NmosOs_MutexUnlock(Search->Mutex);
         NmosOs_ThreadJoin(Search->Thread);
     }
@@ -342,21 +342,21 @@ DtNmosResult DtNmosRegistrySearch_Open(DtNmosRegistrySearch* Search,
         Search->Discovery = *Config->Discovery;
     }
     Search->Discovery.Size = sizeof(Search->Discovery);
-    int Failed = 0;
+    bool Failed = false;
     Search->Discovery.InterfaceAddress =
         CopyOptional(Search->Discovery.InterfaceAddress, &Failed);
     Search->Discovery.Destination = CopyOptional(Search->Discovery.Destination, &Failed);
     Search->Discovery.DnsServer = CopyOptional(Search->Discovery.DnsServer, &Failed);
     Search->Discovery.DnsDomain = CopyOptional(Search->Discovery.DnsDomain, &Failed);
     Search->Finds = Config->Finds;
-    Search->Fed = Config->Fed != 0;
+    Search->Fed = Config->Fed;
     Search->Mutex = NmosOs_MutexCreate();
     if (Failed || Search->Mutex == NULL)
     {
         Release(Search);
         return NmosError_FailMemory();
     }
-    Search->Open = 1;
+    Search->Open = true;
     if (!Search->Fed)
     {
         Search->Thread = NmosOs_ThreadStart(SearchLoop, Search);
@@ -377,7 +377,7 @@ void NmosRegistrySearch_Hurry(DtNmosRegistrySearch* Search)
     if (Search != NULL && Search->Open)
     {
         NmosOs_MutexLock(Search->Mutex);
-        Search->Hurried = 1;
+        Search->Hurried = true;
         NmosOs_MutexUnlock(Search->Mutex);
     }
 }

@@ -17,16 +17,16 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int DtNmos_HasCurl(void)
+bool DtNmos_HasCurl(void)
 {
-    return 1;
+    return true;
 }
 
 // What the callbacks of libcurl fill.
 typedef struct NmosTransfer
 {
     DtNmosHttpResponse* Response;
-    int Failed;
+    bool Failed;
 } NmosTransfer;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReceiveBody -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -37,7 +37,7 @@ static size_t ReceiveBody(char* Data, size_t Size, size_t Count, void* User)
     const size_t Length = Size * Count;
     if (DtNmosHttpResponse_AppendBody(t->Response, Data, Length) != DTNMOS_OK)
     {
-        t->Failed = 1;
+        t->Failed = true;
         return 0;
     }
     return Length;
@@ -76,7 +76,7 @@ static size_t ReceiveHeader(char* Data, size_t Size, size_t Count, void* User)
     ValueText[Trimmed.Length] = '\0';
     if (DtNmosHttpResponse_AddHeader(t->Response, NameText, ValueText) != DTNMOS_OK)
     {
-        t->Failed = 1;
+        t->Failed = true;
         return 0;
     }
     return Length;
@@ -177,9 +177,9 @@ DtNmosResult DtNmos_CurlHttp(void* User, const DtNmosHttpRequest* Request,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_HasCurl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int DtNmos_HasCurl(void)
+bool DtNmos_HasCurl(void)
 {
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_CurlHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

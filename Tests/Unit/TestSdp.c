@@ -309,7 +309,7 @@ NMOS_TEST(SdpNamesTheLineOfAnError)
 //
 // Checks that the texts a and b are the same; a null one counts as empty.
 //
-static int Same(const char* a, const char* b)
+static bool Same(const char* a, const char* b)
 {
     return strcmp(a == NULL ? "" : a, b == NULL ? "" : b) == 0;
 }
@@ -318,7 +318,7 @@ static int Same(const char* a, const char* b)
 //
 // Whether a and b are the same reference clock.
 //
-static int SameClock(const DtNmosRefClock* a, const DtNmosRefClock* b)
+static bool SameClock(const DtNmosRefClock* a, const DtNmosRefClock* b)
 {
     return a->Kind == b->Kind && Same(a->PtpVersion, b->PtpVersion) &&
            Same(a->Grandmaster, b->Grandmaster) && a->Traceable == b->Traceable &&
@@ -330,7 +330,7 @@ static int SameClock(const DtNmosRefClock* a, const DtNmosRefClock* b)
 //
 // Whether flows a and b describe the same flow.
 //
-static int FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
+static bool FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
 {
     if (a->Media != b->Media || !Same(a->DestinationIp, b->DestinationIp) ||
         a->DestinationPort != b->DestinationPort || !Same(a->SourceIp, b->SourceIp) ||
@@ -339,7 +339,7 @@ static int FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
         a->MediaClockDirect != b->MediaClockDirect ||
         a->MediaClockOffset != b->MediaClockOffset || a->Leg != b->Leg)
     {
-        return 0;
+        return false;
     }
     switch (a->Media)
     {
@@ -393,7 +393,7 @@ static int FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
         return Same(a->Format.Other.Encoding, b->Format.Other.Encoding) &&
                Same(a->Format.Other.Fmtp, b->Format.Other.Fmtp);
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SdpWritesWhatItReadsBack -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

@@ -7,6 +7,7 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <dtnmos_sdp.h>
+#include <stdbool.h>
 #include <string.h>
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- main -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -22,8 +23,8 @@ int main(void)
         return 1;
     }
     const DtNmosFlow* Flow = DtNmosSdp_Flow(Sdp, 0);
-    const int Ok = Flow != NULL && Flow->Media == DTNMOS_MEDIA_AUDIO &&
-                   Flow->Format.Audio.Channels == 2;
+    const bool Ok = Flow != NULL && Flow->Media == DTNMOS_MEDIA_AUDIO &&
+                    Flow->Format.Audio.Channels == 2;
     DtNmosSdp_Free(Sdp);
     return Ok ? 0 : 1;
 }

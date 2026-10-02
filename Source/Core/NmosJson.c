@@ -46,23 +46,23 @@ static void SkipSpace(NmosReader* r)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextIs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int NextIs(NmosReader* r, char c)
+static bool NextIs(NmosReader* r, char c)
 {
     return r->Position < r->Length && r->Text[r->Position] == c;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadWord -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int ReadWord(NmosReader* r, const char* Word)
+static bool ReadWord(NmosReader* r, const char* Word)
 {
     const size_t Length = strlen(Word);
     if (r->Length - r->Position < Length ||
         memcmp(r->Text + r->Position, Word, Length) != 0)
     {
-        return 0;
+        return false;
     }
     r->Position += Length;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HexValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -88,11 +88,11 @@ static int HexValue(char c)
 //
 // Reads the four hexadecimal digits of \u.
 //
-static int ReadHex4(NmosReader* r, unsigned* Code)
+static bool ReadHex4(NmosReader* r, unsigned* Code)
 {
     if (r->Length - r->Position < 4)
     {
-        return 0;
+        return false;
     }
     unsigned Value = 0;
     for (int i = 0; i < 4; ++i)
@@ -100,13 +100,13 @@ static int ReadHex4(NmosReader* r, unsigned* Code)
         const int Digit = HexValue(r->Text[r->Position + (size_t)i]);
         if (Digit < 0)
         {
-            return 0;
+            return false;
         }
         Value = Value * 16 + (unsigned)Digit;
     }
     r->Position += 4;
     *Code = Value;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AppendUtf8 -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -317,7 +317,7 @@ static NmosJson* AddItem(NmosJson* Value, char* Key, size_t* Capacity)
 //
 static DtNmosResult ReadContainer(NmosReader* r, NmosJson* Value, int Depth, char Close)
 {
-    const int Object = Close == '}';
+    const bool Object = Close == '}';
     Value->Type = Object ? DTNMOS_JSON_OBJECT : DTNMOS_JSON_ARRAY;
     size_t Capacity = 0;
     SkipSpace(r);

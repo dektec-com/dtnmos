@@ -108,7 +108,7 @@ static void StopNode(void* Context)
 // The sender sends from the address the node serves at, so that its SDP has a source
 // filter.
 //
-static void StartNode(NmosInteropNode* Interop, int Searches)
+static void StartNode(NmosInteropNode* Interop, bool Searches)
 {
     memset(Interop, 0, sizeof(*Interop));
     const char* Registry = Searches ? NULL : Getenv("DTNMOS_TEST_REGISTRY");
@@ -168,7 +168,7 @@ static void StartNode(NmosInteropNode* Interop, int Searches)
     Flow.ClockRate = 90000;
     Flow.RefClock.Kind = DTNMOS_REFCLOCK_LOCALMAC;
     snprintf(Flow.RefClock.LocalMac, sizeof(Flow.RefClock.LocalMac), "00-14-F4-00-00-01");
-    Flow.MediaClockDirect = 1;
+    Flow.MediaClockDirect = true;
     DtNmosVideoFormat* Video = &Flow.Format.Video;
     Video->Width = 1920;
     Video->Height = 1080;
@@ -226,7 +226,7 @@ static void StartNode(NmosInteropNode* Interop, int Searches)
 // its registry itself. Prints every result but a pass and the tally of each state.
 //
 static void RunSuite(const char* Suite, const char* const* Versions, size_t Count,
-                     int Searches, int* Failed)
+                     bool Searches, int* Failed)
 {
     *Failed = -1;
     const char* Tool = Getenv("DTNMOS_TESTING_TOOL");
@@ -356,7 +356,7 @@ NMOS_TEST(NodePassesIs0401)
     static const char* const Versions[] = {"v1.3"};
     int Failed = 0;
     RunCommand("DTNMOS_PAUSE_REGISTRY");
-    RunSuite("IS-04-01", Versions, 1, 1, &Failed);
+    RunSuite("IS-04-01", Versions, 1, true, &Failed);
     RunCommand("DTNMOS_RESUME_REGISTRY");
     NMOS_ASSERT_EQ(Failed, 0);
 }
@@ -369,7 +369,7 @@ NMOS_TEST(NodePassesIs0501)
 {
     static const char* const Versions[] = {"v1.1"};
     int Failed = 0;
-    RunSuite("IS-05-01", Versions, 1, 0, &Failed);
+    RunSuite("IS-05-01", Versions, 1, false, &Failed);
     NMOS_ASSERT_EQ(Failed, 0);
 }
 
@@ -382,7 +382,7 @@ NMOS_TEST(NodePassesIs0502)
 {
     static const char* const Versions[] = {"v1.3", "v1.1"};
     int Failed = 0;
-    RunSuite("IS-05-02", Versions, 2, 0, &Failed);
+    RunSuite("IS-05-02", Versions, 2, false, &Failed);
     NMOS_ASSERT_EQ(Failed, 0);
 }
 
@@ -403,7 +403,7 @@ static void OnChange(void* User, const DtNmosChange* Change)
 NMOS_TEST(ClientWorksWithTheRegistry)
 {
     NmosInteropNode Interop;
-    StartNode(&Interop, 0);
+    StartNode(&Interop, false);
     NMOS_ASSERT(Interop.Node != NULL && DtNmosNode_IsRegistered(Interop.Node));
 
     DtNmosQueryConfig Config;

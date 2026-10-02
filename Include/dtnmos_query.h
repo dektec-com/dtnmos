@@ -66,7 +66,7 @@ typedef struct DtNmosReceiverInfo
     DtNmosMedia Media;     // from its format; DTNMOS_MEDIA_OTHER for another one
     const char* Transport; // e.g. "urn:x-nmos:transport:rtp"
     DtNmosId SenderId;     // the sender it is subscribed to; empty when none
-    int Active;            // whether that subscription is active
+    bool Active;           // whether that subscription is active
 } DtNmosReceiverInfo;
 
 // Receivers of a registry, which the list owns with their strings. What finds a single
@@ -352,9 +352,9 @@ typedef struct DtNmosRegistryInfo
     const char* ApiVersions;              // e.g. "v1.2,v1.3"
     int Priority; // pri: lower is preferred, 100 and up are for development;
                   // -1 when the announcement has none
-    int Auth;     // api_auth is true: the API asks for authorization (IS-10)
+    bool Auth;    // api_auth is true: the API asks for authorization (IS-10)
     // The API offers v1.3 over http or https without authorization, as dtnmos can use it.
-    int Usable;
+    bool Usable;
     DtNmosSearch FoundBy; // the search that found it
 } DtNmosRegistryInfo;
 
@@ -407,7 +407,7 @@ typedef struct DtNmosRegistrySearchConfig
     const DtNmosDiscoveryConfig* Discovery;
     // 1: it never searches, and holds the lists DtNmosRegistrySearch_Feed() gives it, as
     // an application that finds registries in another way, or a test, wants.
-    int Fed;
+    bool Fed;
 } DtNmosRegistrySearchConfig;
 
 // A function of a search other than _Alloc(), _Open(), _Free() and _Freep() needs an open

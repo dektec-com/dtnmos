@@ -155,7 +155,7 @@ uint64_t NmosOs_MonotonicMs(void)
 //
 // Winsock is started once per process and left running, as the process ends it.
 //
-static int StartSockets(void)
+static bool StartSockets(void)
 {
     static volatile LONG Started = 0;
     if (InterlockedCompareExchange(&Started, 1, 0) == 0)
@@ -164,10 +164,10 @@ static int StartSockets(void)
         if (WSAStartup(MAKEWORD(2, 2), &Data) != 0)
         {
             Started = 0;
-            return 0;
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
     #define DTNMOS_CLOSE_SOCKET closesocket
@@ -291,9 +291,9 @@ uint64_t NmosOs_MonotonicMs(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StartSockets -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int StartSockets(void)
+static bool StartSockets(void)
 {
-    return 1;
+    return true;
 }
 
     #define DTNMOS_CLOSE_SOCKET close
@@ -330,11 +330,11 @@ void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_AddressToward -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosOs_AddressToward(const char* Host, char* Address, size_t Size)
+bool NmosOs_AddressToward(const char* Host, char* Address, size_t Size)
 {
     if (Host == NULL || !StartSockets())
     {
-        return 0;
+        return false;
     }
     struct addrinfo Hints;
     memset(&Hints, 0, sizeof(Hints));
@@ -343,9 +343,9 @@ int NmosOs_AddressToward(const char* Host, char* Address, size_t Size)
     struct addrinfo* Found = NULL;
     if (getaddrinfo(Host, "9", &Hints, &Found) != 0 || Found == NULL)
     {
-        return 0;
+        return false;
     }
-    int Result = 0;
+    bool Result = false;
     // Connecting a datagram socket sends nothing; it only chooses the route and so the
     // address of this host on it.
     const NmosSocket Probe = socket(Found->ai_family, SOCK_DGRAM, 0);
@@ -407,9 +407,9 @@ uint16_t NmosOs_FreePort(const char* Host)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddressText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Writes an address of IPv4 or IPv6 into text; returns 0 for null or another family.
+// Writes an address of IPv4 or IPv6 into text; returns false for null or another family.
 //
-static int AddressText(const struct sockaddr* Address, char* Text, size_t Size)
+static bool AddressText(const struct sockaddr* Address, char* Text, size_t Size)
 {
     if (Address != NULL && Address->sa_family == AF_INET)
     {
@@ -421,7 +421,7 @@ static int AddressText(const struct sockaddr* Address, char* Text, size_t Size)
         return inet_ntop(AF_INET6, &((const struct sockaddr_in6*)Address)->sin6_addr,
                          Text, (socklen_t)Size) != NULL;
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteMac -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -497,7 +497,7 @@ NmosInterface* NmosOs_Interfaces(size_t* Count)
     *Count = 0;
     NmosInterface* List = NULL;
     size_t Capacity = 0;
-    int Failed = 0;
+    bool Failed = false;
     IP_ADAPTER_ADDRESSES* Adapters = GetAdapters(
         GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER);
     for (const IP_ADAPTER_ADDRESSES* Adapter = Adapters; Adapter != NULL && !Failed;
@@ -555,7 +555,7 @@ NmosInterface* NmosOs_Interfaces(size_t* Count)
     }
     NmosInterface* List = NULL;
     size_t Capacity = 0;
-    int Failed = 0;
+    bool Failed = false;
     for (const struct ifaddrs* a = Addresses; a != NULL && !Failed; a = a->ifa_next)
     {
         char Address[64];
@@ -633,11 +633,11 @@ NmosUdp* NmosOs_UdpOpen(const char* BindAddress, const char* InterfaceAddress)
     // too.
     const int Ttl = 255;
     const int Loop = 1;
-    int Ok = bind(Handle, (struct sockaddr*)&Local, sizeof(Local)) == 0 &&
-             setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&Ttl,
-                        sizeof(Ttl)) == 0 &&
-             setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_LOOP, (const char*)&Loop,
-                        sizeof(Loop)) == 0;
+    bool Ok = bind(Handle, (struct sockaddr*)&Local, sizeof(Local)) == 0 &&
+              setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_TTL, (const char*)&Ttl,
+                         sizeof(Ttl)) == 0 &&
+              setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_LOOP, (const char*)&Loop,
+                         sizeof(Loop)) == 0;
     if (Ok && InterfaceAddress != NULL)
     {
         Ok = setsockopt(Handle, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&Interface,
@@ -675,8 +675,8 @@ uint16_t NmosOs_UdpPort(const NmosUdp* Udp)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpSend -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
-                   size_t Length)
+bool NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
+                    size_t Length)
 {
     struct sockaddr_in To;
     memset(&To, 0, sizeof(To));
@@ -684,7 +684,7 @@ int NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void*
     To.sin_port = htons(Port);
     if (inet_pton(AF_INET, Address, &To.sin_addr) != 1)
     {
-        return 0;
+        return false;
     }
     return (size_t)sendto(Udp->Socket, (const char*)Data, DTNMOS_SOCKET_LENGTH(Length), 0,
                           (struct sockaddr*)&To, sizeof(To)) == Length;

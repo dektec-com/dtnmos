@@ -62,7 +62,7 @@ typedef struct NmosFakeNetwork
     char* Body;           // of the last PATCH
     int PatchStatus;      // what the node answers a PATCH
     const char* PatchAnswer;
-    int NodeUnreachable;
+    bool NodeUnreachable;
 } NmosFakeNetwork;
 
 typedef struct NmosFakeRoute
@@ -198,12 +198,12 @@ NMOS_TEST(QueryListsAndFindsReceivers)
     NMOS_ASSERT_EQ(Monitor->Media, DTNMOS_MEDIA_VIDEO);
     NMOS_ASSERT_STR(Monitor->Transport, "urn:x-nmos:transport:rtp");
     NMOS_ASSERT_STR(Monitor->SenderId.Text, "");
-    NMOS_ASSERT_EQ(Monitor->Active, 0);
+    NMOS_ASSERT(!Monitor->Active);
     const DtNmosReceiverInfo* Speaker = DtNmosReceiverList_At(List, 1);
     NMOS_ASSERT_EQ(Speaker->Media, DTNMOS_MEDIA_AUDIO);
     NMOS_ASSERT_STR(Speaker->Description, "booth");
     NMOS_ASSERT_STR(Speaker->SenderId.Text, CAMERA_ID);
-    NMOS_ASSERT_EQ(Speaker->Active, 1);
+    NMOS_ASSERT(Speaker->Active);
     NMOS_ASSERT(DtNmosReceiverList_At(List, 2) == NULL);
 
     // By ID and by label, each in a list of one that owns its strings.
@@ -348,7 +348,7 @@ NMOS_TEST(ControllerNamesWhatWentWrong)
     NMOS_ASSERT(DtNmosQuery_Disconnect(Query, "monitor", NULL) == DTNMOS_E_HTTP);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "with 500: <html>") != NULL);
     // A node that cannot be reached.
-    Network.NodeUnreachable = 1;
+    Network.NodeUnreachable = true;
     NMOS_ASSERT(DtNmosQuery_Disconnect(Query, "monitor", NULL) == DTNMOS_E_HTTP);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
     NMOS_ASSERT(Connection == NULL);

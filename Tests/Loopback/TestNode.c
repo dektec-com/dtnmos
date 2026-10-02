@@ -125,7 +125,7 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
     Flow.Format.Video.Height = 1080;
     Flow.Format.Video.RateNumerator = 25;
     Flow.Format.Video.RateDenominator = 1;
-    Flow.Format.Video.Interlaced = 1;
+    Flow.Format.Video.Interlaced = true;
     Flow.Format.Video.Depth = 10;
     snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
              "YCbCr-4:2:2");
@@ -360,7 +360,7 @@ typedef struct NmosNextRegistry
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GiveNextRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static int GiveNextRegistry(void* User, uint32_t Failures, char* NextUrl, size_t Size)
+static bool GiveNextRegistry(void* User, uint32_t Failures, char* NextUrl, size_t Size)
 {
     NmosNextRegistry* Next = User;
     ++Next->Calls;
@@ -368,10 +368,10 @@ static int GiveNextRegistry(void* User, uint32_t Failures, char* NextUrl, size_t
     NMOS_EXPECT(Size == DTNMOS_MAX_URL_SIZE);
     if (Next->Url == NULL)
     {
-        return 0;
+        return false;
     }
     snprintf(NextUrl, Size, "%s", Next->Url);
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeMovesToTheNextRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -613,7 +613,7 @@ NMOS_TEST(NodeBindsToTheInterfaceOfItsAddress)
     size_t Length = 0;
     const char* Body = DtNmosHttpResponse_Body(Response, &Length);
     NmosJson* Json = NULL;
-    const int Parsed = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
+    const bool Parsed = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
     DtNmosHttpResponse_Free(Response);
     NMOS_ASSERT(Parsed);
     const NmosJson* Interfaces = NmosJson_Member(Json, "interfaces");
@@ -636,7 +636,7 @@ NMOS_TEST(NodeBindsToTheInterfaceOfItsAddress)
     // The node lists only the interfaces its senders and receivers are bound to.
     Response = Ask(Node, "GET", "/x-nmos/node/v1.3/self");
     Body = DtNmosHttpResponse_Body(Response, &Length);
-    const int ParsedAgain = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
+    const bool ParsedAgain = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
     DtNmosHttpResponse_Free(Response);
     NMOS_ASSERT(ParsedAgain);
     const size_t None = NmosJson_Member(Json, "interfaces")->Count;

@@ -72,7 +72,7 @@ static void NodeLog(DtNmosNode* Node, DtNmosLogLevel Level, const char* Format, 
 //
 // Writes the host of an URL, without brackets around an IPv6 address, into host.
 //
-static int HostOfUrl(const char* Url, char* Host, size_t Size)
+static bool HostOfUrl(const char* Url, char* Host, size_t Size)
 {
     const char* Start = strstr(Url, "://");
     Start = Start == NULL ? Url : Start + 3;
@@ -94,11 +94,11 @@ static int HostOfUrl(const char* Url, char* Host, size_t Size)
     }
     if (End == NULL || End == Start || (size_t)(End - Start) >= Size)
     {
-        return 0;
+        return false;
     }
     memcpy(Host, Start, (size_t)(End - Start));
     Host[End - Start] = '\0';
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrationBase -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -178,7 +178,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     }
     // A node without a registry takes those of the search of the application, which a
     // config of an older header does not have.
-    const int Searches =
+    const bool Searches =
         Config->RegistrationUrl == NULL || Config->RegistrationUrl[0] == '\0';
     DtNmosRegistrySearch* Search =
         Config->Size >= offsetof(DtNmosNodeConfig, Search) + sizeof(Config->Search)
@@ -239,7 +239,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     {
         Result->FailuresBeforeSwitch = Searches ? 1 : 3;
     }
-    Result->FirstRegistration = 1;
+    Result->FirstRegistration = true;
     if (Result->Mutex == NULL || Result->Label == NULL || Result->Description == NULL ||
         Result->Hostname == NULL || Result->ApiHost == NULL ||
         (!Searches && Result->Registration == NULL))
@@ -248,7 +248,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
         return NmosError_FailMemory();
     }
     NmosOs_VersionNow(&Result->LastVersion, Result->Version, sizeof(Result->Version));
-    Result->Open = 1;
+    Result->Open = true;
     return DTNMOS_OK;
 }
 
@@ -368,11 +368,11 @@ static DtNmosResult RegisterResource(DtNmosNode* Node, const char* Type, const c
     NmosBuffer_Free(&Body);
     // A registry that answers the first registration of the node with 200 holds a node of
     // its ID from before, which IS-04 has the node delete and register anew.
-    const int Stale = Result == DTNMOS_OK && Status == 200 && strcmp(Type, "node") == 0 &&
-                      Node->FirstRegistration;
+    const bool Stale = Result == DTNMOS_OK && Status == 200 &&
+                       strcmp(Type, "node") == 0 && Node->FirstRegistration;
     if (Result == DTNMOS_OK && strcmp(Type, "node") == 0)
     {
-        Node->FirstRegistration = 0;
+        Node->FirstRegistration = false;
     }
     if (Stale)
     {
@@ -417,7 +417,7 @@ static void WriteCommon(NmosBuffer* b, const DtNmosId* Id, const char* Version,
 //
 void NmosNode_WriteBaseUrl(const DtNmosNode* Node, NmosBuffer* b)
 {
-    const int Ipv6 = strchr(Node->ApiHost, ':') != NULL;
+    const bool Ipv6 = strchr(Node->ApiHost, ':') != NULL;
     NmosBuffer_Printf(b, "http://%s%s%s:%u", Ipv6 ? "[" : "", Node->ApiHost,
                       Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
 }
@@ -426,23 +426,23 @@ void NmosNode_WriteBaseUrl(const DtNmosNode* Node, NmosBuffer* b)
 //
 // Whether a sender of the node sends from Address or a receiver receives on it.
 //
-static int IsBound(const DtNmosNode* Node, const char* Address)
+static bool IsBound(const DtNmosNode* Node, const char* Address)
 {
     for (size_t i = 0; i < Node->SenderCount; ++i)
     {
         if (strcmp(Node->Senders[i].ActiveSourceIp, Address) == 0)
         {
-            return 1;
+            return true;
         }
     }
     for (size_t i = 0; i < Node->ReceiverCount; ++i)
     {
         if (strcmp(Node->Receivers[i].InterfaceIp, Address) == 0)
         {
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -457,14 +457,14 @@ static void WriteInterfaces(const DtNmosNode* Node, NmosBuffer* b)
     size_t Count = 0;
     NmosInterface* List = NmosOs_Interfaces(&Count);
     DTNMOS_APPEND_LITERAL(b, "[");
-    int First = 1;
+    bool First = true;
     for (size_t i = 0; i < Count; ++i)
     {
         if (!IsBound(Node, List[i].Address))
         {
             continue;
         }
-        int Listed = 0;
+        bool Listed = false;
         for (size_t j = 0; j < i && !Listed; ++j)
         {
             Listed =
@@ -478,7 +478,7 @@ static void WriteInterfaces(const DtNmosNode* Node, NmosBuffer* b)
                           First ? "" : ", ", List[i].PortId);
         NmosJson_WriteString(b, List[i].Name);
         DTNMOS_APPEND_LITERAL(b, "}");
-        First = 0;
+        First = false;
     }
     DTNMOS_APPEND_LITERAL(b, "]");
     free(List);
@@ -540,24 +540,24 @@ void NmosNode_WriteDevice(const DtNmosNode* Node, const NmosNodeDevice* Device,
                       ", \"type\": \"urn:x-nmos:device:generic\", \"node_id\": \"%s\", "
                       "\"senders\": [",
                       Node->Id.Text);
-    int First = 1;
+    bool First = true;
     for (size_t i = 0; i < Node->SenderCount; ++i)
     {
         if (strcmp(Node->Senders[i].DeviceId.Text, Device->Id.Text) == 0)
         {
             NmosBuffer_Printf(b, "%s\"%s\"", First ? "" : ", ", Node->Senders[i].Id.Text);
-            First = 0;
+            First = false;
         }
     }
     DTNMOS_APPEND_LITERAL(b, "], \"receivers\": [");
-    First = 1;
+    First = true;
     for (size_t i = 0; i < Node->ReceiverCount; ++i)
     {
         if (strcmp(Node->Receivers[i].DeviceId.Text, Device->Id.Text) == 0)
         {
             NmosBuffer_Printf(b, "%s\"%s\"", First ? "" : ", ",
                               Node->Receivers[i].Id.Text);
-            First = 0;
+            First = false;
         }
     }
     DTNMOS_APPEND_LITERAL(b, "], \"controls\": [{\"href\": \"");
@@ -568,7 +568,7 @@ void NmosNode_WriteDevice(const DtNmosNode* Node, const NmosNodeDevice* Device,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int IsVideo(const NmosNodeSender* Sender)
+static bool IsVideo(const NmosNodeSender* Sender)
 {
     return Sender->Flow.Media == DTNMOS_MEDIA_VIDEO;
 }
@@ -692,7 +692,7 @@ void NmosNode_WriteSender(const DtNmosNode* Node, const NmosNodeSender* Sender,
 //
 void NmosNode_WriteReceiver(const NmosNodeReceiver* Receiver, NmosBuffer* b)
 {
-    const int Video = Receiver->Media == DTNMOS_MEDIA_VIDEO;
+    const bool Video = Receiver->Media == DTNMOS_MEDIA_VIDEO;
     DTNMOS_APPEND_LITERAL(b, "{");
     WriteCommon(b, &Receiver->Id, Receiver->Version, Receiver->Label,
                 Receiver->Description);
@@ -719,12 +719,12 @@ void NmosNode_WriteReceiver(const NmosNodeReceiver* Receiver, NmosBuffer* b)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsAddress -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosNode_IsAddress(const char* Address)
+bool NmosNode_IsAddress(const char* Address)
 {
     if (Address == NULL || Address[0] == '\0' ||
         strlen(Address) >= DTNMOS_MAX_ADDRESS_SIZE)
     {
-        return 0;
+        return false;
     }
     if (strchr(Address, ':') != NULL)
     {
@@ -744,19 +744,19 @@ int NmosNode_IsAddress(const char* Address)
         }
         if (Digits == 0 || Digits > 3 || Value > 255 || *p != (Part < 3 ? '.' : '\0'))
         {
-            return 0;
+            return false;
         }
         if (Part < 3)
         {
             ++p;
         }
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsMulticast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-int NmosNode_IsMulticast(const char* Address)
+bool NmosNode_IsMulticast(const char* Address)
 {
     if (strchr(Address, ':') != NULL)
     {
@@ -859,7 +859,7 @@ NmosNodeReceiver* NmosNode_FindReceiver(DtNmosNode* Node, const DtNmosId* Id)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IdTaken -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static int IdTaken(DtNmosNode* Node, const DtNmosId* Id)
+static bool IdTaken(DtNmosNode* Node, const DtNmosId* Id)
 {
     return strcmp(Node->Id.Text, Id->Text) == 0 ||
            NmosNode_FindDevice(Node, Id) != NULL ||
@@ -871,21 +871,21 @@ static int IdTaken(DtNmosNode* Node, const DtNmosId* Id)
 //
 // Grows an array of count elements of size bytes to hold one more.
 //
-static int Grow(void** Array, size_t* Capacity, size_t Count, size_t Size)
+static bool Grow(void** Array, size_t* Capacity, size_t Count, size_t Size)
 {
     if (Count < *Capacity)
     {
-        return 1;
+        return true;
     }
     const size_t Grown = *Capacity == 0 ? 4 : *Capacity * 2;
     void* Larger = realloc(*Array, Grown * Size);
     if (Larger == NULL)
     {
-        return 0;
+        return false;
     }
     *Array = Larger;
     *Capacity = Grown;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TouchDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -899,7 +899,7 @@ static void TouchDevice(DtNmosNode* Node, const DtNmosId* Id)
     if (Device != NULL)
     {
         NewVersion(Node, Device->Version, sizeof(Device->Version));
-        Device->Registered = 0;
+        Device->Registered = false;
     }
     NmosNode_Touch(Node);
 }
@@ -909,7 +909,7 @@ static void TouchDevice(DtNmosNode* Node, const DtNmosId* Id)
 void NmosNode_Touch(DtNmosNode* Node)
 {
     NewVersion(Node, Node->Version, sizeof(Node->Version));
-    Node->NodeRegistered = 0;
+    Node->NodeRegistered = false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_AddDevice -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1047,7 +1047,7 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         Added->SourceIp = CopyText(Sender->SourceIp);
         Added->Activate = Activate;
         Added->User = User;
-        Added->MasterEnable = 1;
+        Added->MasterEnable = true;
         Added->SessionId = Node->LastVersion / 1000000000u;
         Added->SessionVersion = 1;
         if (Sender->Size >= offsetof(DtNmosSenderConfig, ActivationLeadMs) +
@@ -1161,17 +1161,17 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
 //
 // Adds a resource of type to delete from the registry, when it was registered.
 //
-static int ScheduleRemoval(DtNmosNode* Node, const char* Type, const DtNmosId* Id)
+static bool ScheduleRemoval(DtNmosNode* Node, const char* Type, const DtNmosId* Id)
 {
     if (!Grow((void**)&Node->Removals, &Node->RemovalCapacity, Node->RemovalCount,
               sizeof(*Node->Removals)))
     {
-        return 0;
+        return false;
     }
     NmosNodeRemoval* Removal = &Node->Removals[Node->RemovalCount++];
     snprintf(Removal->Type, sizeof(Removal->Type), "%s", Type);
     Removal->Id = *Id;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RemoveSenderAt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1323,7 +1323,7 @@ DtNmosResult DtNmosNode_UpdateSender(DtNmosNode* Node, const DtNmosId* Id,
     {
         NewVersion(Node, Sender->Version, sizeof(Sender->Version));
         ++Sender->SessionVersion;
-        Sender->Registered = 0;
+        Sender->Registered = false;
     }
     NmosNode_Unlock(Node);
     return Result;
@@ -1337,19 +1337,19 @@ static void ForgetRegistration(DtNmosNode* Node)
 {
     // Registering everything again is a first registration, which a registry holding an
     // old node of this ID answers with 200.
-    Node->FirstRegistration = 1;
-    Node->NodeRegistered = 0;
+    Node->FirstRegistration = true;
+    Node->NodeRegistered = false;
     for (size_t i = 0; i < Node->DeviceCount; ++i)
     {
-        Node->Devices[i].Registered = 0;
+        Node->Devices[i].Registered = false;
     }
     for (size_t i = 0; i < Node->SenderCount; ++i)
     {
-        Node->Senders[i].Registered = 0;
+        Node->Senders[i].Registered = false;
     }
     for (size_t i = 0; i < Node->ReceiverCount; ++i)
     {
-        Node->Receivers[i].Registered = 0;
+        Node->Receivers[i].Registered = false;
     }
 }
 
@@ -1379,16 +1379,16 @@ static void FreePending(NmosPending* p)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NextPending -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Renders into p the first resource that is not registered, parents before children;
-// returns 0 when all are registered.
+// returns false when all are registered.
 //
-static int NextPending(DtNmosNode* Node, NmosPending* p)
+static bool NextPending(DtNmosNode* Node, NmosPending* p)
 {
     memset(p, 0, sizeof(*p));
     NmosBuffer b[3];
     memset(b, 0, sizeof(b));
     if (Node->Closing)
     {
-        return 0;
+        return false;
     }
     if (!Node->NodeRegistered)
     {
@@ -1467,40 +1467,40 @@ static void MarkRegistered(DtNmosNode* Node, const NmosPending* p)
     Node->NodeWasRegistered |= p->Kind == 0;
     if (p->Kind == 0 && strcmp(Node->Version, p->Version) == 0)
     {
-        Node->NodeRegistered = 1;
+        Node->NodeRegistered = true;
     }
     NmosNodeDevice* Device = p->Kind == 1 ? NmosNode_FindDevice(Node, &p->Id) : NULL;
     if (Device != NULL && strcmp(Device->Version, p->Version) == 0)
     {
-        Device->Registered = 1;
-        Device->WasRegistered = 1;
+        Device->Registered = true;
+        Device->WasRegistered = true;
     }
     NmosNodeSender* Sender = p->Kind == 2 ? NmosNode_FindSender(Node, &p->Id) : NULL;
     if (Sender != NULL && strcmp(Sender->Version, p->Version) == 0)
     {
-        Sender->Registered = 1;
-        Sender->WasRegistered = 1;
+        Sender->Registered = true;
+        Sender->WasRegistered = true;
     }
     NmosNodeReceiver* Receiver =
         p->Kind == 3 ? NmosNode_FindReceiver(Node, &p->Id) : NULL;
     if (Receiver != NULL && strcmp(Receiver->Version, p->Version) == 0)
     {
-        Receiver->Registered = 1;
-        Receiver->WasRegistered = 1;
+        Receiver->Registered = true;
+        Receiver->WasRegistered = true;
     }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_IsRegistered -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-int DtNmosNode_IsRegistered(const DtNmosNode* Node)
+bool DtNmosNode_IsRegistered(const DtNmosNode* Node)
 {
     if (Node == NULL || !Node->Open)
     {
-        return 0;
+        return false;
     }
     DtNmosNode* MutableNode = (DtNmosNode*)Node;
     NmosNode_Lock(MutableNode);
-    int All = Node->NodeRegistered && Node->RemovalCount == 0;
+    bool All = Node->NodeRegistered && Node->RemovalCount == 0;
     for (size_t i = 0; All && i < Node->DeviceCount; ++i)
     {
         All = Node->Devices[i].Registered;
@@ -1520,15 +1520,15 @@ int DtNmosNode_IsRegistered(const DtNmosNode* Node)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Moves the node to the registry at Url, which the caller of the node chose, and with
-// which it registers everything from the start. Returns 0 when the memory ran out. On
+// which it registers everything from the start. Returns false when the memory ran out. On
 // the poll thread.
 //
-static int TakeRegistry(DtNmosNode* Node, const char* Url)
+static bool TakeRegistry(DtNmosNode* Node, const char* Url)
 {
     char* Base = RegistrationBase(Url);
     if (Base == NULL)
     {
-        return 0;
+        return false;
     }
     NmosNode_Lock(Node);
     free(Node->Registration);
@@ -1536,23 +1536,23 @@ static int TakeRegistry(DtNmosNode* Node, const char* Url)
     ForgetRegistration(Node);
     NmosNode_Unlock(Node);
     Node->Failures = 0;
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasFailed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Whether the registry of the base URL Base failed since the node last started over.
 //
-static int HasFailed(const DtNmosNode* Node, const char* Base)
+static bool HasFailed(const DtNmosNode* Node, const char* Base)
 {
     for (size_t i = 0; i < Node->FailedCount; ++i)
     {
         if (strcmp(Node->Failed[i], Base) == 0)
         {
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ForgetFailed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1599,10 +1599,10 @@ static void MarkFailed(DtNmosNode* Node)
 // has not failed yet, so that it goes down the list and never back to one that failed;
 // when all have, forgets that they failed and starts over from the most preferred. A
 // node registered before sends a heartbeat first, which tells it whether the registry
-// has it; another registers everything. Returns 0 when there is none, having had the
+// has it; another registers everything. Returns false when there is none, having had the
 // search search sooner. On the poll thread.
 //
-static int TakeFound(DtNmosNode* Node)
+static bool TakeFound(DtNmosNode* Node)
 {
     DtNmosRegistryList* Found = NULL;
     if (DtNmosRegistrySearch_List(Node->Search, DTNMOS_SERVICE_REGISTRATION, &Found) !=
@@ -1611,12 +1611,12 @@ static int TakeFound(DtNmosNode* Node)
         NodeLog(Node, DTNMOS_LOG_WARNING, "The search gives no registries: %s",
                 DtNmos_GetLastError());
     }
-    int Taken = 0;
+    bool Taken = false;
     for (int Round = 0; Round < 2 && !Taken; ++Round)
     {
         char* Base = NULL;
         char Url[DTNMOS_MAX_URL_SIZE] = "";
-        int AnyFailed = 0;
+        bool AnyFailed = false;
         NmosNode_Lock(Node);
         for (size_t i = 0; Base == NULL && i < DtNmosRegistryList_Count(Found); ++i)
         {
@@ -1624,7 +1624,7 @@ static int TakeFound(DtNmosNode* Node)
             char* Candidate = Info->Usable ? RegistrationBase(Info->Url) : NULL;
             if (Candidate != NULL && HasFailed(Node, Candidate))
             {
-                AnyFailed = 1;
+                AnyFailed = true;
                 free(Candidate);
                 Candidate = NULL;
             }
@@ -1652,7 +1652,7 @@ static int TakeFound(DtNmosNode* Node)
             Node->Failures = 0;
             NodeLog(Node, DTNMOS_LOG_INFO, "The node registers with %s, of its search.",
                     Url);
-            Taken = 1;
+            Taken = true;
         }
         else if (AnyFailed)
         {
@@ -1732,7 +1732,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     {
         NmosPending p;
         NmosNode_Lock(Node);
-        const int Any = NextPending(Node, &p);
+        const bool Any = NextPending(Node, &p);
         NmosNode_Unlock(Node);
         if (!Any)
         {
@@ -1758,8 +1758,8 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     }
     // The heartbeat, when it is due.
     NmosNode_Lock(Node);
-    const int Beat = Result == DTNMOS_OK && Node->NodeRegistered &&
-                     NmosOs_MonotonicMs() >= Node->NextHeartbeatMs;
+    const bool Beat = Result == DTNMOS_OK && Node->NodeRegistered &&
+                      NmosOs_MonotonicMs() >= Node->NextHeartbeatMs;
     NmosNode_Unlock(Node);
     if (Beat)
     {
@@ -1785,7 +1785,7 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     // A registry that fails polls in a row makes way for another one: the one the caller
     // gives, when it gives one, or else, for a node that searches, the next one found.
     // The URL is swapped here, on the thread that reads it.
-    int Switched = 0;
+    bool Switched = false;
     if (Result == DTNMOS_OK)
     {
         Node->Failures = 0;
@@ -1794,11 +1794,11 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
     {
         const uint32_t Failures = Node->Failures;
         char Next[DTNMOS_MAX_URL_SIZE] = "";
-        int Moved = Node->RegistryFailed != NULL &&
-                    Node->RegistryFailed(Node->RegistryFailedUser, Failures, Next,
-                                         sizeof(Next)) &&
-                    memchr(Next, '\0', sizeof(Next)) != NULL && Next[0] != '\0' &&
-                    TakeRegistry(Node, Next);
+        bool Moved = Node->RegistryFailed != NULL &&
+                     Node->RegistryFailed(Node->RegistryFailedUser, Failures, Next,
+                                          sizeof(Next)) &&
+                     memchr(Next, '\0', sizeof(Next)) != NULL && Next[0] != '\0' &&
+                     TakeRegistry(Node, Next);
         if (Moved)
         {
             NodeLog(Node, DTNMOS_LOG_WARNING,
@@ -1865,8 +1865,8 @@ static void UnregisterAll(DtNmosNode* Node)
             ScheduleRemoval(Node, "devices", &Node->Devices[i].Id);
         }
     }
-    Node->NodeRegistered = 0;
-    Node->Closing = 1;
+    Node->NodeRegistered = false;
+    Node->Closing = true;
     if (Node->NodeWasRegistered)
     {
         ScheduleRemoval(Node, "nodes", &Node->Id);

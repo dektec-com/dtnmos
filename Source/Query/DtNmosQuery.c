@@ -26,7 +26,7 @@
 // DtNmosQuery_Close() empties it again.
 struct DtNmosQuery
 {
-    int Open;
+    bool Open;
     char* Base; // registry URL followed by /x-nmos/query/v1.3/
     DtNmosHttpFunc Http;
     void* HttpUser;
@@ -140,7 +140,7 @@ DtNmosResult DtNmosQuery_Open(DtNmosQuery* Query, const DtNmosQueryConfig* Confi
     Result->TimeoutMs = Config->TimeoutMs == 0 ? 5000 : Config->TimeoutMs;
     Result->Log = Config->Log;
     Result->LogUser = Config->LogUser;
-    Result->Open = 1;
+    Result->Open = true;
     return DTNMOS_OK;
 }
 
@@ -436,7 +436,7 @@ static DtNmosResult GetPages(DtNmosQuery* Query, char* Url, NmosPages* p)
             return Result;
         }
         // An empty page ends the list; a page that points back at itself does too.
-        const int End = Json->Count == 0 || (Next != NULL && strcmp(Next, Url) == 0);
+        const bool End = Json->Count == 0 || (Next != NULL && strcmp(Next, Url) == 0);
         if (p->Count == p->Capacity)
         {
             const size_t Capacity = p->Capacity == 0 ? 4 : p->Capacity * 2;
@@ -517,7 +517,7 @@ static void CopyId(DtNmosId* Id, const char* Text)
 // has none; sets *Failed when the memory ran out.
 //
 static const char* StoreMember(NmosStore* Store, const NmosJson* Resource,
-                               const char* Key, int* Failed)
+                               const char* Key, bool* Failed)
 {
     const char* Text = NmosJson_MemberText(Resource, Key);
     if (Text == NULL || Text[0] == '\0')
@@ -527,7 +527,7 @@ static const char* StoreMember(NmosStore* Store, const NmosJson* Resource,
     const char* Copy = NmosStore_Text(Store, Text, strlen(Text));
     if (Copy == NULL)
     {
-        *Failed = 1;
+        *Failed = true;
         return "";
     }
     return Copy;
@@ -546,7 +546,7 @@ static DtNmosResult ReadSender(const NmosJson* Resource, NmosStore* Store, void*
     CopyId(&Sender->Id, NmosJson_MemberText(Resource, "id"));
     CopyId(&Sender->FlowId, NmosJson_MemberText(Resource, "flow_id"));
     CopyId(&Sender->DeviceId, NmosJson_MemberText(Resource, "device_id"));
-    int Failed = 0;
+    bool Failed = false;
     Sender->Label = StoreMember(Store, Resource, "label", &Failed);
     Sender->Description = StoreMember(Store, Resource, "description", &Failed);
     Sender->Transport = StoreMember(Store, Resource, "transport", &Failed);
@@ -657,24 +657,24 @@ DtNmosResult DtNmosQuery_Senders(DtNmosQuery* Query, DtNmosSenderList** List)
 //
 // Whether text has the form of a UUID.
 //
-static int IsUuid(const char* Text)
+static bool IsUuid(const char* Text)
 {
     if (strlen(Text) != 36)
     {
-        return 0;
+        return false;
     }
     for (size_t i = 0; i < 36; ++i)
     {
         const char c = Text[i];
-        const int Dash = i == 8 || i == 13 || i == 18 || i == 23;
-        const int Hex =
+        const bool Dash = i == 8 || i == 13 || i == 18 || i == 23;
+        const bool Hex =
             (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
         if (Dash ? c != '-' : !Hex)
         {
-            return 0;
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AppendEncoded -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -928,7 +928,7 @@ static DtNmosResult ReadReceiver(const NmosJson* Resource, NmosStore* Store, voi
     CopyId(&Receiver->SenderId, NmosJson_MemberText(Subscription, "sender_id"));
     const NmosJson* Active = NmosJson_Member(Subscription, "active");
     Receiver->Active = Active != NULL && Active->Type == DTNMOS_JSON_TRUE;
-    int Failed = 0;
+    bool Failed = false;
     Receiver->Label = StoreMember(Store, Resource, "label", &Failed);
     Receiver->Description = StoreMember(Store, Resource, "description", &Failed);
     Receiver->Transport = StoreMember(Store, Resource, "transport", &Failed);

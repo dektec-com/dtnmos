@@ -165,13 +165,13 @@ DtNmosResult NmosError_FailMemory(void)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadUuid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Reads the 16 bytes of a UUID in its text form; returns 0 when text is no UUID.
+// Reads the 16 bytes of a UUID in its text form; returns false when text is no UUID.
 //
-static int ReadUuid(const char* Text, uint8_t Bytes[16])
+static bool ReadUuid(const char* Text, uint8_t Bytes[16])
 {
     if (strlen(Text) != 36)
     {
-        return 0;
+        return false;
     }
     size_t Byte = 0;
     for (size_t i = 0; i < 36;)
@@ -180,7 +180,7 @@ static int ReadUuid(const char* Text, uint8_t Bytes[16])
         {
             if (Text[i] != '-')
             {
-                return 0;
+                return false;
             }
             ++i;
             continue;
@@ -190,12 +190,12 @@ static int ReadUuid(const char* Text, uint8_t Bytes[16])
         uint8_t Value = 0;
         if (!NmosText_ParseByte(NmosSpan_Of(Hex), &Value))
         {
-            return 0;
+            return false;
         }
         Bytes[Byte++] = Value;
         i += 2;
     }
-    return 1;
+    return true;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosId_FromName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

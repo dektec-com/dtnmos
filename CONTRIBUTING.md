@@ -20,6 +20,8 @@ about structs is added.
 7. **A value whose width matters has a fixed-width type** from `<stdint.h>`, such as
    `uint8_t`, `uint16_t`, `uint32_t` and `uint64_t`, in the public headers too.
    - Counters and indices stay `int`, sizes stay `size_t`, and text is `char`.
+   - A value that is true or false is `bool`, from `<stdbool.h>`: a field, a parameter, a
+     result and a callback's result alike, in the public headers and inside.
    - `long` and `unsigned long` appear only where an interface of the operating system
      or of a library defines them, such as `timeval.tv_sec` or libcurl's options.
 8. **A header guards itself with `#pragma once`**, as the first line after the file

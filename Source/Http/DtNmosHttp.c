@@ -161,7 +161,7 @@ DtNmosResult DtNmosHttpResponse_AddHeader(DtNmosHttpResponse* Response, const ch
         free(Header.Value);
         return DTNMOS_E_NO_MEMORY;
     }
-    if (NmosSpan_Equals(NmosSpan_Of(Name), "content-type", 1) &&
+    if (NmosSpan_Equals(NmosSpan_Of(Name), "content-type", true) &&
         Response->ContentType == NULL)
     {
         Response->ContentType = CopyText(Value);
@@ -227,7 +227,7 @@ const char* DtNmosHttpResponse_FindHeader(const DtNmosHttpResponse* Response,
     }
     for (size_t i = 0; i < Response->HeaderCount; ++i)
     {
-        if (NmosSpan_Equals(NmosSpan_Of(Response->Headers[i].Name), Name, 1))
+        if (NmosSpan_Equals(NmosSpan_Of(Response->Headers[i].Name), Name, true))
         {
             return Response->Headers[i].Value;
         }

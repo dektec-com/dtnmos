@@ -121,7 +121,7 @@ typedef struct NmosFakeRegistry
     const NmosRoute* Routes;
     size_t Count;
     int Requests;
-    int Unreachable; // every request fails as if the registry did not answer
+    bool Unreachable; // every request fails as if the registry did not answer
 } NmosFakeRegistry;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeHttp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -415,7 +415,7 @@ NMOS_TEST(QueryNamesWhatWentWrong)
     NMOS_ASSERT(DtNmosQuery_FindSender(Query, VIDEO_ID, &Sender) == DTNMOS_E_HTTP);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "answered with 500") != NULL);
     // A registry that does not answer.
-    Registry.Unreachable = 1;
+    Registry.Unreachable = true;
     DtNmosSenderList* List = NULL;
     NMOS_ASSERT(DtNmosQuery_Senders(Query, &List) == DTNMOS_E_HTTP);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "connection refused") != NULL);
