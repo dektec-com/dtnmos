@@ -117,6 +117,10 @@ if (DtNmosSdp_Write(&session, &flow, 1, text, &size) == DTNMOS_OK)
 }
 ```
 
+A video flow's colorimetry follows its raster when the caller sets none:
+`DtNmosVideoFormat_SetDefaults()` gives BT601 to SD, BT709 to HD and BT2020 to UHD, by
+the height, and SDR; HDR is the caller's to state.
+
 The parser reports what a description says and judges no format: a receiver decides
 whether it can carry a flow. A media it does not know comes back as `DTNMOS_MEDIA_OTHER`
 with its encoding and the text of its `a=fmtp`, and both paths of ST 2022-7 come back as

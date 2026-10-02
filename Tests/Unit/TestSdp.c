@@ -654,6 +654,48 @@ NMOS_TEST(SdpRefusesAValueLongerThanItsField)
         "SDP line 8: a=fmtp has a value longer than its standard allows: 'sampling'");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFormatTakesDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The colorimetry of an empty format follows its raster, SD, HD or UHD, whatever its
+// width; the transfer characteristic is SDR; what the caller set stays, and a format
+// without a height gets no colorimetry.
+NMOS_TEST(VideoFormatTakesDefaults)
+{
+    static const struct
+    {
+        uint32_t Width;
+        uint32_t Height;
+        const char* Colorimetry;
+    } Cases[] = {{720, 486, "BT601"},   {720, 576, "BT601"},   {1280, 720, "BT709"},
+                 {1920, 1080, "BT709"}, {2048, 1080, "BT709"}, {3840, 2160, "BT2020"},
+                 {7680, 4320, "BT2020"}};
+    for (size_t i = 0; i < sizeof(Cases) / sizeof(Cases[0]); ++i)
+    {
+        DtNmosVideoFormat Format;
+        memset(&Format, 0, sizeof(Format));
+        Format.Width = Cases[i].Width;
+        Format.Height = Cases[i].Height;
+        DtNmosVideoFormat_SetDefaults(&Format);
+        NMOS_ASSERT_STR(Format.Colorimetry, Cases[i].Colorimetry);
+        NMOS_ASSERT_STR(Format.Tcs, "SDR");
+        NMOS_ASSERT_STR(Format.Range, "");
+    }
+
+    DtNmosVideoFormat Format;
+    memset(&Format, 0, sizeof(Format));
+    Format.Height = 2160;
+    snprintf(Format.Colorimetry, sizeof(Format.Colorimetry), "BT2100");
+    snprintf(Format.Tcs, sizeof(Format.Tcs), "PQ");
+    DtNmosVideoFormat_SetDefaults(&Format);
+    NMOS_ASSERT_STR(Format.Colorimetry, "BT2100");
+    NMOS_ASSERT_STR(Format.Tcs, "PQ");
+
+    memset(&Format, 0, sizeof(Format));
+    DtNmosVideoFormat_SetDefaults(&Format);
+    NMOS_ASSERT_STR(Format.Colorimetry, "");
+    DtNmosVideoFormat_SetDefaults(NULL);
+}
+
 NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio),
                NMOS_RUN(SdpReadsCompressedVideo), NMOS_RUN(SdpReadsAncillaryData),
                NMOS_RUN(SdpReadsOtherMediaAsTheyAre),
@@ -662,4 +704,5 @@ NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio)
                NMOS_RUN(SdpRefusesToWriteAnIncompleteFlow),
                NMOS_RUN(SdpNamesThePathsOfEachPair), NMOS_RUN(FlowIsCopiedWithAssignment),
                NMOS_RUN(SdpReadsTheFormsOfTsRefclk),
-               NMOS_RUN(SdpRefusesAValueLongerThanItsField))
+               NMOS_RUN(SdpRefusesAValueLongerThanItsField),
+               NMOS_RUN(VideoFormatTakesDefaults))

@@ -502,3 +502,24 @@ DtNmosResult DtNmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flo
     NmosBuffer_Free(&Text);
     return Result;
 }
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosVideoFormat_SetDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void DtNmosVideoFormat_SetDefaults(DtNmosVideoFormat* Format)
+{
+    if (Format == NULL)
+    {
+        return;
+    }
+    if (Format->Colorimetry[0] == '\0' && Format->Height != 0)
+    {
+        const char* Colorimetry = Format->Height <= 576    ? "BT601"
+                                  : Format->Height <= 1080 ? "BT709"
+                                                           : "BT2020";
+        snprintf(Format->Colorimetry, sizeof(Format->Colorimetry), "%s", Colorimetry);
+    }
+    if (Format->Tcs[0] == '\0')
+    {
+        snprintf(Format->Tcs, sizeof(Format->Tcs), "SDR");
+    }
+}

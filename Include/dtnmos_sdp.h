@@ -224,6 +224,14 @@ DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* Session,
                                         const DtNmosFlow* Flows, size_t Count,
                                         char* Buffer, size_t* Size);
 
+// Fills an empty Colorimetry and Tcs of format with what its raster has when nothing
+// says otherwise: by the height of the active picture, which tells SD, HD and UHD apart
+// whatever the width, BT601 up to 576 lines, BT709 up to 1080 and BT2020 above, as
+// ST 2036-1 has UHD; Tcs SDR. A height of 0 leaves Colorimetry empty. HDR, PQ or HLG
+// with BT2100, cannot be told from the raster, and is the caller's to set. Range is left
+// out, which ST 2110-20 reads as narrow.
+DTNMOS_API void DtNmosVideoFormat_SetDefaults(DtNmosVideoFormat* Format);
+
 #ifdef __cplusplus
 }
 #endif
