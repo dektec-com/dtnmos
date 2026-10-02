@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#*# NmosQuery.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - What the controller shares of the query of a registry
+// dtnmos - Helpers for requests to a registry's Query API, shared by the controller
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -14,26 +14,34 @@
 #include "NmosJson.h"
 #include "dtnmos_query.h"
 
-// Fails with DTNMOS_E_STATE, naming function, when query is not open.
+// Checks that a query is open. Fails with DTNMOS_E_STATE when it is not; the message
+// names Function.
 DtNmosResult NmosQuery_CheckOpen(const DtNmosQuery* Query, const char* Function);
 
-// Returns the base URL of the Query API of query, ending in a slash.
+// Returns the base URL of the registry's Query API. It ends in a slash.
 const char* NmosQuery_Base(const DtNmosQuery* Query);
 
-// Returns how long a request of query may take, in milliseconds.
+// Returns the time a request may take, in milliseconds.
 uint32_t NmosQuery_Timeout(const DtNmosQuery* Query);
 
-// Sends a request with the HTTP function and the timeout of query, and logs it; the body
-// may be null. Fails only when the HTTP function does, whatever status the answer has.
+// Sends an HTTP request through the query's HTTP function, with its timeout, and logs
+// it. Body may be null. Fails only when the HTTP function fails; an error status in the
+// answer is not a failure here.
 DtNmosResult NmosQuery_Request(DtNmosQuery* Query, const char* Method, const char* Url,
                                const char* ContentType, const char* Body,
                                size_t BodyLength, DtNmosHttpResponse* Response);
 
-// Performs a GET of url and parses its JSON, which the caller frees. Fails unless the
-// answer is 200, with DTNMOS_E_NOT_FOUND for 404.
+// Gets a JSON resource: a GET of Url, whose answer is parsed into *Json. The caller frees
+// *Json.
+//
+// Returns DTNMOS_OK, or:
+//   DTNMOS_E_NOT_FOUND  the answer was 404
+//   DTNMOS_E_HTTP       the answer was another status than 200
+//   DTNMOS_E_PARSE      the answer is not JSON
+// and the errors of the request.
 DtNmosResult NmosQuery_GetJson(DtNmosQuery* Query, const char* Url, NmosJson** Json);
 
-// Fetches the SDP of sender from its manifest_href into a response, which the caller
-// frees; null when it fails. Fails as DtNmosQuery_SenderManifest() does.
+// Downloads the SDP of a sender, from its manifest_href, into *Response. The caller frees
+// it; it is null after a failure. Fails as DtNmosQuery_SenderManifest() does.
 DtNmosResult NmosQuery_Manifest(DtNmosQuery* Query, const DtNmosSenderInfo* Sender,
                                 DtNmosHttpResponse** Response);

@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#*#* NmosOs.h *#*#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - What the node needs of the operating system, behind names of dtnmos
+// dtnmos - The operating system services dtnmos uses: locks, threads, clocks and sockets
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -12,82 +12,93 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// A lock that one thread at a time holds.
 typedef struct NmosMutex NmosMutex;
 
-// Returns a new mutex, or null when out of memory.
+// Creates a mutex. Returns null when out of memory.
 NmosMutex* NmosOs_MutexCreate(void);
+// Frees a mutex. Nobody may hold it.
 void NmosOs_MutexFree(NmosMutex* Mutex);
+// Takes the lock, waiting until no other thread holds it.
 void NmosOs_MutexLock(NmosMutex* Mutex);
+// Releases the lock.
 void NmosOs_MutexUnlock(NmosMutex* Mutex);
 
 typedef struct NmosThread NmosThread;
 
-// Starts a thread that runs function(argument); returns null when it cannot.
+// Starts a thread that runs Function(Argument). Returns null when it cannot.
 NmosThread* NmosOs_ThreadStart(void (*Function)(void*), void* Argument);
 
-// Waits for the thread to end and frees it.
+// Waits until the thread has ended, and frees it.
 void NmosOs_ThreadJoin(NmosThread* Thread);
 
+// Sleeps for the given number of milliseconds.
 void NmosOs_SleepMs(uint32_t Milliseconds);
 
-// Milliseconds of a clock that only runs forward.
+// Returns a time in milliseconds, for measuring intervals. It never goes back, even when
+// the clock of the computer is set.
 uint64_t NmosOs_MonotonicMs(void);
 
-// The time now in nanoseconds of TAI, since the epoch of PTP, as IS-04 and IS-05 count.
+// Returns the current time in TAI nanoseconds since the PTP epoch (1970), the time that
+// IS-04 and IS-05 use. It is the system clock plus a fixed TAI offset.
 uint64_t NmosOs_TaiNowNs(void);
 
-// Writes the time now as an IS-04 version, "<seconds>:<nanoseconds>" of TAI, into text,
-// which holds at least 32 characters. last holds the previous version in nanoseconds,
-// which the new one exceeds even within one tick of the clock; its owner guards it.
+// Makes a new IS-04 version stamp, "<seconds>:<nanoseconds>" of TAI time, and writes it
+// into Text, which holds at least 32 characters. *Last is the previous stamp in
+// nanoseconds; the new stamp is always later, even when the clock has not moved. The
+// caller guards *Last against other threads.
 void NmosOs_VersionNow(uint64_t* Last, char* Text, size_t Size);
 
-// Writes the address of this host that reaches host into address, as text; returns false
-// when host cannot be resolved or reached.
+// Finds the address of this computer that is used to reach Host, and writes it as text
+// into Address. Returns false when Host cannot be resolved or reached.
 bool NmosOs_AddressToward(const char* Host, char* Address, size_t Size);
 
-// An address of a network interface of the host, which is up: a port of a card of
-// DekTec among them, which the operating system has as a network interface too.
+// An address of a network interface of this computer that is up. A DekTec card's network
+// port is among them: the operating system sees it as a network interface too.
 typedef struct NmosInterface
 {
-    char Name[64];    // as the operating system names it, e.g. "eth0" or "Ethernet 2"
-    char PortId[18];  // its MAC address, as IS-04 writes it: "00-14-f4-00-00-01"
-    char Address[64]; // one address of IPv4 or IPv6 of the interface
+    char Name[64];    // its name in the operating system, e.g. "eth0" or "Ethernet 2"
+    char PortId[18];  // its MAC address as IS-04 writes it: "00-14-f4-00-00-01"
+    char Address[64]; // one IPv4 or IPv6 address of the interface
 } NmosInterface;
 
-// Returns the addresses of the network interfaces of the host, one entry for each, and
-// sets *Count to their number; returns null, *Count 0, when there are none or the
-// memory ran out. The caller frees the array. An interface without a MAC address, such
-// as loopback, has "00-00-00-00-00-00".
+// Lists the addresses of this computer's network interfaces, one entry per address, and
+// sets *Count to the number. Returns null and *Count 0 when there are none or memory runs
+// out. The caller frees the array. An interface without a MAC address, such as
+// loopback, has "00-00-00-00-00-00".
 NmosInterface* NmosOs_Interfaces(size_t* Count);
 
-// Returns a TCP port that is free on the address host now, or 0 when there is none.
+// Returns a TCP port that is free on the address Host right now, or 0 when there is none.
 uint16_t NmosOs_FreePort(const char* Host);
 
-// An IPv4 datagram socket, for the queries of multicast DNS.
+// An IPv4 UDP socket, for multicast DNS queries.
 typedef struct NmosUdp NmosUdp;
 
-// Opens a socket on a free port of bind_address, or of every address when it is null,
-// whose multicast leaves through the interface of interface_address, or of the default
-// route when it is null, with a hop limit of 255 and loopback. Returns null on failure.
+// Opens a UDP socket on a free port. Returns null on failure.
+//
+// BindAddress is the local address to bind to; null binds to every address.
+// InterfaceAddress selects the interface multicast is sent from; null uses the default
+// route. Multicast is sent with a hop limit of 255, and loops back to this computer.
 NmosUdp* NmosOs_UdpOpen(const char* BindAddress, const char* InterfaceAddress);
 
-// Returns the port the socket is bound to.
+// Returns the local port of the socket.
 uint16_t NmosOs_UdpPort(const NmosUdp* Udp);
 
-// Sends length bytes of data to address and port; returns false on failure.
+// Sends Length bytes to Address and Port. Returns false on failure.
 bool NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
                     size_t Length);
 
-// Waits up to timeout_ms for a datagram and receives it into buffer; returns its length,
-// 0 when none came in time, or -1 on failure. from_address, when not null, receives the
-// address of the sender as text, and from_port its port.
+// Waits up to TimeoutMs for a datagram and copies it into Buffer. Returns its length, 0
+// when none came in time, or -1 on failure. FromAddress, when not null, gets the
+// sender's address as text, and *FromPort, when not null, its port.
 int NmosOs_UdpReceive(NmosUdp* Udp, void* Buffer, size_t Size, uint32_t TimeoutMs,
                       char* FromAddress, size_t FromSize, uint16_t* FromPort);
 
+// Closes the socket.
 void NmosOs_UdpClose(NmosUdp* Udp);
 
-// Writes the first IPv4 DNS server of the host into server, and the domain it searches
-// into domain, as DHCP or the administrator gave them: of /etc/resolv.conf on POSIX, and
-// of the first adapter with a gateway on Windows. Each is left empty when the host has
-// none.
+// Finds this computer's DNS server and search domain, as DHCP or the administrator set
+// them. Server gets the first IPv4 DNS server, and Domain the domain searched. On POSIX
+// they come from /etc/resolv.conf; on Windows from the first adapter with a gateway.
+// Each is left empty when there is none.
 void NmosOs_SystemDns(char* Server, size_t ServerSize, char* Domain, size_t DomainSize);
