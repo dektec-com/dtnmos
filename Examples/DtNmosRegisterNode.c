@@ -5,13 +5,16 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Registers a node, its device, a video sender and a video receiver with a registry,
-// given with --registry or else one the node finds itself with DNS-SD, searching again
-// until it finds one, and serves the Node API and the Connection
-// API of IS-05 for --seconds. The sender sends the first flow of the SDP of --sdp, or a
-// flow of 1080p25 to 239.100.1.1:5004, from --address, which the receiver receives on:
-// with a card, the address of its network port. The IDs follow from --label, so that the
-// node keeps them when it starts again. Each activation a controller makes is printed:
+// Runs an NMOS node for --seconds: registers it, with a device, a video sender and a
+// video receiver, and serves its Node API and Connection API (IS-05), so that a
+// controller can connect them. The registry is the one at --registry, or one the node
+// finds on the network with DNS-SD, searching until it finds one.
+//
+// The sender describes the first stream of the SDP file --sdp, or by default 1080p25 to
+// 239.100.1.1:5004, sent from --address; the receiver receives on that address too. With
+// a card, give the address of its network port. The IDs are made from --label, so that
+// the node keeps them when it starts again. Each activation a controller makes is
+// printed; the program only prints, and sends or receives nothing:
 //
 //     node "dtnmos example" 6aac9516-..., registering with http://192.168.1.5:8010
 //     sender 9dfb9312-..., receiver a3b1ccff-...
@@ -21,8 +24,8 @@
 //     receiver a3b1ccff-...: stop receiving
 //     unregistered
 //
-// Needs dtnmos built with libcurl and with the server; without the server it registers
-// the node but serves no Connection API. Exits with 0 when the time is over, and 1 when
+// Needs dtnmos built with libcurl and the server; without the server it registers the
+// node but serves no Connection API. Exits with 0 when the time is over, and 1 when
 // a call failed.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -47,13 +50,14 @@ static const ExampleOption Options[] = {
     {"--verbose", false, "Prints what the node does"},
 };
 
-// The namespace of the IDs of this example's nodes, a version 4 UUID of its own.
+// The namespace of this example's node IDs, a version 4 UUID of its own.
 static const DtNmosId Namespace = {"7c1d5a40-2b6e-4f39-9e0a-58d3b1c4e2f7"};
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A program would configure what receives here, and fail with DtNmos_SetLastError()
-// when it cannot; this one prints what it would receive.
+// The receiver's callback, called when a controller connects or disconnects it. A real
+// program would set up its receiving here, and fail with DtNmos_SetLastError() when it
+// cannot; this one prints what it would receive.
 //
 static DtNmosResult ActivateReceiver(void* User, const DtNmosId* Receiver,
                                      const DtNmosReceiverActivation* Activation)
@@ -82,6 +86,9 @@ static DtNmosResult ActivateReceiver(void* User, const DtNmosId* Receiver,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
+// The sender's callback, called when a controller enables, disables or redirects it.
+// Prints where it would send to.
+//
 static DtNmosResult ActivateSender(void* User, const DtNmosId* Sender,
                                    const DtNmosSenderActivation* Activation)
 {
@@ -101,7 +108,7 @@ static DtNmosResult ActivateSender(void* User, const DtNmosId* Sender,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ApiHost -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Writes the host of the base URL of the APIs of the node into Address, of Size bytes.
+// Writes the host part of the node's API URL, its address, into Address, of Size bytes.
 //
 static void ApiHost(const DtNmosNode* Node, char* Address, size_t Size)
 {
@@ -124,7 +131,7 @@ static void ApiHost(const DtNmosNode* Node, char* Address, size_t Size)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DefaultFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A flow of 1080p25, 10-bit 4:2:2, to a multicast group.
+// Fills *Flow with the default stream: 1080p25, 10-bit 4:2:2, to a multicast group.
 //
 static void DefaultFlow(DtNmosFlow* Flow)
 {
@@ -155,9 +162,9 @@ static void DefaultFlow(DtNmosFlow* Flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Adds the device, the sender of Flow and a video receiver, which send from and receive
-// on Address, with IDs that follow from the ID of the node. Returns EXAMPLE_OK, or
-// EXAMPLE_FAILED having printed why.
+// Adds the device, a sender of Flow and a video receiver to the node. They send from and
+// receive on Address, and their IDs are made from the node's ID. Returns EXAMPLE_OK, or
+// EXAMPLE_FAILED after printing why.
 //
 static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
                   const DtNmosFlow* Flow, const char* Address)
@@ -210,8 +217,10 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Run -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// With the server, the node polls itself on a thread of its own, and the program only
-// waits; without it, the program polls, when the node asks to be.
+// Runs the node for Seconds: prints where it serves, and when it becomes registered. With
+// the server, the node polls itself on a thread of its own and the program only waits;
+// without it, the program polls the node when the node asks. Returns the program's exit
+// code.
 //
 static int Run(DtNmosNode* Node, int64_t Seconds)
 {

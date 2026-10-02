@@ -4,9 +4,9 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Prints the session and one line per flow, a media section: its media, where it is
-// sent, from where, and its format. With --write it writes the flows back as the SDP a
-// sender of dtnmos would give.
+// Reads an SDP file and prints its session and a line per stream (media section): its
+// media, where it is sent to and from, and its format. --write then writes the streams
+// back as SDP, as a dtnmos sender would give it.
 //
 //     session "Camera 1" from 192.168.1.10
 //     flow 0: video 239.10.1.1:5004 from 192.168.1.10, PT 96, 1920x1080i 25/1 ...
@@ -31,7 +31,7 @@ static const ExampleOption Options[] = {
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PrintFormat -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Prints the format of Flow, which its media says how to read.
+// Prints the format of Flow, which depends on its media.
 //
 static void PrintFormat(const DtNmosFlow* Flow)
 {
@@ -70,8 +70,11 @@ static void PrintFormat(const DtNmosFlow* Flow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteBack -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// DtNmosSdp_Write with no buffer reports the size the text needs, with
-// DTNMOS_E_BUFFER_TOO_SMALL; the second call fills a buffer of that size.
+// Writes the streams of Sdp back as SDP text and prints it. Returns the program's exit
+// code.
+//
+// The first DtNmosSdp_Write, without a buffer, asks for the size the text needs; it
+// returns DTNMOS_E_BUFFER_TOO_SMALL. The second call fills a buffer of that size.
 //
 static int WriteBack(const DtNmosSdp* Sdp)
 {

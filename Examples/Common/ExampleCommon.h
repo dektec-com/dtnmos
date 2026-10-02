@@ -43,14 +43,14 @@ typedef struct ExampleOption
 bool Example_CheckArguments(int Argc, char** Argv, const char* Usage,
                             const ExampleOption* Options, int NumOptions);
 
-// True when the lone option Name is on the command line.
+// Returns whether the option Name, which takes no value, is on the command line.
 bool Example_HasFlag(int Argc, char** Argv, const char* Name);
 
 // Reads option Name as a decimal integer into *Value, which is left alone when the option
 // is not given. Prints the problem and returns false for a value that is not an integer.
 bool Example_Int64(int Argc, char** Argv, const char* Name, int64_t* Value);
 
-// The value of option Name, or null when it is not given.
+// Returns the value of option Name, or NULL when it is not given.
 const char* Example_Value(int Argc, char** Argv, const char* Name);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Helpers +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -59,17 +59,18 @@ const char* Example_Value(int Argc, char** Argv, const char* Name);
 // EXAMPLE_FAILED.
 int Example_Failed(const char* What, DtNmosResult Result);
 
-// Finds a registry of Service with DNS-SD and writes the base URL of the first usable
-// one into Url of Size bytes. Returns EXAMPLE_OK, EXAMPLE_NOTHING when none was found, or
-// EXAMPLE_FAILED, having printed why.
+// Searches the network for a registry of Service with DNS-SD, and writes the base URL
+// of the most preferred usable one into Url, of Size bytes. Returns EXAMPLE_OK,
+// EXAMPLE_NOTHING when none was found, or EXAMPLE_FAILED after printing why.
 int Example_FindRegistry(DtNmosService Service, char* Url, size_t Size);
 
-// A DtNmosLogFunc that prints warnings and errors, and the rest too when User is not
-// null.
+// A DtNmosLogFunc that prints warnings and errors, and all other messages too when User
+// is not NULL.
 void Example_Log(void* User, DtNmosLogLevel Level, const char* Message);
 
-// Reads the file at Path into *Text, with a terminating null, which the caller frees, and
-// its length into *Length. Prints the problem and returns false when it cannot.
+// Reads the file at Path into a new buffer *Text, with a null at its end, for the caller
+// to free, and sets *Length to its length. Returns false, after printing why, when it
+// cannot.
 bool Example_ReadFile(const char* Path, char** Text, size_t* Length);
 
 // Sleeps for about Ms milliseconds.

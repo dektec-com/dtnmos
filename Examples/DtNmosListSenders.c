@@ -4,10 +4,10 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Asks the Query API of a registry, given with --registry or found with DNS-SD, for its
-// senders, and with --receivers for its receivers too, and prints one line for each: its
-// ID, its media, its label and its transport, and for a receiver the sender it is
-// subscribed to. With --sdp it fetches and prints the SDP of each sender that has one.
+// Lists the senders an NMOS registry knows, and with --receivers its receivers too. The
+// registry is the one at --registry, or one found on the network with DNS-SD. Prints a
+// line for each: its ID, media, label and transport, and for a receiver the sender it is
+// connected to. --sdp also downloads and prints the SDP of each sender that has one.
 //
 //     senders of http://192.168.1.5:8010:
 //       9dfb9312-...  video  "dtnmos example sender"  urn:x-nmos:transport:rtp.mcast
@@ -33,6 +33,8 @@ static const ExampleOption Options[] = {
 };
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ListReceivers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Prints a line for each receiver of the registry. Returns the program's exit code.
 //
 static int ListReceivers(DtNmosQuery* Query)
 {
@@ -61,9 +63,11 @@ static int ListReceivers(DtNmosQuery* Query)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ListSenders -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The SDP of a sender is fetched into a buffer of 8 KB, which one fits with room; for a
-// longer one DtNmosQuery_SenderManifest fails with DTNMOS_E_BUFFER_TOO_SMALL and gives
-// the size it needs.
+// Prints a line for each sender of the registry at Url, and with PrintSdp its SDP.
+// Returns the program's exit code.
+//
+// The SDP is downloaded into a buffer of 8 KB, which is ample. For a longer SDP,
+// DtNmosQuery_SenderManifest returns DTNMOS_E_BUFFER_TOO_SMALL and the size it needs.
 //
 static int ListSenders(DtNmosQuery* Query, const char* Url, bool PrintSdp)
 {

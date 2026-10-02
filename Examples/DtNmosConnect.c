@@ -4,10 +4,11 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Finds the receiver and the sender, each by its ID or its label, in a registry given
-// with --registry or found with DNS-SD, and activates the receiver with the sender and
-// its SDP through the Connection API of IS-05 of the receiver's node. With --disconnect
-// it disconnects the receiver instead.
+// Connects a receiver to a sender, as an NMOS controller does: the receiver starts
+// receiving what the sender sends. Both are given by ID or label, and found in the
+// registry at --registry, or in one found on the network with DNS-SD. The program asks
+// the receiver's node, through its Connection API (IS-05), to activate the receiver with
+// the sender's SDP. --disconnect disconnects the receiver instead.
 //
 //     connected receiver a3b1ccff-... ("dtnmos example receiver") to sender 9dfb9312-...
 //     ("dtnmos example sender")
@@ -34,6 +35,9 @@ static const ExampleOption Options[] = {
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Connect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
+// Connects Receiver to Sender, prints what was connected and, with PrintSdp, the SDP
+// the receiver was given. Returns the program's exit code.
+//
 static int Connect(DtNmosQuery* Query, const char* Receiver, const char* Sender,
                    bool PrintSdp)
 {
@@ -56,6 +60,8 @@ static int Connect(DtNmosQuery* Query, const char* Receiver, const char* Sender,
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Disconnect -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Disconnects Receiver and prints it. Returns the program's exit code.
 //
 static int Disconnect(DtNmosQuery* Query, const char* Receiver)
 {

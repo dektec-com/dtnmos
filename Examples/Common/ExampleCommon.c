@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*# ExampleCommon.c *#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - What the example programs share - Implementation
+// dtnmos - What the example programs share: arguments, files and finding a registry
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
@@ -30,7 +30,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindOption -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The option named Name, or null when the program has none.
+// Returns the option called Name among Options, or NULL when the program has none.
 //
 static const ExampleOption* FindOption(const char* Name, const ExampleOption* Options,
                                        int NumOptions)
@@ -46,6 +46,8 @@ static const ExampleOption* FindOption(const char* Name, const ExampleOption* Op
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PrintUsage -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Prints what the program does and its options, for --help.
 //
 static void PrintUsage(const char* Program, const char* Usage,
                        const ExampleOption* Options, int NumOptions)
@@ -100,7 +102,8 @@ int Example_Failed(const char* What, DtNmosResult Result)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Example_FindRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The list comes sorted, the usable registries first, in the order of their priority.
+// DtNmos_Discover() returns the usable registries first, the most preferred first, so
+// the program takes the first.
 //
 int Example_FindRegistry(DtNmosService Service, char* Url, size_t Size)
 {
