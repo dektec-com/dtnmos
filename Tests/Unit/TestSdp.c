@@ -679,6 +679,63 @@ NMOS_TEST(FlowCopyOutlivesItsSdp)
     DtNmosFlow_Free(NULL);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ValuesAreEnums -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Every value of each list turns into its enum and back into the same text; a value the
+// list has not, null and "" are _OTHER, whose text is "", as is that of a number outside
+// the enum.
+NMOS_TEST(ValuesAreEnums)
+{
+    for (int i = 0; i <= DTNMOS_SAMPLING_KEY; ++i)
+    {
+        const DtNmosSampling Value = (DtNmosSampling)i;
+        NMOS_ASSERT_EQ(DtNmosSampling_FromText(DtNmosSampling_Text(Value)), Value);
+    }
+    for (int i = 0; i <= DTNMOS_COLORIMETRY_ALPHA; ++i)
+    {
+        const DtNmosColorimetry Value = (DtNmosColorimetry)i;
+        NMOS_ASSERT_EQ(DtNmosColorimetry_FromText(DtNmosColorimetry_Text(Value)), Value);
+    }
+    for (int i = 0; i <= DTNMOS_TCS_UNSPECIFIED; ++i)
+    {
+        NMOS_ASSERT_EQ(DtNmosTcs_FromText(DtNmosTcs_Text((DtNmosTcs)i)), (DtNmosTcs)i);
+    }
+    for (int i = 0; i <= DTNMOS_RANGE_FULL; ++i)
+    {
+        NMOS_ASSERT_EQ(DtNmosRange_FromText(DtNmosRange_Text((DtNmosRange)i)),
+                       (DtNmosRange)i);
+    }
+    for (int i = 0; i <= DTNMOS_PACKING_MODE_BLOCK; ++i)
+    {
+        const DtNmosPackingMode Value = (DtNmosPackingMode)i;
+        NMOS_ASSERT_EQ(DtNmosPackingMode_FromText(DtNmosPackingMode_Text(Value)), Value);
+    }
+    for (int i = 0; i <= DTNMOS_TRANSMITTER_TYPE_WIDE; ++i)
+    {
+        const DtNmosTransmitterType Value = (DtNmosTransmitterType)i;
+        NMOS_ASSERT_EQ(DtNmosTransmitterType_FromText(DtNmosTransmitterType_Text(Value)),
+                       Value);
+    }
+    for (int i = 0; i <= DTNMOS_AUDIO_ENCODING_AM824; ++i)
+    {
+        const DtNmosAudioEncoding Value = (DtNmosAudioEncoding)i;
+        NMOS_ASSERT_EQ(DtNmosAudioEncoding_FromText(DtNmosAudioEncoding_Text(Value)),
+                       Value);
+    }
+
+    NMOS_ASSERT_STR(DtNmosSampling_Text(DTNMOS_SAMPLING_YCBCR_422), "YCbCr-4:2:2");
+    NMOS_ASSERT_STR(DtNmosColorimetry_Text(DTNMOS_COLORIMETRY_ST2065_1), "ST2065-1");
+    NMOS_ASSERT_STR(DtNmosTransmitterType_Text(DTNMOS_TRANSMITTER_TYPE_NARROW_LINEAR),
+                    "2110TPNL");
+    NMOS_ASSERT_EQ(DtNmosSampling_FromText("YCbCr-4:2:2"), DTNMOS_SAMPLING_YCBCR_422);
+    NMOS_ASSERT_EQ(DtNmosSampling_FromText("ycbcr-4:2:2"), DTNMOS_SAMPLING_OTHER);
+    NMOS_ASSERT_EQ(DtNmosTcs_FromText("ST2115LOGS4"), DTNMOS_TCS_OTHER);
+    NMOS_ASSERT_EQ(DtNmosRange_FromText(NULL), DTNMOS_RANGE_OTHER);
+    NMOS_ASSERT_EQ(DtNmosRange_FromText(""), DTNMOS_RANGE_OTHER);
+    NMOS_ASSERT_STR(DtNmosRange_Text(DTNMOS_RANGE_OTHER), "");
+    NMOS_ASSERT_STR(DtNmosRange_Text((DtNmosRange)99), "");
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFormatTakesDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // The colorimetry of an empty format follows its raster, SD, HD or UHD, whatever its
@@ -730,4 +787,5 @@ NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio)
                NMOS_RUN(SdpNamesThePathsOfEachPair), NMOS_RUN(FlowIsCopiedWithAssignment),
                NMOS_RUN(SdpReadsTheFormsOfTsRefclk),
                NMOS_RUN(SdpRefusesAValueLongerThanItsField),
-               NMOS_RUN(FlowCopyOutlivesItsSdp), NMOS_RUN(VideoFormatTakesDefaults))
+               NMOS_RUN(FlowCopyOutlivesItsSdp), NMOS_RUN(ValuesAreEnums),
+               NMOS_RUN(VideoFormatTakesDefaults))

@@ -80,6 +80,7 @@ add_library(
   Source/Query/DtNmosSubscription.c
   Source/Sdp/NmosFlow.c
   Source/Sdp/DtNmosSdpParse.c
+  Source/Sdp/DtNmosSdpValues.c
   Source/Sdp/DtNmosSdpWrite.c)
 add_library(dtnmos::dtnmos ALIAS dtnmos)
 # The headers, public and internal, are added to the target as well, so that an IDE shows

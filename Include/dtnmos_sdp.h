@@ -25,6 +25,96 @@ typedef enum DtNmosMedia
     DTNMOS_MEDIA_OTHER = 99            // anything else, with its encoding and raw fmtp
 } DtNmosMedia;
 
+// The values ST 2110 lists for the text fields of a flow, as enums beside the text, which
+// the fields keep so that a value of a later edition or of another maker passes through
+// unchanged. Each has _FromText(), which gives _OTHER for null, empty or a value it does
+// not know, and _Text(), which gives the SDP's spelling, or "" for _OTHER.
+
+// sampling, ST 2110-20 §7.4.1.
+typedef enum DtNmosSampling
+{
+    DTNMOS_SAMPLING_OTHER = 0,
+    DTNMOS_SAMPLING_YCBCR_444,   // YCbCr-4:4:4
+    DTNMOS_SAMPLING_YCBCR_422,   // YCbCr-4:2:2
+    DTNMOS_SAMPLING_YCBCR_420,   // YCbCr-4:2:0
+    DTNMOS_SAMPLING_CLYCBCR_444, // CLYCbCr-4:4:4, constant luminance
+    DTNMOS_SAMPLING_CLYCBCR_422, // CLYCbCr-4:2:2
+    DTNMOS_SAMPLING_CLYCBCR_420, // CLYCbCr-4:2:0
+    DTNMOS_SAMPLING_ICTCP_444,   // ICtCp-4:4:4
+    DTNMOS_SAMPLING_ICTCP_422,   // ICtCp-4:2:2
+    DTNMOS_SAMPLING_ICTCP_420,   // ICtCp-4:2:0
+    DTNMOS_SAMPLING_RGB,         // RGB
+    DTNMOS_SAMPLING_XYZ,         // XYZ
+    DTNMOS_SAMPLING_KEY          // KEY, a key (alpha) signal
+} DtNmosSampling;
+
+// colorimetry, ST 2110-20 §7.5.
+typedef enum DtNmosColorimetry
+{
+    DTNMOS_COLORIMETRY_OTHER = 0,
+    DTNMOS_COLORIMETRY_BT601,
+    DTNMOS_COLORIMETRY_BT709,
+    DTNMOS_COLORIMETRY_BT2020,
+    DTNMOS_COLORIMETRY_BT2100,
+    DTNMOS_COLORIMETRY_ST2065_1, // ST2065-1, ACES
+    DTNMOS_COLORIMETRY_ST2065_3, // ST2065-3, ADX
+    DTNMOS_COLORIMETRY_UNSPECIFIED,
+    DTNMOS_COLORIMETRY_XYZ,
+    DTNMOS_COLORIMETRY_ALPHA // of a key signal
+} DtNmosColorimetry;
+
+// TCS, the transfer characteristic system, ST 2110-20 §7.6; SDR when absent.
+typedef enum DtNmosTcs
+{
+    DTNMOS_TCS_OTHER = 0,
+    DTNMOS_TCS_SDR,
+    DTNMOS_TCS_PQ,
+    DTNMOS_TCS_HLG,
+    DTNMOS_TCS_LINEAR,
+    DTNMOS_TCS_BT2100LINPQ,
+    DTNMOS_TCS_BT2100LINHLG,
+    DTNMOS_TCS_ST2065_1, // ST2065-1
+    DTNMOS_TCS_ST428_1,  // ST428-1
+    DTNMOS_TCS_DENSITY,
+    DTNMOS_TCS_ST2115LOGS3,
+    DTNMOS_TCS_UNSPECIFIED
+} DtNmosTcs;
+
+// RANGE, ST 2110-20 §7.3; NARROW when absent.
+typedef enum DtNmosRange
+{
+    DTNMOS_RANGE_OTHER = 0,
+    DTNMOS_RANGE_NARROW,
+    DTNMOS_RANGE_FULLPROTECT,
+    DTNMOS_RANGE_FULL
+} DtNmosRange;
+
+// PM, the packing mode, ST 2110-20 §6.3.
+typedef enum DtNmosPackingMode
+{
+    DTNMOS_PACKING_MODE_OTHER = 0,
+    DTNMOS_PACKING_MODE_GENERAL, // 2110GPM
+    DTNMOS_PACKING_MODE_BLOCK    // 2110BPM
+} DtNmosPackingMode;
+
+// TP, the type of a sender, ST 2110-21 §7.1.
+typedef enum DtNmosTransmitterType
+{
+    DTNMOS_TRANSMITTER_TYPE_OTHER = 0,
+    DTNMOS_TRANSMITTER_TYPE_NARROW,        // 2110TPN
+    DTNMOS_TRANSMITTER_TYPE_NARROW_LINEAR, // 2110TPNL
+    DTNMOS_TRANSMITTER_TYPE_WIDE           // 2110TPW
+} DtNmosTransmitterType;
+
+// The encoding of an audio flow, ST 2110-30 and -31.
+typedef enum DtNmosAudioEncoding
+{
+    DTNMOS_AUDIO_ENCODING_OTHER = 0,
+    DTNMOS_AUDIO_ENCODING_L16,
+    DTNMOS_AUDIO_ENCODING_L24,
+    DTNMOS_AUDIO_ENCODING_AM824
+} DtNmosAudioEncoding;
+
 // The sizes of the strings of a flow, each the longest value the standards allow and its
 // terminating null, with room. The parser refuses a value that does not fit.
 #define DTNMOS_MAX_SHORT_SIZE 16 // PM, TP, TM, an audio encoding
@@ -191,6 +281,20 @@ typedef struct DtNmosSession
 // A parsed SDP: its session and its flows, which it owns with their strings.
 typedef struct DtNmosSdp DtNmosSdp;
 
+// The audio encoding of Text, or DTNMOS_AUDIO_ENCODING_OTHER.
+DTNMOS_API DtNmosAudioEncoding DtNmosAudioEncoding_FromText(const char* Text);
+
+// The SDP's spelling of AudioEncoding, or "" for DTNMOS_AUDIO_ENCODING_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosAudioEncoding_Text(DtNmosAudioEncoding AudioEncoding);
+
+// The colorimetry of Text, or DTNMOS_COLORIMETRY_OTHER.
+DTNMOS_API DtNmosColorimetry DtNmosColorimetry_FromText(const char* Text);
+
+// The SDP's spelling of Colorimetry, or "" for DTNMOS_COLORIMETRY_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosColorimetry_Text(DtNmosColorimetry Colorimetry);
+
 // Makes *Copy a copy of Flow that owns its strings and arrays, ChannelOrder, Fmtp,
 // DidSdid and RefClock.Text, so that it stays valid after what Flow came from is gone:
 // a flow a node passes to a callback, or one of an SDP that is freed. Frees it with
@@ -205,6 +309,27 @@ DTNMOS_API void DtNmosFlow_Free(DtNmosFlow* Flow);
 
 // Returns the name of a media, e.g. "video"; a static string.
 DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia Media);
+
+// The packing mode of Text, or DTNMOS_PACKING_MODE_OTHER.
+DTNMOS_API DtNmosPackingMode DtNmosPackingMode_FromText(const char* Text);
+
+// The SDP's spelling of PackingMode, or "" for DTNMOS_PACKING_MODE_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosPackingMode_Text(DtNmosPackingMode PackingMode);
+
+// The range of Text, or DTNMOS_RANGE_OTHER.
+DTNMOS_API DtNmosRange DtNmosRange_FromText(const char* Text);
+
+// The SDP's spelling of Range, or "" for DTNMOS_RANGE_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosRange_Text(DtNmosRange Range);
+
+// The sampling of Text, or DTNMOS_SAMPLING_OTHER.
+DTNMOS_API DtNmosSampling DtNmosSampling_FromText(const char* Text);
+
+// The SDP's spelling of Sampling, or "" for DTNMOS_SAMPLING_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosSampling_Text(DtNmosSampling Sampling);
 
 // Returns the flow at Index, in the order of the media sections, or null past them;
 // valid, with its strings, until the SDP is freed.
@@ -235,6 +360,20 @@ DTNMOS_API const DtNmosSession* DtNmosSdp_Session(const DtNmosSdp* Sdp);
 DTNMOS_API DtNmosResult DtNmosSdp_Write(const DtNmosSession* Session,
                                         const DtNmosFlow* Flows, size_t Count,
                                         char* Buffer, size_t* Size);
+
+// The transfer characteristic system of Text, or DTNMOS_TCS_OTHER.
+DTNMOS_API DtNmosTcs DtNmosTcs_FromText(const char* Text);
+
+// The SDP's spelling of Tcs, or "" for DTNMOS_TCS_OTHER; a static
+// string.
+DTNMOS_API const char* DtNmosTcs_Text(DtNmosTcs Tcs);
+
+// The transmitter type of Text, or DTNMOS_TRANSMITTER_TYPE_OTHER.
+DTNMOS_API DtNmosTransmitterType DtNmosTransmitterType_FromText(const char* Text);
+
+// The SDP's spelling of TransmitterType, or "" for DTNMOS_TRANSMITTER_TYPE_OTHER; a
+// static string.
+DTNMOS_API const char* DtNmosTransmitterType_Text(DtNmosTransmitterType TransmitterType);
 
 // Fills an empty Colorimetry and Tcs of format with what its raster has when nothing
 // says otherwise: by the height of the active picture, which tells SD, HD and UHD apart
