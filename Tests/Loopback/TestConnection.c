@@ -41,6 +41,11 @@ typedef struct NmosActivations
     DtNmosResult Answer;
     int Registrations; // of the registry: POSTs of a resource
     char LastRegistered[16];
+    // Called from within the receiver's callback when it is not null, as a second request
+    // that comes in while an activation is applied.
+    void (*During)(struct NmosActivations* Seen);
+    DtNmosNode* Node;
+    int DuringStatus;
 } NmosActivations;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -80,6 +85,10 @@ static DtNmosResult ActivateReceiver(void* User, const DtNmosId* Receiver,
     snprintf(Seen->ReceivesFrom, sizeof(Seen->ReceivesFrom), "%s",
              Activation->Flow.SourceIp);
     snprintf(Seen->SenderId, sizeof(Seen->SenderId), "%s", Activation->SenderId.Text);
+    if (Seen->During != NULL)
+    {
+        Seen->During(Seen);
+    }
     return Seen->Answer;
 }
 
@@ -384,6 +393,50 @@ NMOS_TEST(ConnectionConnectsAReceiver)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PatchWhileApplied -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A PATCH of the receiver that comes in while its callback applies an activation; it
+// is asked once.
+//
+static void PatchWhileApplied(NmosActivations* Seen)
+{
+    Seen->During = NULL;
+    Seen->DuringStatus =
+        Ask(Seen->Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+            "{\"master_enable\": false, "
+            "\"activation\": {\"mode\": \"activate_immediate\"}}",
+            NULL);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.- ConnectionRefusesAPatchWhileApplying -.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// While the callback of a receiver applies an activation, which cannot be taken back,
+// another PATCH of it is answered with 423, and is taken once the activation is done.
+NMOS_TEST(ConnectionRefusesAPatchWhileApplying)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    Seen.Node = Node;
+    Seen.During = PatchWhileApplied;
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+                       ConnectReceiver, NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.DuringStatus, 423);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 1);
+    NMOS_ASSERT(Seen.ReceiverEnabled);
+
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+                       "{\"master_enable\": false, "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 2);
+    NMOS_ASSERT(!Seen.ReceiverEnabled);
+    DtNmosNode_Free(Node);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersCorsAndTheTarget -.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Every answer carries the headers of CORS, with PATCH among the methods, and a
@@ -579,7 +632,7 @@ NMOS_TEST(ConnectionRefusesBadPatches)
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionResolvesAuto -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionResolvesAuto -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // "auto" is staged where IS-05 allows it, and the active parameters hold what it stands
 // for: the addresses of the ports of the config, and the ports of the flows.
@@ -677,7 +730,7 @@ static void ActivationMode(DtNmosNode* Node, const char* Leaf, char* Mode, size_
     NmosJson_Free(Json);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionSchedulesActivations -.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionSchedulesActivations -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A scheduled activation is answered with 202, locks the staged parameters but for a
 // PATCH that cancels it, and is applied by the poll when it is due.
@@ -731,7 +784,7 @@ NMOS_TEST(ConnectionSchedulesActivations)
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersBulk -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersBulk -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // The bulk interface applies each patch as a PATCH of its own would, and answers the
 // status and error of each.
@@ -772,4 +825,5 @@ NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionRefusesBadPatches),
                NMOS_RUN(ConnectionAnswersCorsAndTheTarget),
                NMOS_RUN(ConnectionResolvesAuto), NMOS_RUN(ConnectionSchedulesActivations),
-               NMOS_RUN(ConnectionAnswersBulk))
+               NMOS_RUN(ConnectionAnswersBulk),
+               NMOS_RUN(ConnectionRefusesAPatchWhileApplying))

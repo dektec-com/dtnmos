@@ -48,6 +48,7 @@ typedef struct NmosConnection
 {
     NmosParameters Staged;
     NmosParameters Active;
+    int Applying; // An activation's callback runs, which a PATCH meanwhile is refused for
 } NmosConnection;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -67,7 +68,7 @@ static char* CopyText(const char* Text)
     return Copy;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-. IsAuto .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsAuto -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Whether an address the node chooses is left to it: "auto", or null.
 //
@@ -834,7 +835,8 @@ static void MakeActive(DtNmosNode* Node, NmosConnection* c, NmosNodeSender* s,
 //
 // Answers a PATCH, Body, of the staged parameters of the sender or receiver Id: with 200
 // and the activation that took place, or with 202 and the one that is scheduled. While
-// one is scheduled, only a PATCH that cancels it is taken.
+// one is scheduled, only a PATCH that cancels it is taken; while a callback applies one,
+// none is, as what it applies cannot be taken back (423).
 //
 static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJson* Body,
                       DtNmosHttpResponse* Response)
@@ -857,7 +859,14 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
     NmosNodeSender* s = NULL;
     NmosNodeReceiver* r = NULL;
     NmosConnection* c = FindConnection(Node, Id, Sender, &s, &r);
-    if (c != NULL && c->Staged.DueNs != 0 && !Cancels)
+    if (c != NULL && c->Applying)
+    {
+        // The callback is applying an activation, which cannot be taken back; the PATCH
+        // waits for it to end, a cancel included.
+        Status = 423;
+        Failure = "An activation is being applied; try again when it has taken place.";
+    }
+    else if (c != NULL && c->Staged.DueNs != 0 && !Cancels)
     {
         Status = 423;
         Failure = "An activation is scheduled; a PATCH with an activation of mode null "
@@ -890,6 +899,12 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
         Status = 500;
         Failure = "Out of memory.";
     }
+    const int Calls =
+        Failure == NULL && (a.SenderCallback != NULL || a.ReceiverCallback != NULL);
+    if (Calls)
+    {
+        c->Applying = 1;
+    }
     NmosNode_Unlock(Node);
 
     // The callback applies the activation without the lock, for as long as that takes. A
@@ -914,16 +929,20 @@ static void PatchJson(DtNmosNode* Node, const char* Id, int Sender, const NmosJs
 
     NmosBuffer b;
     memset(&b, 0, sizeof(b));
-    if (Failure == NULL)
+    if (Calls || Failure == NULL)
     {
         NmosNode_Lock(Node);
         c = FindConnection(Node, Id, Sender, &s, &r);
-        if (c == NULL)
+        if (c != NULL)
+        {
+            c->Applying = 0;
+        }
+        if (Failure == NULL && c == NULL)
         {
             Status = 404;
             Failure = "The sender or receiver was removed during its activation.";
         }
-        else
+        else if (Failure == NULL)
         {
             if (Activate == NMOS_ACTIVATE_NOW)
             {
@@ -1044,7 +1063,7 @@ static void PostBulk(DtNmosNode* Node, int Sender, const DtNmosHttpRequest* Requ
     NmosBuffer_Free(&b);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindDue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindDue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Finds a sender or receiver whose scheduled activation is due at NowNs; sets *NextNs to
 // the time of the first that is not due yet, when one is sooner. The caller holds the
@@ -1079,7 +1098,7 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
 // The margin before a scheduled activation within which the poll waits for it itself.
 #define NMOS_DUE_SPIN_NS 3000000u
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
 {
@@ -1126,6 +1145,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
                                   ? GatherActivation(s, r, &Staged, &a)
                                   : "Out of memory.";
         c->Staged.DueNs = 0;
+        c->Applying = Failure == NULL;
         NmosNode_Unlock(Node);
 
         NmosError_Clear();
@@ -1154,6 +1174,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
         if (c != NULL)
         {
             // The staged parameters show no activation once it took place, or failed.
+            c->Applying = 0;
             c->Staged.Mode[0] = '\0';
             c->Staged.RequestedTime[0] = '\0';
             c->Staged.ActivationTime[0] = '\0';

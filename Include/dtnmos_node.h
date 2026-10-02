@@ -136,7 +136,9 @@ typedef struct DtNmosSenderActivation
 // the controller with. It is called without the lock of the node, and may block for as
 // long as applying takes: on the thread that handles the request for an immediate
 // activation, and in DtNmosNode_Poll() for a scheduled one, when it is due; the failure
-// of a scheduled one goes to the log.
+// of a scheduled one goes to the log. While it runs, a PATCH of the same sender or
+// receiver is answered with 423, as what the callback applies cannot be taken back; the
+// callback is never called twice at once for one sender or receiver.
 typedef DtNmosResult (*DtNmosReceiverActivateFunc)(
     void* User, const DtNmosId* Receiver, const DtNmosReceiverActivation* Activation);
 
