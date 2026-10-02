@@ -277,6 +277,10 @@ NMOS_TEST(NodeIsOpenedClosedAndOpenedAgain)
     NMOS_ASSERT(Node != NULL);
     NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
     NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+    DtNmosId Id;
+    NMOS_ASSERT(DtNmosNode_Id(Node, &Id) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Id.Text, NODE_ID);
+    NMOS_ASSERT(DtNmosNode_Id(Node, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 
     // Closing deletes what the node registered, and leaves it closed.
     const int Registered = Registry.Count;
@@ -287,6 +291,7 @@ NMOS_TEST(NodeIsOpenedClosedAndOpenedAgain)
     NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_E_STATE);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "needs an open node") != NULL);
     NMOS_ASSERT(DtNmosNode_Close(Node) == DTNMOS_E_STATE);
+    NMOS_ASSERT(DtNmosNode_Id(Node, &Id) == DTNMOS_E_STATE);
 
     // Opened again with a config, the same handle starts empty, and opens only once.
     DtNmosNodeConfig Config;

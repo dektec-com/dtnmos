@@ -484,7 +484,7 @@ static void WriteInterfaces(const DtNmosNode* Node, NmosBuffer* b)
     free(List);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteBindings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteBindings -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Writes the interface bindings of a sender or receiver of the one leg on Address: the
 // name of the interface of the host that has it, or none when no interface has it.
@@ -717,7 +717,7 @@ void NmosNode_WriteReceiver(const NmosNodeReceiver* Receiver, NmosBuffer* b)
     NmosBuffer_Printf(b, ", \"active\": %s}}", Receiver->MasterEnable ? "true" : "false");
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsAddress -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_IsAddress -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 bool NmosNode_IsAddress(const char* Address)
 {
@@ -904,7 +904,7 @@ static void TouchDevice(DtNmosNode* Node, const DtNmosId* Id)
     NmosNode_Touch(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_Touch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_Touch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void NmosNode_Touch(DtNmosNode* Node)
 {
@@ -1490,6 +1490,27 @@ static void MarkRegistered(DtNmosNode* Node, const NmosPending* p)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Id -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The ID is set when the node opens and stays until it closes, so it is read without the
+// lock.
+//
+DtNmosResult DtNmosNode_Id(const DtNmosNode* Node, DtNmosId* Id)
+{
+    const DtNmosResult Open = NmosNode_CheckOpen(Node, "DtNmosNode_Id");
+    if (Open != DTNMOS_OK)
+    {
+        return Open;
+    }
+    if (Id == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosNode_Id() needs a place for the ID.");
+    }
+    *Id = Node->Id;
+    return DTNMOS_OK;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_IsRegistered -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 bool DtNmosNode_IsRegistered(const DtNmosNode* Node)
@@ -1593,7 +1614,7 @@ static void MarkFailed(DtNmosNode* Node)
     }
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeFound -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeFound -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Moves a node without a registry to the most preferred usable one its search found that
 // has not failed yet, so that it goes down the list and never back to one that failed;

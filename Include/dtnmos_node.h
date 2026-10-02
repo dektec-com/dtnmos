@@ -215,6 +215,11 @@ DTNMOS_API DtNmosResult DtNmosNode_Handle(DtNmosNode* Node,
                                           const DtNmosHttpRequest* Request,
                                           DtNmosHttpResponse* Response);
 
+// Writes the ID of the node, that of its config, into *Id, so that a caller derives the
+// IDs of its devices, senders and receivers from it with DtNmosId_FromName(). Fails with
+// DTNMOS_E_INVALID_ARGUMENT for a null Id.
+DTNMOS_API DtNmosResult DtNmosNode_Id(const DtNmosNode* Node, DtNmosId* Id);
+
 // Whether the registry holds the node and everything it has.
 DTNMOS_API bool DtNmosNode_IsRegistered(const DtNmosNode* Node);
 
