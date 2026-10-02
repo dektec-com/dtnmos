@@ -381,6 +381,8 @@ static void WriteFlow(NmosBuffer* Buffer, const DtNmosFlow* Flow, size_t Pair)
     case DTNMOS_MEDIA_OTHER:
         WriteOther(Buffer, Flow);
         break;
+    case DTNMOS_MEDIA_NONE: // refused before
+        break;
     }
     WriteRefClock(Buffer, &Flow->RefClock);
     if (Flow->MediaClockDirect)
@@ -424,6 +426,11 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
             return NmosError_Fail(
                 DTNMOS_E_INVALID_ARGUMENT,
                 "Flow %zu of the SDP needs a destination address and port.", i);
+        }
+        if (Flows[i].Media == DTNMOS_MEDIA_NONE)
+        {
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "Flow %zu of the SDP has no Media.", i);
         }
         if (Flows[i].Media == DTNMOS_MEDIA_AUDIO &&
             DtNmosAudioEncoding_Text(Flows[i].Format.Audio.Encoding)[0] == '\0')

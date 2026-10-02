@@ -1144,6 +1144,8 @@ static DtNmosResult BuildFlow(NmosParser* p, const NmosSection* s, DtNmosFlow* F
         }
         return DTNMOS_OK;
     }
+    case DTNMOS_MEDIA_NONE: // MediaOf() never gives it
+        break;
     }
     return DTNMOS_OK;
 }

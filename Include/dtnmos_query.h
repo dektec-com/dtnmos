@@ -297,6 +297,7 @@ DTNMOS_API const char* DtNmosSubscription_Url(const DtNmosSubscription* Subscrip
 
 typedef enum DtNmosService
 {
+    DTNMOS_SERVICE_NONE = 0,     // not given; refused
     DTNMOS_SERVICE_QUERY,        // _nmos-query._tcp, the Query API
     DTNMOS_SERVICE_REGISTRATION, // _nmos-register._tcp, the Registration API
 } DtNmosService;

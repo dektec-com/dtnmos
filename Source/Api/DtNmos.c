@@ -72,6 +72,8 @@ const char* DtNmosMedia_Name(DtNmosMedia Media)
 {
     switch (Media)
     {
+    case DTNMOS_MEDIA_NONE:
+        return "none";
     case DTNMOS_MEDIA_VIDEO:
         return "video";
     case DTNMOS_MEDIA_AUDIO:

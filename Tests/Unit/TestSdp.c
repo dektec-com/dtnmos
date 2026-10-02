@@ -398,6 +398,8 @@ static bool FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
     case DTNMOS_MEDIA_OTHER:
         return Same(a->Format.Other.Encoding, b->Format.Other.Encoding) &&
                Same(a->Format.Other.Fmtp, b->Format.Other.Fmtp);
+    case DTNMOS_MEDIA_NONE: // no format to compare
+        return true;
     }
     return false;
 }
@@ -590,6 +592,11 @@ NMOS_TEST(SdpRefusesToWriteAnIncompleteFlow)
     Size = sizeof(Text);
     NMOS_ASSERT(DtNmosSdp_Write(&Session, Flows, 2, Text, &Size) == DTNMOS_OK);
     NMOS_ASSERT(strstr(Text, "a=group:DUP primary secondary\r\n") != NULL);
+    Flows[0].Media = DTNMOS_MEDIA_NONE;
+    Size = sizeof(Text);
+    NMOS_ASSERT(DtNmosSdp_Write(&Session, Flows, 1, Text, &Size) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(strstr(DtNmos_GetLastError(), "no Media") != NULL);
     DtNmosSession Empty = {0};
     Empty.Size = sizeof(Empty);
     Size = sizeof(Text);

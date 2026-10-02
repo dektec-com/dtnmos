@@ -15,13 +15,16 @@ extern "C"
 {
 #endif
 
-// What a media section carries, from the encoding of its a=rtpmap.
+// What a media section carries, from the encoding of its a=rtpmap. An enum a program
+// fills has _NONE as 0, so that a field it forgets is refused rather than read as a
+// value.
 typedef enum DtNmosMedia
 {
-    DTNMOS_MEDIA_VIDEO = 0,            // ST 2110-20, uncompressed video: raw (RFC 4175)
-    DTNMOS_MEDIA_AUDIO = 1,            // ST 2110-30 and -31: L16, L24 or AM824
-    DTNMOS_MEDIA_COMPRESSED_VIDEO = 2, // ST 2110-22: jxsv, JPEG XS (RFC 9134)
-    DTNMOS_MEDIA_ANC = 3,              // ST 2110-40: smpte291, ancillary data (RFC 8331)
+    DTNMOS_MEDIA_NONE = 0,             // not given; refused where a media is needed
+    DTNMOS_MEDIA_VIDEO = 1,            // ST 2110-20, uncompressed video: raw (RFC 4175)
+    DTNMOS_MEDIA_AUDIO = 2,            // ST 2110-30 and -31: L16, L24 or AM824
+    DTNMOS_MEDIA_COMPRESSED_VIDEO = 3, // ST 2110-22: jxsv, JPEG XS (RFC 9134)
+    DTNMOS_MEDIA_ANC = 4,              // ST 2110-40: smpte291, ancillary data (RFC 8331)
     DTNMOS_MEDIA_OTHER = 99            // anything else, with its encoding and raw fmtp
 } DtNmosMedia;
 
