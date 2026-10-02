@@ -40,13 +40,15 @@ static void PrintFormat(const DtNmosFlow* Flow)
         const DtNmosVideoFormat* Video = &Flow->Format.Video;
         printf("%ux%u%s %u/%u %s %u bit", (unsigned)Video->Width, (unsigned)Video->Height,
                Video->Interlaced ? "i" : "p", (unsigned)Video->RateNumerator,
-               (unsigned)Video->RateDenominator, Video->Sampling, (unsigned)Video->Depth);
+               (unsigned)Video->RateDenominator, DtNmosSampling_Text(Video->Sampling),
+               (unsigned)Video->Depth);
     }
     else if (Flow->Media == DTNMOS_MEDIA_AUDIO)
     {
         const DtNmosAudioFormat* Audio = &Flow->Format.Audio;
-        printf("%s %u Hz %u ch, %u us", Audio->Encoding, (unsigned)Audio->SampleRate,
-               (unsigned)Audio->Channels, (unsigned)(Audio->PacketTimeNs / 1000));
+        printf("%s %u Hz %u ch, %u us", DtNmosAudioEncoding_Text(Audio->Encoding),
+               (unsigned)Audio->SampleRate, (unsigned)Audio->Channels,
+               (unsigned)(Audio->PacketTimeNs / 1000));
     }
     else if (Flow->Media == DTNMOS_MEDIA_COMPRESSED_VIDEO)
     {

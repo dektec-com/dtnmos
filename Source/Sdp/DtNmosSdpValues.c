@@ -13,21 +13,22 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Tables -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Each table holds the spelling of each value of its enum, in the order of the enum, the
-// first, of _OTHER, empty. The SDP's values are compared as they are written, case and
-// all, as the standards spell them.
+// first two, of _NONE and _OTHER, empty. The SDP's values are compared as they are
+// written, case and all, as the standards spell them.
 //
 
-static const char* const AudioEncodings[] = {"", "L16", "L24", "AM824"};
+static const char* const AudioEncodings[] = {"", "", "L16", "L24", "AM824"};
 
 static const char* const Colorimetries[] = {
-    "",         "BT601",    "BT709",       "BT2020", "BT2100",
-    "ST2065-1", "ST2065-3", "UNSPECIFIED", "XYZ",    "ALPHA"};
+    "",         "",         "BT601",       "BT709", "BT2020", "BT2100",
+    "ST2065-1", "ST2065-3", "UNSPECIFIED", "XYZ",   "ALPHA"};
 
-static const char* const PackingModes[] = {"", "2110GPM", "2110BPM"};
+static const char* const PackingModes[] = {"", "", "2110GPM", "2110BPM"};
 
-static const char* const Ranges[] = {"", "NARROW", "FULLPROTECT", "FULL"};
+static const char* const Ranges[] = {"", "", "NARROW", "FULLPROTECT", "FULL"};
 
 static const char* const Samplings[] = {"",
+                                        "",
                                         "YCbCr-4:4:4",
                                         "YCbCr-4:2:2",
                                         "YCbCr-4:2:0",
@@ -41,19 +42,19 @@ static const char* const Samplings[] = {"",
                                         "XYZ",
                                         "KEY"};
 
-static const char* const Tcss[] = {
-    "",        "SDR",         "PQ",           "HLG",
-    "LINEAR",  "BT2100LINPQ", "BT2100LINHLG", "ST2065-1",
-    "ST428-1", "DENSITY",     "ST2115LOGS3",  "UNSPECIFIED"};
+static const char* const Tcss[] = {"",           "",        "SDR",         "PQ",
+                                   "HLG",        "LINEAR",  "BT2100LINPQ", "BT2100LINHLG",
+                                   "ST2065-1",   "ST428-1", "DENSITY",     "ST2115LOGS3",
+                                   "UNSPECIFIED"};
 
-static const char* const TransmitterTypes[] = {"", "2110TPN", "2110TPNL", "2110TPW"};
+static const char* const TransmitterTypes[] = {"", "", "2110TPN", "2110TPNL", "2110TPW"};
 
 #define NMOS_COUNT(Table) (sizeof(Table) / sizeof((Table)[0]))
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IndexOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The index of Text in Table, of Count spellings, or 0, that of _OTHER, for null, empty
-// or one it does not have.
+// The index of Text in Table, of Count spellings: 0, that of _NONE, for null or empty,
+// and 1, that of _OTHER, for one it does not have.
 //
 static int IndexOf(const char* const* Table, size_t Count, const char* Text)
 {
@@ -61,23 +62,24 @@ static int IndexOf(const char* const* Table, size_t Count, const char* Text)
     {
         return 0;
     }
-    for (size_t i = 1; i < Count; ++i)
+    for (size_t i = 2; i < Count; ++i)
     {
         if (strcmp(Table[i], Text) == 0)
         {
             return (int)i;
         }
     }
-    return 0;
+    return 1;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TextOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The spelling at Index in Table, of Count spellings, or "" for one outside it.
+// The spelling at Index in Table, of Count spellings, or "" for _NONE, _OTHER and one
+// outside it.
 //
 static const char* TextOf(const char* const* Table, size_t Count, int Index)
 {
-    return Index > 0 && (size_t)Index < Count ? Table[Index] : "";
+    return Index > 1 && (size_t)Index < Count ? Table[Index] : "";
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosAudioEncoding_FromText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-

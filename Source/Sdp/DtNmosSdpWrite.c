@@ -130,6 +130,20 @@ static void EndFmtp(NmosFmtpWriter* Writer)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteOthers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Writes the parameters dtnmos does not know as they are, after those it knows.
+//
+static void WriteOthers(NmosFmtpWriter* Writer, const char* Others)
+{
+    if (Others == NULL || Others[0] == '\0')
+    {
+        return;
+    }
+    Separate(Writer);
+    NmosBuffer_Append(Writer->Buffer, Others, strlen(Others));
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static void WriteVideo(NmosBuffer* Buffer, const DtNmosFlow* Flow)
@@ -138,19 +152,20 @@ static void WriteVideo(NmosBuffer* Buffer, const DtNmosFlow* Flow)
     NmosBuffer_Printf(Buffer, "a=rtpmap:%u raw/%u\r\n", (unsigned)Flow->PayloadType,
                       (unsigned)Flow->ClockRate);
     NmosFmtpWriter Writer = {Buffer, Flow->PayloadType, 0};
-    WriteText(&Writer, "sampling", Video->Sampling);
+    WriteText(&Writer, "sampling", DtNmosSampling_Text(Video->Sampling));
     WriteNumber(&Writer, "width", Video->Width);
     WriteNumber(&Writer, "height", Video->Height);
     WriteRate(&Writer, Video->RateNumerator, Video->RateDenominator);
     WriteNumber(&Writer, "depth", Video->Depth);
-    WriteText(&Writer, "TCS", Video->Tcs);
-    WriteText(&Writer, "colorimetry", Video->Colorimetry);
-    WriteText(&Writer, "RANGE", Video->Range);
-    WriteText(&Writer, "PM", Video->PackingMode);
+    WriteText(&Writer, "TCS", DtNmosTcs_Text(Video->Tcs));
+    WriteText(&Writer, "colorimetry", DtNmosColorimetry_Text(Video->Colorimetry));
+    WriteText(&Writer, "RANGE", DtNmosRange_Text(Video->Range));
+    WriteText(&Writer, "PM", DtNmosPackingMode_Text(Video->PackingMode));
     WriteText(&Writer, "SSN", Video->Ssn);
-    WriteText(&Writer, "TP", Video->TransmitterType);
+    WriteText(&Writer, "TP", DtNmosTransmitterType_Text(Video->TransmitterType));
     WriteFlag(&Writer, "interlace", Video->Interlaced);
     WriteFlag(&Writer, "segmented", Video->Segmented);
+    WriteOthers(&Writer, Video->OtherParameters);
     EndFmtp(&Writer);
 }
 
@@ -167,16 +182,16 @@ static void WriteCompressed(NmosBuffer* Buffer, const DtNmosFlow* Flow)
     WriteText(&Writer, "profile", Video->Profile);
     WriteText(&Writer, "level", Video->Level);
     WriteText(&Writer, "sublevel", Video->Sublevel);
-    WriteText(&Writer, "sampling", Video->Sampling);
+    WriteText(&Writer, "sampling", DtNmosSampling_Text(Video->Sampling));
     WriteNumber(&Writer, "width", Video->Width);
     WriteNumber(&Writer, "height", Video->Height);
     WriteRate(&Writer, Video->RateNumerator, Video->RateDenominator);
     WriteNumber(&Writer, "depth", Video->Depth);
-    WriteText(&Writer, "TCS", Video->Tcs);
-    WriteText(&Writer, "colorimetry", Video->Colorimetry);
-    WriteText(&Writer, "RANGE", Video->Range);
+    WriteText(&Writer, "TCS", DtNmosTcs_Text(Video->Tcs));
+    WriteText(&Writer, "colorimetry", DtNmosColorimetry_Text(Video->Colorimetry));
+    WriteText(&Writer, "RANGE", DtNmosRange_Text(Video->Range));
     WriteText(&Writer, "SSN", Video->Ssn);
-    WriteText(&Writer, "TP", Video->TransmitterType);
+    WriteText(&Writer, "TP", DtNmosTransmitterType_Text(Video->TransmitterType));
     if (Video->TransmissionMode != 1)
     {
         Separate(&Writer);
@@ -184,6 +199,7 @@ static void WriteCompressed(NmosBuffer* Buffer, const DtNmosFlow* Flow)
     }
     WriteFlag(&Writer, "interlace", Video->Interlaced);
     WriteFlag(&Writer, "segmented", Video->Segmented);
+    WriteOthers(&Writer, Video->OtherParameters);
     EndFmtp(&Writer);
 }
 
@@ -215,10 +231,11 @@ static void WriteAudio(NmosBuffer* Buffer, const DtNmosFlow* Flow)
 {
     const DtNmosAudioFormat* Audio = &Flow->Format.Audio;
     NmosBuffer_Printf(Buffer, "a=rtpmap:%u %s/%u/%u\r\n", (unsigned)Flow->PayloadType,
-                      Audio->Encoding, (unsigned)Audio->SampleRate,
-                      (unsigned)Audio->Channels);
+                      DtNmosAudioEncoding_Text(Audio->Encoding),
+                      (unsigned)Audio->SampleRate, (unsigned)Audio->Channels);
     NmosFmtpWriter Writer = {Buffer, Flow->PayloadType, 0};
     WriteText(&Writer, "channel-order", Audio->ChannelOrder);
+    WriteOthers(&Writer, Audio->OtherParameters);
     EndFmtp(&Writer);
     if (Audio->PacketTimeNs != 0)
     {
@@ -408,6 +425,12 @@ DtNmosResult NmosSdp_Write(const DtNmosSession* Session, const DtNmosFlow* Flows
                 DTNMOS_E_INVALID_ARGUMENT,
                 "Flow %zu of the SDP needs a destination address and port.", i);
         }
+        if (Flows[i].Media == DTNMOS_MEDIA_AUDIO &&
+            DtNmosAudioEncoding_Text(Flows[i].Format.Audio.Encoding)[0] == '\0')
+        {
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "Flow %zu is audio and needs L16, L24 or AM824.", i);
+        }
         if (Flows[i].Leg == 1)
         {
             if (i == 0 || Flows[i - 1].Leg != 0)
@@ -511,15 +534,14 @@ void DtNmosVideoFormat_SetDefaults(DtNmosVideoFormat* Format)
     {
         return;
     }
-    if (Format->Colorimetry[0] == '\0' && Format->Height != 0)
+    if (Format->Colorimetry == DTNMOS_COLORIMETRY_NONE && Format->Height != 0)
     {
-        const char* Colorimetry = Format->Height <= 576    ? "BT601"
-                                  : Format->Height <= 1080 ? "BT709"
-                                                           : "BT2020";
-        snprintf(Format->Colorimetry, sizeof(Format->Colorimetry), "%s", Colorimetry);
+        Format->Colorimetry = Format->Height <= 576    ? DTNMOS_COLORIMETRY_BT601
+                              : Format->Height <= 1080 ? DTNMOS_COLORIMETRY_BT709
+                                                       : DTNMOS_COLORIMETRY_BT2020;
     }
-    if (Format->Tcs[0] == '\0')
+    if (Format->Tcs == DTNMOS_TCS_NONE)
     {
-        snprintf(Format->Tcs, sizeof(Format->Tcs), "SDR");
+        Format->Tcs = DTNMOS_TCS_SDR;
     }
 }

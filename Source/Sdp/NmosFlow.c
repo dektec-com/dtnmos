@@ -44,8 +44,19 @@ DtNmosResult NmosFlow_Copy(DtNmosFlow* Target, NmosStore* Store, const DtNmosFlo
     switch (Source->Media)
     {
     case DTNMOS_MEDIA_AUDIO:
-        Copied = Copied && CopyText(&Copy.Format.Audio.ChannelOrder, Store,
-                                    Source->Format.Audio.ChannelOrder);
+        Copied = Copied &&
+                 CopyText(&Copy.Format.Audio.ChannelOrder, Store,
+                          Source->Format.Audio.ChannelOrder) &&
+                 CopyText(&Copy.Format.Audio.OtherParameters, Store,
+                          Source->Format.Audio.OtherParameters);
+        break;
+    case DTNMOS_MEDIA_VIDEO:
+        Copied = Copied && CopyText(&Copy.Format.Video.OtherParameters, Store,
+                                    Source->Format.Video.OtherParameters);
+        break;
+    case DTNMOS_MEDIA_COMPRESSED_VIDEO:
+        Copied = Copied && CopyText(&Copy.Format.CompressedVideo.OtherParameters, Store,
+                                    Source->Format.CompressedVideo.OtherParameters);
         break;
     case DTNMOS_MEDIA_ANC:
         if (Source->Format.Anc.DidSdidCount > 0)

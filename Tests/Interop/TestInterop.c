@@ -175,12 +175,12 @@ static void StartNode(NmosInteropNode* Interop, bool Searches)
     Video->RateNumerator = 25;
     Video->RateDenominator = 1;
     Video->Depth = 10;
-    snprintf(Video->Sampling, sizeof(Video->Sampling), "YCbCr-4:2:2");
-    snprintf(Video->Colorimetry, sizeof(Video->Colorimetry), "BT709");
-    snprintf(Video->Tcs, sizeof(Video->Tcs), "SDR");
-    snprintf(Video->PackingMode, sizeof(Video->PackingMode), "2110GPM");
+    Video->Sampling = DTNMOS_SAMPLING_YCBCR_422;
+    Video->Colorimetry = DTNMOS_COLORIMETRY_BT709;
+    Video->Tcs = DTNMOS_TCS_SDR;
+    Video->PackingMode = DTNMOS_PACKING_MODE_GENERAL;
     snprintf(Video->Ssn, sizeof(Video->Ssn), "ST2110-20:2017");
-    snprintf(Video->TransmitterType, sizeof(Video->TransmitterType), "2110TPN");
+    Video->TransmitterType = DTNMOS_TRANSMITTER_TYPE_NARROW;
 
     DtNmosSenderConfig Sender;
     memset(&Sender, 0, sizeof(Sender));

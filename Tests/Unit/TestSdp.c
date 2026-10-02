@@ -131,12 +131,14 @@ NMOS_TEST(SdpReadsVideoOnTwoPaths)
     NMOS_ASSERT_EQ(Video->RateDenominator, 1001);
     NMOS_ASSERT_EQ(Video->Depth, 10);
     NMOS_ASSERT(!Video->Interlaced);
-    NMOS_ASSERT_STR(Video->Sampling, "YCbCr-4:2:2");
-    NMOS_ASSERT_STR(Video->Colorimetry, "BT709");
-    NMOS_ASSERT_STR(Video->Tcs, "SDR");
-    NMOS_ASSERT_STR(Video->PackingMode, "2110GPM");
+    NMOS_ASSERT_EQ(Video->Sampling, DTNMOS_SAMPLING_YCBCR_422);
+    NMOS_ASSERT_EQ(Video->Colorimetry, DTNMOS_COLORIMETRY_BT709);
+    NMOS_ASSERT_EQ(Video->Tcs, DTNMOS_TCS_SDR);
+    NMOS_ASSERT_EQ(Video->Range, DTNMOS_RANGE_NONE);
+    NMOS_ASSERT_EQ(Video->PackingMode, DTNMOS_PACKING_MODE_GENERAL);
     NMOS_ASSERT_STR(Video->Ssn, "ST2110-20:2017");
-    NMOS_ASSERT_STR(Video->TransmitterType, "2110TPN");
+    NMOS_ASSERT_EQ(Video->TransmitterType, DTNMOS_TRANSMITTER_TYPE_NARROW);
+    NMOS_ASSERT(Video->OtherParameters == NULL);
 
     const DtNmosFlow* Secondary = DtNmosSdp_Flow(Sdp, 1);
     NMOS_ASSERT_EQ(Secondary->Leg, 1);
@@ -160,7 +162,7 @@ NMOS_TEST(SdpReadsAudio)
     NMOS_ASSERT_STR(Flow->SourceIp, "");
     NMOS_ASSERT_EQ(Flow->MediaClockOffset, 1234);
     const DtNmosAudioFormat* Audio = &Flow->Format.Audio;
-    NMOS_ASSERT_STR(Audio->Encoding, "L24");
+    NMOS_ASSERT_EQ(Audio->Encoding, DTNMOS_AUDIO_ENCODING_L24);
     NMOS_ASSERT_EQ(Audio->SampleRate, 48000);
     NMOS_ASSERT_EQ(Audio->Channels, 8);
     NMOS_ASSERT_EQ(Audio->PacketTimeNs, 125000);
@@ -187,8 +189,8 @@ NMOS_TEST(SdpReadsCompressedVideo)
     NMOS_ASSERT_EQ(Video->BandwidthKbps, 116000);
     NMOS_ASSERT_EQ(Video->Width, 1920);
     NMOS_ASSERT_EQ(Video->RateDenominator, 1001);
-    NMOS_ASSERT_STR(Video->Range, "FULL");
-    NMOS_ASSERT_STR(Video->TransmitterType, "2110TPNL");
+    NMOS_ASSERT_EQ(Video->Range, DTNMOS_RANGE_FULL);
+    NMOS_ASSERT_EQ(Video->TransmitterType, DTNMOS_TRANSMITTER_TYPE_NARROW_LINEAR);
     DtNmosSdp_Free(Sdp);
 }
 
@@ -252,7 +254,7 @@ NMOS_TEST(SdpTakesDefaultsOfTheSession)
     NMOS_ASSERT_EQ(Flow->RefClock.Kind, DTNMOS_REFCLOCK_LOCALMAC);
     NMOS_ASSERT_STR(Flow->RefClock.LocalMac, "CA-FE-01-02-03-04");
     NMOS_ASSERT_EQ(Flow->MediaClockOffset, 5);
-    NMOS_ASSERT_STR(Flow->Format.Audio.Encoding, "L16");
+    NMOS_ASSERT_EQ(Flow->Format.Audio.Encoding, DTNMOS_AUDIO_ENCODING_L16);
     NMOS_ASSERT_EQ(Flow->Format.Audio.PacketTimeNs, 1000000);
     NMOS_ASSERT_STR(DtNmosSdp_Session(Sdp)->OriginIp, "fd00::5");
     DtNmosSdp_Free(Sdp);
@@ -351,18 +353,20 @@ static bool FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
                x->RateNumerator == y->RateNumerator &&
                x->RateDenominator == y->RateDenominator &&
                x->Interlaced == y->Interlaced && x->Segmented == y->Segmented &&
-               x->Depth == y->Depth && Same(x->Sampling, y->Sampling) &&
-               Same(x->Colorimetry, y->Colorimetry) && Same(x->Tcs, y->Tcs) &&
-               Same(x->Range, y->Range) && Same(x->PackingMode, y->PackingMode) &&
-               Same(x->Ssn, y->Ssn) && Same(x->TransmitterType, y->TransmitterType);
+               x->Depth == y->Depth && x->Sampling == y->Sampling &&
+               x->Colorimetry == y->Colorimetry && x->Tcs == y->Tcs &&
+               x->Range == y->Range && x->PackingMode == y->PackingMode &&
+               Same(x->Ssn, y->Ssn) && x->TransmitterType == y->TransmitterType &&
+               Same(x->OtherParameters, y->OtherParameters);
     }
     case DTNMOS_MEDIA_AUDIO:
     {
         const DtNmosAudioFormat* x = &a->Format.Audio;
         const DtNmosAudioFormat* y = &b->Format.Audio;
-        return Same(x->Encoding, y->Encoding) && x->SampleRate == y->SampleRate &&
+        return x->Encoding == y->Encoding && x->SampleRate == y->SampleRate &&
                x->Channels == y->Channels && x->PacketTimeNs == y->PacketTimeNs &&
-               Same(x->ChannelOrder, y->ChannelOrder);
+               Same(x->ChannelOrder, y->ChannelOrder) &&
+               Same(x->OtherParameters, y->OtherParameters);
     }
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
     {
@@ -371,9 +375,11 @@ static bool FlowsEqual(const DtNmosFlow* a, const DtNmosFlow* b)
         return Same(x->Encoding, y->Encoding) && x->Width == y->Width &&
                x->Height == y->Height && x->RateNumerator == y->RateNumerator &&
                x->RateDenominator == y->RateDenominator && x->Depth == y->Depth &&
-               Same(x->Sampling, y->Sampling) && Same(x->Profile, y->Profile) &&
+               x->Sampling == y->Sampling && Same(x->Profile, y->Profile) &&
                Same(x->Level, y->Level) && Same(x->Sublevel, y->Sublevel) &&
-               Same(x->Range, y->Range) && Same(x->Ssn, y->Ssn) &&
+               x->Range == y->Range && x->Tcs == y->Tcs &&
+               x->TransmitterType == y->TransmitterType && Same(x->Ssn, y->Ssn) &&
+               Same(x->OtherParameters, y->OtherParameters) &&
                x->PacketMode == y->PacketMode &&
                x->TransmissionMode == y->TransmissionMode &&
                x->BandwidthKbps == y->BandwidthKbps;
@@ -444,6 +450,70 @@ NMOS_TEST(SdpWritesWhatItReadsBack)
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- SdpKeepsAValueItDoesNotKnow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A value of a later edition is _OTHER, and a parameter dtnmos does not know is kept;
+// both are in OtherParameters as they were written, are written back as they were read,
+// and stay in a copy of the flow. A parameter not given is _NONE and stays out of what
+// is written. An audio flow keeps the parameters it does not know too, and needs an
+// encoding to be written.
+NMOS_TEST(SdpKeepsAValueItDoesNotKnow)
+{
+    DtNmosSdp* Sdp =
+        Parse("v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
+              "m=video 5000 RTP/AVP 96\nc=IN IP4 239.0.0.1/64\n"
+              "a=rtpmap:96 raw/90000\n"
+              "a=fmtp:96 sampling=YCbCr-4:2:2; width=1920; height=1080; "
+              "exactframerate=25; depth=10; TCS=ST2115LOGS9; colorimetry=BT709; "
+              "PM=2110XPM; TROFF=37; SSN=ST2110-20:2017; vendor-flag\n"
+              "m=audio 5002 RTP/AVP 97\nc=IN IP4 239.0.0.2/64\n"
+              "a=rtpmap:97 L24/48000/2\n"
+              "a=fmtp:97 channel-order=SMPTE2110.(ST); MAXUDP=8960\n");
+    NMOS_ASSERT(Sdp != NULL);
+    if (Sdp == NULL)
+    {
+        return;
+    }
+    DtNmosFlow Flow = *DtNmosSdp_Flow(Sdp, 0);
+    NMOS_ASSERT_EQ(Flow.Format.Video.Tcs, DTNMOS_TCS_OTHER);
+    NMOS_ASSERT_EQ(Flow.Format.Video.PackingMode, DTNMOS_PACKING_MODE_OTHER);
+    NMOS_ASSERT_STR(Flow.Format.Video.OtherParameters,
+                    "TCS=ST2115LOGS9; PM=2110XPM; TROFF=37; vendor-flag");
+    NMOS_ASSERT_EQ(Flow.Format.Video.Range, DTNMOS_RANGE_NONE);
+    NMOS_ASSERT_EQ(Flow.Format.Video.TransmitterType, DTNMOS_TRANSMITTER_TYPE_NONE);
+    const DtNmosFlow* Audio = DtNmosSdp_Flow(Sdp, 1);
+    NMOS_ASSERT_STR(Audio->Format.Audio.OtherParameters, "MAXUDP=8960");
+    char Text[1024];
+    size_t Size = sizeof(Text);
+    NMOS_ASSERT(DtNmosSdp_Write(DtNmosSdp_Session(Sdp), &Flow, 1, Text, &Size) ==
+                DTNMOS_OK);
+    NMOS_ASSERT(strstr(Text, "TCS=ST2115LOGS9; PM=2110XPM; TROFF=37; vendor-flag") !=
+                NULL);
+    NMOS_ASSERT(strstr(Text, "sampling=YCbCr-4:2:2") != NULL);
+    NMOS_ASSERT(strstr(Text, "TCS=SDR") == NULL);
+    NMOS_ASSERT(strstr(Text, "RANGE") == NULL);
+    NMOS_ASSERT(strstr(Text, "TP=") == NULL);
+
+    Flow.Media = DTNMOS_MEDIA_AUDIO;
+    memset(&Flow.Format.Audio, 0, sizeof(Flow.Format.Audio));
+    Size = sizeof(Text);
+    NMOS_ASSERT(DtNmosSdp_Write(DtNmosSdp_Session(Sdp), &Flow, 1, Text, &Size) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(strstr(DtNmos_GetLastError(), "L16, L24 or AM824") != NULL);
+
+    DtNmosFlow* Copy = NULL;
+    NMOS_ASSERT_EQ(DtNmosFlow_Copy(DtNmosSdp_Flow(Sdp, 0), &Copy), DTNMOS_OK);
+    const char* Original = DtNmosSdp_Flow(Sdp, 0)->Format.Video.OtherParameters;
+    NMOS_ASSERT(Copy != NULL && Copy->Format.Video.OtherParameters != Original);
+    DtNmosSdp_Free(Sdp);
+    if (Copy != NULL)
+    {
+        NMOS_ASSERT_STR(Copy->Format.Video.OtherParameters,
+                        "TCS=ST2115LOGS9; PM=2110XPM; TROFF=37; vendor-flag");
+    }
+    DtNmosFlow_Free(Copy);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SdpWritesAnAudioSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 NMOS_TEST(SdpWritesAnAudioSender)
@@ -465,7 +535,7 @@ NMOS_TEST(SdpWritesAnAudioSender)
     snprintf(Flow.RefClock.LocalMac, sizeof(Flow.RefClock.LocalMac), "%s",
              "00-14-F4-01-02-03");
     Flow.MediaClockDirect = 1;
-    snprintf(Flow.Format.Audio.Encoding, sizeof(Flow.Format.Audio.Encoding), "%s", "L24");
+    Flow.Format.Audio.Encoding = DTNMOS_AUDIO_ENCODING_L24;
     Flow.Format.Audio.SampleRate = 48000;
     Flow.Format.Audio.Channels = 2;
     Flow.Format.Audio.PacketTimeNs = 1000000;
@@ -642,16 +712,30 @@ NMOS_TEST(SdpReadsTheFormsOfTsRefclk)
 // .-.-.-.-.-.-.-.-.-.-.-.- SdpRefusesAValueLongerThanItsField -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A value of a=fmtp longer than its field, which no standard allows, fails the parse and
-// names the line and the parameter.
+// names the line and the parameter. A long value of a parameter an enum reads is one the
+// enum does not know, which the flow keeps.
 NMOS_TEST(SdpRefusesAValueLongerThanItsField)
 {
-    CheckError(
-        "v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
-        "m=video 5000 RTP/AVP 96\nc=IN IP4 239.0.0.1/64\n"
-        "a=rtpmap:96 raw/90000\n"
-        "a=fmtp:96 sampling=YCbCr-4:2:2-and-far-more-than-it-may-be\n",
-        DTNMOS_E_PARSE,
-        "SDP line 8: a=fmtp has a value longer than its standard allows: 'sampling'");
+    CheckError("v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
+               "m=video 5000 RTP/AVP 96\nc=IN IP4 239.0.0.1/64\n"
+               "a=rtpmap:96 raw/90000\n"
+               "a=fmtp:96 SSN=ST2110-20:2017-and-far-more-than-it-may-be\n",
+               DTNMOS_E_PARSE,
+               "SDP line 8: a=fmtp has a value longer than its standard allows: 'SSN'");
+    DtNmosSdp* Sdp =
+        Parse("v=0\no=- 1 1 IN IP4 10.0.0.1\ns=x\nt=0 0\n"
+              "m=video 5000 RTP/AVP 96\nc=IN IP4 239.0.0.1/64\n"
+              "a=rtpmap:96 raw/90000\n"
+              "a=fmtp:96 sampling=YCbCr-4:2:2-and-far-more-than-it-may-be\n");
+    NMOS_ASSERT(Sdp != NULL);
+    if (Sdp != NULL)
+    {
+        const DtNmosVideoFormat* Video = &DtNmosSdp_Flow(Sdp, 0)->Format.Video;
+        NMOS_ASSERT_EQ(Video->Sampling, DTNMOS_SAMPLING_OTHER);
+        NMOS_ASSERT_STR(Video->OtherParameters,
+                        "sampling=YCbCr-4:2:2-and-far-more-than-it-may-be");
+    }
+    DtNmosSdp_Free(Sdp);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FlowCopyOutlivesItsSdp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -681,42 +765,42 @@ NMOS_TEST(FlowCopyOutlivesItsSdp)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ValuesAreEnums -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Every value of each list turns into its enum and back into the same text; a value the
-// list has not, null and "" are _OTHER, whose text is "", as is that of a number outside
-// the enum.
+// Every value of each list turns into its enum and back into the same text; null and ""
+// are _NONE, a value the list has not _OTHER, and the text of both is "", as is that of
+// a number outside the enum.
 NMOS_TEST(ValuesAreEnums)
 {
-    for (int i = 0; i <= DTNMOS_SAMPLING_KEY; ++i)
+    for (int i = 2; i <= DTNMOS_SAMPLING_KEY; ++i)
     {
         const DtNmosSampling Value = (DtNmosSampling)i;
         NMOS_ASSERT_EQ(DtNmosSampling_FromText(DtNmosSampling_Text(Value)), Value);
     }
-    for (int i = 0; i <= DTNMOS_COLORIMETRY_ALPHA; ++i)
+    for (int i = 2; i <= DTNMOS_COLORIMETRY_ALPHA; ++i)
     {
         const DtNmosColorimetry Value = (DtNmosColorimetry)i;
         NMOS_ASSERT_EQ(DtNmosColorimetry_FromText(DtNmosColorimetry_Text(Value)), Value);
     }
-    for (int i = 0; i <= DTNMOS_TCS_UNSPECIFIED; ++i)
+    for (int i = 2; i <= DTNMOS_TCS_UNSPECIFIED; ++i)
     {
         NMOS_ASSERT_EQ(DtNmosTcs_FromText(DtNmosTcs_Text((DtNmosTcs)i)), (DtNmosTcs)i);
     }
-    for (int i = 0; i <= DTNMOS_RANGE_FULL; ++i)
+    for (int i = 2; i <= DTNMOS_RANGE_FULL; ++i)
     {
         NMOS_ASSERT_EQ(DtNmosRange_FromText(DtNmosRange_Text((DtNmosRange)i)),
                        (DtNmosRange)i);
     }
-    for (int i = 0; i <= DTNMOS_PACKING_MODE_BLOCK; ++i)
+    for (int i = 2; i <= DTNMOS_PACKING_MODE_BLOCK; ++i)
     {
         const DtNmosPackingMode Value = (DtNmosPackingMode)i;
         NMOS_ASSERT_EQ(DtNmosPackingMode_FromText(DtNmosPackingMode_Text(Value)), Value);
     }
-    for (int i = 0; i <= DTNMOS_TRANSMITTER_TYPE_WIDE; ++i)
+    for (int i = 2; i <= DTNMOS_TRANSMITTER_TYPE_WIDE; ++i)
     {
         const DtNmosTransmitterType Value = (DtNmosTransmitterType)i;
         NMOS_ASSERT_EQ(DtNmosTransmitterType_FromText(DtNmosTransmitterType_Text(Value)),
                        Value);
     }
-    for (int i = 0; i <= DTNMOS_AUDIO_ENCODING_AM824; ++i)
+    for (int i = 2; i <= DTNMOS_AUDIO_ENCODING_AM824; ++i)
     {
         const DtNmosAudioEncoding Value = (DtNmosAudioEncoding)i;
         NMOS_ASSERT_EQ(DtNmosAudioEncoding_FromText(DtNmosAudioEncoding_Text(Value)),
@@ -730,8 +814,9 @@ NMOS_TEST(ValuesAreEnums)
     NMOS_ASSERT_EQ(DtNmosSampling_FromText("YCbCr-4:2:2"), DTNMOS_SAMPLING_YCBCR_422);
     NMOS_ASSERT_EQ(DtNmosSampling_FromText("ycbcr-4:2:2"), DTNMOS_SAMPLING_OTHER);
     NMOS_ASSERT_EQ(DtNmosTcs_FromText("ST2115LOGS4"), DTNMOS_TCS_OTHER);
-    NMOS_ASSERT_EQ(DtNmosRange_FromText(NULL), DTNMOS_RANGE_OTHER);
-    NMOS_ASSERT_EQ(DtNmosRange_FromText(""), DTNMOS_RANGE_OTHER);
+    NMOS_ASSERT_EQ(DtNmosRange_FromText(NULL), DTNMOS_RANGE_NONE);
+    NMOS_ASSERT_EQ(DtNmosRange_FromText(""), DTNMOS_RANGE_NONE);
+    NMOS_ASSERT_STR(DtNmosRange_Text(DTNMOS_RANGE_NONE), "");
     NMOS_ASSERT_STR(DtNmosRange_Text(DTNMOS_RANGE_OTHER), "");
     NMOS_ASSERT_STR(DtNmosRange_Text((DtNmosRange)99), "");
 }
@@ -747,10 +832,12 @@ NMOS_TEST(VideoFormatTakesDefaults)
     {
         uint32_t Width;
         uint32_t Height;
-        const char* Colorimetry;
-    } Cases[] = {{720, 486, "BT601"},   {720, 576, "BT601"},   {1280, 720, "BT709"},
-                 {1920, 1080, "BT709"}, {2048, 1080, "BT709"}, {3840, 2160, "BT2020"},
-                 {7680, 4320, "BT2020"}};
+        DtNmosColorimetry Colorimetry;
+    } Cases[] = {
+        {720, 486, DTNMOS_COLORIMETRY_BT601},   {720, 576, DTNMOS_COLORIMETRY_BT601},
+        {1280, 720, DTNMOS_COLORIMETRY_BT709},  {1920, 1080, DTNMOS_COLORIMETRY_BT709},
+        {2048, 1080, DTNMOS_COLORIMETRY_BT709}, {3840, 2160, DTNMOS_COLORIMETRY_BT2020},
+        {7680, 4320, DTNMOS_COLORIMETRY_BT2020}};
     for (size_t i = 0; i < sizeof(Cases) / sizeof(Cases[0]); ++i)
     {
         DtNmosVideoFormat Format;
@@ -758,23 +845,23 @@ NMOS_TEST(VideoFormatTakesDefaults)
         Format.Width = Cases[i].Width;
         Format.Height = Cases[i].Height;
         DtNmosVideoFormat_SetDefaults(&Format);
-        NMOS_ASSERT_STR(Format.Colorimetry, Cases[i].Colorimetry);
-        NMOS_ASSERT_STR(Format.Tcs, "SDR");
-        NMOS_ASSERT_STR(Format.Range, "");
+        NMOS_ASSERT_EQ(Format.Colorimetry, Cases[i].Colorimetry);
+        NMOS_ASSERT_EQ(Format.Tcs, DTNMOS_TCS_SDR);
+        NMOS_ASSERT_EQ(Format.Range, DTNMOS_RANGE_NONE);
     }
 
     DtNmosVideoFormat Format;
     memset(&Format, 0, sizeof(Format));
     Format.Height = 2160;
-    snprintf(Format.Colorimetry, sizeof(Format.Colorimetry), "BT2100");
-    snprintf(Format.Tcs, sizeof(Format.Tcs), "PQ");
+    Format.Colorimetry = DTNMOS_COLORIMETRY_BT2100;
+    Format.Tcs = DTNMOS_TCS_PQ;
     DtNmosVideoFormat_SetDefaults(&Format);
-    NMOS_ASSERT_STR(Format.Colorimetry, "BT2100");
-    NMOS_ASSERT_STR(Format.Tcs, "PQ");
+    NMOS_ASSERT_EQ(Format.Colorimetry, DTNMOS_COLORIMETRY_BT2100);
+    NMOS_ASSERT_EQ(Format.Tcs, DTNMOS_TCS_PQ);
 
     memset(&Format, 0, sizeof(Format));
     DtNmosVideoFormat_SetDefaults(&Format);
-    NMOS_ASSERT_STR(Format.Colorimetry, "");
+    NMOS_ASSERT_EQ(Format.Colorimetry, DTNMOS_COLORIMETRY_NONE);
     DtNmosVideoFormat_SetDefaults(NULL);
 }
 
@@ -782,7 +869,8 @@ NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio)
                NMOS_RUN(SdpReadsCompressedVideo), NMOS_RUN(SdpReadsAncillaryData),
                NMOS_RUN(SdpReadsOtherMediaAsTheyAre),
                NMOS_RUN(SdpTakesDefaultsOfTheSession), NMOS_RUN(SdpNamesTheLineOfAnError),
-               NMOS_RUN(SdpWritesWhatItReadsBack), NMOS_RUN(SdpWritesAnAudioSender),
+               NMOS_RUN(SdpWritesWhatItReadsBack), NMOS_RUN(SdpKeepsAValueItDoesNotKnow),
+               NMOS_RUN(SdpWritesAnAudioSender),
                NMOS_RUN(SdpRefusesToWriteAnIncompleteFlow),
                NMOS_RUN(SdpNamesThePathsOfEachPair), NMOS_RUN(FlowIsCopiedWithAssignment),
                NMOS_RUN(SdpReadsTheFormsOfTsRefclk),

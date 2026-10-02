@@ -127,8 +127,7 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
     Flow.Format.Video.RateDenominator = 1;
     Flow.Format.Video.Interlaced = true;
     Flow.Format.Video.Depth = 10;
-    snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
-             "YCbCr-4:2:2");
+    Flow.Format.Video.Sampling = DTNMOS_SAMPLING_YCBCR_422;
     // The sender and the receiver are on the address of the APIs.
     DtNmosSenderConfig Sender = {
         sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "", &Flow, Host, 0};

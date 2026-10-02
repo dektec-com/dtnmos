@@ -6,6 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -511,7 +512,8 @@ static bool FlagValue(NmosSpan Value)
     return Value.Length == 0 || !NmosSpan_Equals(Value, "0", false);
 }
 
-// The raster, rate and colour that ST 2110-20 and -22 share.
+// The raster, rate and colour that ST 2110-20 and -22 share, and the parameters of the
+// format that dtnmos does not know.
 typedef struct NmosRaster
 {
     uint32_t* Width;
@@ -521,12 +523,13 @@ typedef struct NmosRaster
     bool* Interlaced;
     bool* Segmented;
     uint32_t* Depth;
-    char* Sampling;        // of DTNMOS_MAX_VALUE_SIZE
-    char* Colorimetry;     // of DTNMOS_MAX_VALUE_SIZE
-    char* Tcs;             // of DTNMOS_MAX_VALUE_SIZE
-    char* Range;           // of DTNMOS_MAX_VALUE_SIZE
-    char* Ssn;             // of DTNMOS_MAX_VALUE_SIZE
-    char* TransmitterType; // of DTNMOS_MAX_SHORT_SIZE
+    DtNmosSampling* Sampling;
+    DtNmosColorimetry* Colorimetry;
+    DtNmosTcs* Tcs;
+    DtNmosRange* Range;
+    DtNmosTransmitterType* TransmitterType;
+    char* Ssn; // of DTNMOS_MAX_VALUE_SIZE
+    NmosBuffer* Others;
 } NmosRaster;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyValue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -544,17 +547,69 @@ static DtNmosResult CopyValue(size_t Line, NmosSpan Name, NmosSpan Value, char* 
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- KeepParameter -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Adds a parameter of a=fmtp to others as it was written: its name, and =value when it
+// has a value, after "; " when others has one already.
+//
+static void KeepParameter(NmosBuffer* Others, NmosSpan Name, NmosSpan Value)
+{
+    if (Others->Length > 0)
+    {
+        DTNMOS_APPEND_LITERAL(Others, "; ");
+    }
+    NmosBuffer_Append(Others, Name.Data, Name.Length);
+    if (Value.Length > 0)
+    {
+        DTNMOS_APPEND_LITERAL(Others, "=");
+        NmosBuffer_Append(Others, Value.Data, Value.Length);
+    }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- StoreOthers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Sets *Target to the parameters in others, owned by store, or leaves it null when there
+// are none, and frees others; fails when the memory ran out.
+//
+static DtNmosResult StoreOthers(NmosBuffer* Others, NmosStore* Store, const char** Target)
+{
+    bool Stored = !Others->Failed;
+    if (Stored && Others->Length > 0)
+    {
+        *Target = NmosStore_Text(Store, Others->Data, Others->Length);
+        Stored = *Target != NULL;
+    }
+    NmosBuffer_Free(Others);
+    return Stored ? DTNMOS_OK : NmosError_FailMemory();
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ValueText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Copies a value an enum reads into text of size bytes. A value longer than text is
+// longer than any the enum knows, and becomes "?", which none spells, so that the enum
+// reads it as _OTHER.
+//
+static void ValueText(NmosSpan Value, char* Text, size_t Size)
+{
+    if (!NmosText_CopySpan(Text, Size, Value))
+    {
+        snprintf(Text, Size, "?");
+    }
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadRaster -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Reads the parameter name of the raster; sets handled when it is one of them.
+// Reads the parameter name of the raster; sets handled when it is one of them. A value
+// an enum does not know makes it _OTHER and is kept in the others of the raster.
 //
 static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan Name,
                                NmosSpan Value, bool* Handled)
 {
     *Handled = true;
     bool Valid = true;
-    char* Text = NULL;
-    size_t Size = DTNMOS_MAX_VALUE_SIZE;
+    bool Other = false;
+    char Text[DTNMOS_MAX_VALUE_SIZE];
+    ValueText(Value, Text, sizeof(Text));
     if (NmosSpan_Equals(Name, "width", true))
     {
         Valid = NmosText_ParseU32(Value, 65535, r->Width);
@@ -581,28 +636,32 @@ static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan Name,
     }
     else if (NmosSpan_Equals(Name, "sampling", true))
     {
-        Text = r->Sampling;
+        *r->Sampling = DtNmosSampling_FromText(Text);
+        Other = *r->Sampling == DTNMOS_SAMPLING_OTHER;
     }
     else if (NmosSpan_Equals(Name, "colorimetry", true))
     {
-        Text = r->Colorimetry;
+        *r->Colorimetry = DtNmosColorimetry_FromText(Text);
+        Other = *r->Colorimetry == DTNMOS_COLORIMETRY_OTHER;
     }
     else if (NmosSpan_Equals(Name, "TCS", true))
     {
-        Text = r->Tcs;
+        *r->Tcs = DtNmosTcs_FromText(Text);
+        Other = *r->Tcs == DTNMOS_TCS_OTHER;
     }
     else if (NmosSpan_Equals(Name, "RANGE", true))
     {
-        Text = r->Range;
-    }
-    else if (NmosSpan_Equals(Name, "SSN", true))
-    {
-        Text = r->Ssn;
+        *r->Range = DtNmosRange_FromText(Text);
+        Other = *r->Range == DTNMOS_RANGE_OTHER;
     }
     else if (NmosSpan_Equals(Name, "TP", true))
     {
-        Text = r->TransmitterType;
-        Size = DTNMOS_MAX_SHORT_SIZE;
+        *r->TransmitterType = DtNmosTransmitterType_FromText(Text);
+        Other = *r->TransmitterType == DTNMOS_TRANSMITTER_TYPE_OTHER;
+    }
+    else if (NmosSpan_Equals(Name, "SSN", true))
+    {
+        return CopyValue(Line, Name, Value, r->Ssn, DTNMOS_MAX_VALUE_SIZE);
     }
     else
     {
@@ -613,43 +672,72 @@ static DtNmosResult ReadRaster(size_t Line, const NmosRaster* r, NmosSpan Name,
         return FailAt(Line, "a=fmtp has a parameter whose value is no number or rate",
                       Name);
     }
-    return Text == NULL ? DTNMOS_OK : CopyValue(Line, Name, Value, Text, Size);
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-static DtNmosResult BuildVideo(const NmosSection* s, DtNmosVideoFormat* Video)
-{
-    const NmosRaster r = {&Video->Width,         &Video->Height,
-                          &Video->RateNumerator, &Video->RateDenominator,
-                          &Video->Interlaced,    &Video->Segmented,
-                          &Video->Depth,         Video->Sampling,
-                          Video->Colorimetry,    Video->Tcs,
-                          Video->Range,          Video->Ssn,
-                          Video->TransmitterType};
-    NmosFmtpReader Reader = {s->Fmtp};
-    NmosSpan Name;
-    NmosSpan Value;
-    while (NextParameter(&Reader, &Name, &Value))
+    if (Other)
     {
-        bool Handled = false;
-        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
-        if (Result == DTNMOS_OK && !Handled && NmosSpan_Equals(Name, "PM", true))
-        {
-            Result = CopyValue(s->FmtpLine, Name, Value, Video->PackingMode,
-                               sizeof(Video->PackingMode));
-        }
-        if (Result != DTNMOS_OK)
-        {
-            return Result;
-        }
+        KeepParameter(r->Others, Name, Value);
     }
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildVideo -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+static DtNmosResult BuildVideo(const NmosSection* s, NmosStore* Store,
+                               DtNmosVideoFormat* Video)
+{
+    NmosBuffer Others;
+    memset(&Others, 0, sizeof(Others));
+    const NmosRaster r = {&Video->Width,
+                          &Video->Height,
+                          &Video->RateNumerator,
+                          &Video->RateDenominator,
+                          &Video->Interlaced,
+                          &Video->Segmented,
+                          &Video->Depth,
+                          &Video->Sampling,
+                          &Video->Colorimetry,
+                          &Video->Tcs,
+                          &Video->Range,
+                          &Video->TransmitterType,
+                          Video->Ssn,
+                          &Others};
+    NmosFmtpReader Reader = {s->Fmtp};
+    NmosSpan Name;
+    NmosSpan Value;
+    DtNmosResult Result = DTNMOS_OK;
+    while (Result == DTNMOS_OK && NextParameter(&Reader, &Name, &Value))
+    {
+        bool Handled = false;
+        Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
+        if (Result != DTNMOS_OK || Handled)
+        {
+            continue;
+        }
+        if (NmosSpan_Equals(Name, "PM", true))
+        {
+            char Text[DTNMOS_MAX_VALUE_SIZE];
+            ValueText(Value, Text, sizeof(Text));
+            Video->PackingMode = DtNmosPackingMode_FromText(Text);
+            if (Video->PackingMode == DTNMOS_PACKING_MODE_OTHER)
+            {
+                KeepParameter(&Others, Name, Value);
+            }
+        }
+        else
+        {
+            KeepParameter(&Others, Name, Value);
+        }
+    }
+    if (Result != DTNMOS_OK)
+    {
+        NmosBuffer_Free(&Others);
+        return Result;
+    }
+    return StoreOthers(&Others, Store, &Video->OtherParameters);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildCompressed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-static DtNmosResult BuildCompressed(const NmosSection* s,
+static DtNmosResult BuildCompressed(const NmosSection* s, NmosStore* Store,
                                     DtNmosCompressedVideoFormat* Video)
 {
     if (!NmosText_CopySpan(Video->Encoding, sizeof(Video->Encoding), s->Encoding))
@@ -659,25 +747,31 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
     }
     Video->TransmissionMode = 1;
     Video->BandwidthKbps = s->BandwidthKbps;
-    const NmosRaster r = {&Video->Width,         &Video->Height,
-                          &Video->RateNumerator, &Video->RateDenominator,
-                          &Video->Interlaced,    &Video->Segmented,
-                          &Video->Depth,         Video->Sampling,
-                          Video->Colorimetry,    Video->Tcs,
-                          Video->Range,          Video->Ssn,
-                          Video->TransmitterType};
+    NmosBuffer Others;
+    memset(&Others, 0, sizeof(Others));
+    const NmosRaster r = {&Video->Width,
+                          &Video->Height,
+                          &Video->RateNumerator,
+                          &Video->RateDenominator,
+                          &Video->Interlaced,
+                          &Video->Segmented,
+                          &Video->Depth,
+                          &Video->Sampling,
+                          &Video->Colorimetry,
+                          &Video->Tcs,
+                          &Video->Range,
+                          &Video->TransmitterType,
+                          Video->Ssn,
+                          &Others};
     NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan Name;
     NmosSpan Value;
-    while (NextParameter(&Reader, &Name, &Value))
+    DtNmosResult Result = DTNMOS_OK;
+    while (Result == DTNMOS_OK && NextParameter(&Reader, &Name, &Value))
     {
         bool Handled = false;
-        DtNmosResult Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
-        if (Result != DTNMOS_OK)
-        {
-            return Result;
-        }
-        if (Handled)
+        Result = ReadRaster(s->FmtpLine, &r, Name, Value, &Handled);
+        if (Result != DTNMOS_OK || Handled)
         {
             continue;
         }
@@ -703,21 +797,26 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
         {
             Number = &Video->TransmissionMode;
         }
+        else
+        {
+            KeepParameter(&Others, Name, Value);
+        }
         if (Text != NULL)
         {
             Result = CopyValue(s->FmtpLine, Name, Value, Text, DTNMOS_MAX_VALUE_SIZE);
-            if (Result != DTNMOS_OK)
-            {
-                return Result;
-            }
         }
         if (Number != NULL && !NmosText_ParseU32(Value, 255, Number))
         {
-            return FailAt(s->FmtpLine, "a=fmtp has a parameter whose value is no number",
-                          Name);
+            Result = FailAt(s->FmtpLine,
+                            "a=fmtp has a parameter whose value is no number", Name);
         }
     }
-    return DTNMOS_OK;
+    if (Result != DTNMOS_OK)
+    {
+        NmosBuffer_Free(&Others);
+        return Result;
+    }
+    return StoreOthers(&Others, Store, &Video->OtherParameters);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BuildAudio -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -725,11 +824,11 @@ static DtNmosResult BuildCompressed(const NmosSection* s,
 static DtNmosResult BuildAudio(const NmosSection* s, NmosStore* Store,
                                DtNmosAudioFormat* Audio)
 {
-    if (!NmosText_CopySpan(Audio->Encoding, sizeof(Audio->Encoding), s->Encoding))
-    {
-        return FailAt(s->Line, "a=rtpmap has an audio encoding longer than L24",
-                      s->Encoding);
-    }
+    // One of the three, as MediaOf() made the flow audio, and as there without case.
+    Audio->Encoding =
+        NmosSpan_Equals(s->Encoding, "L16", true)   ? DTNMOS_AUDIO_ENCODING_L16
+        : NmosSpan_Equals(s->Encoding, "L24", true) ? DTNMOS_AUDIO_ENCODING_L24
+                                                    : DTNMOS_AUDIO_ENCODING_AM824;
     Audio->SampleRate = s->ClockRate;
     // RFC 4566 leaves one channel when a=rtpmap names none.
     Audio->Channels = s->Channels == 0 ? 1 : s->Channels;
@@ -739,21 +838,26 @@ static DtNmosResult BuildAudio(const NmosSection* s, NmosStore* Store,
         return FailAt(s->PtimeLine, "a=ptime needs milliseconds, such as 1 or 0.125",
                       s->Ptime);
     }
+    NmosBuffer Others;
+    memset(&Others, 0, sizeof(Others));
     NmosFmtpReader Reader = {s->Fmtp};
     NmosSpan Name;
     NmosSpan Value;
     while (NextParameter(&Reader, &Name, &Value))
     {
-        if (NmosSpan_Equals(Name, "channel-order", true))
+        if (!NmosSpan_Equals(Name, "channel-order", true))
         {
-            Audio->ChannelOrder = NmosStore_Text(Store, Value.Data, Value.Length);
-            if (Audio->ChannelOrder == NULL)
-            {
-                return NmosError_FailMemory();
-            }
+            KeepParameter(&Others, Name, Value);
+            continue;
+        }
+        Audio->ChannelOrder = NmosStore_Text(Store, Value.Data, Value.Length);
+        if (Audio->ChannelOrder == NULL)
+        {
+            NmosBuffer_Free(&Others);
+            return NmosError_FailMemory();
         }
     }
-    return DTNMOS_OK;
+    return StoreOthers(&Others, Store, &Audio->OtherParameters);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReadDidSdid -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -1014,11 +1118,11 @@ static DtNmosResult BuildFlow(NmosParser* p, const NmosSection* s, DtNmosFlow* F
     switch (Flow->Media)
     {
     case DTNMOS_MEDIA_VIDEO:
-        return BuildVideo(s, &Flow->Format.Video);
+        return BuildVideo(s, p->Store, &Flow->Format.Video);
     case DTNMOS_MEDIA_AUDIO:
         return BuildAudio(s, p->Store, &Flow->Format.Audio);
     case DTNMOS_MEDIA_COMPRESSED_VIDEO:
-        return BuildCompressed(s, &Flow->Format.CompressedVideo);
+        return BuildCompressed(s, p->Store, &Flow->Format.CompressedVideo);
     case DTNMOS_MEDIA_ANC:
         return BuildAnc(s, p->Store, Flow);
     case DTNMOS_MEDIA_OTHER:

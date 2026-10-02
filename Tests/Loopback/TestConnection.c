@@ -162,8 +162,7 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
     Flow.Format.Video.RateNumerator = 50;
     Flow.Format.Video.RateDenominator = 1;
     Flow.Format.Video.Depth = 10;
-    snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
-             "YCbCr-4:2:2");
+    Flow.Format.Video.Sampling = DTNMOS_SAMPLING_YCBCR_422;
     DtNmosSenderConfig Sender = {
         sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "", &Flow, "192.168.1.5", 0};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
@@ -811,7 +810,7 @@ NMOS_TEST(ConnectionCallsItsLeadEarly)
     Flow.DestinationPort = 5004;
     Flow.PayloadType = 97;
     Flow.ClockRate = 48000;
-    snprintf(Flow.Format.Audio.Encoding, sizeof(Flow.Format.Audio.Encoding), "%s", "L24");
+    Flow.Format.Audio.Encoding = DTNMOS_AUDIO_ENCODING_L24;
     Flow.Format.Audio.SampleRate = 48000;
     Flow.Format.Audio.Channels = 2;
     Flow.Format.Audio.PacketTimeNs = 1000000;

@@ -628,6 +628,10 @@ void NmosNode_WriteFlow(const NmosNodeSender* Sender, NmosBuffer* b)
         const unsigned Width = (unsigned)Video->Width;
         const unsigned Height = (unsigned)Video->Height;
         const unsigned Depth = (unsigned)(Video->Depth == 0 ? 10 : Video->Depth);
+        // IS-04 lists the values of ST 2110 alone, so one dtnmos does not know, like one
+        // not given, becomes the default.
+        const char* Colorimetry = DtNmosColorimetry_Text(Video->Colorimetry);
+        const char* Tcs = DtNmosTcs_Text(Video->Tcs);
         NmosBuffer_Printf(
             b,
             ", \"grain_rate\": {\"numerator\": %u, \"denominator\": %u}, "
@@ -641,14 +645,13 @@ void NmosNode_WriteFlow(const NmosNodeSender* Sender, NmosBuffer* b)
             "{\"name\": \"Cr\", \"width\": %u, \"height\": %u, \"bit_depth\": %u}]}",
             (unsigned)Video->RateNumerator,
             (unsigned)(Video->RateDenominator == 0 ? 1 : Video->RateDenominator), Width,
-            Height, OrDefault(Video->Colorimetry, "BT709"),
-            Video->Interlaced ? "interlaced_tff" : "progressive",
-            OrDefault(Video->Tcs, "SDR"), Width, Height, Depth, Width / 2, Height, Depth,
-            Width / 2, Height, Depth);
+            Height, OrDefault(Colorimetry, "BT709"),
+            Video->Interlaced ? "interlaced_tff" : "progressive", OrDefault(Tcs, "SDR"),
+            Width, Height, Depth, Width / 2, Height, Depth, Width / 2, Height, Depth);
         return;
     }
     const DtNmosAudioFormat* Audio = &Sender->Flow.Format.Audio;
-    const int L16 = strcmp(Audio->Encoding, "L16") == 0;
+    const bool L16 = Audio->Encoding == DTNMOS_AUDIO_ENCODING_L16;
     NmosBuffer_Printf(
         b,
         ", \"sample_rate\": {\"numerator\": %u}, \"media_type\": \"audio/%s\", "
