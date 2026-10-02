@@ -654,6 +654,31 @@ NMOS_TEST(SdpRefusesAValueLongerThanItsField)
         "SDP line 8: a=fmtp has a value longer than its standard allows: 'sampling'");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FlowCopyOutlivesItsSdp -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A flow copied with DtNmosFlow_Copy() owns what it points to: the DID and SDID pairs of
+// an ANC flow stay readable after the SDP it came from is freed, at addresses of their
+// own. Null is refused, and freeing null does nothing.
+NMOS_TEST(FlowCopyOutlivesItsSdp)
+{
+    DtNmosSdp* Sdp = Parse(AncSdp);
+    NMOS_ASSERT(Sdp != NULL);
+    const DtNmosFlow* Original = DtNmosSdp_Flow(Sdp, 0);
+    DtNmosFlow* Copy = NULL;
+    NMOS_ASSERT_EQ(DtNmosFlow_Copy(Original, &Copy), DTNMOS_OK);
+    NMOS_ASSERT(Copy != NULL);
+    NMOS_ASSERT(Copy->Format.Anc.DidSdid != Original->Format.Anc.DidSdid);
+    DtNmosSdp_Free(Sdp);
+    NMOS_ASSERT_EQ(Copy->Format.Anc.DidSdidCount, 2);
+    NMOS_ASSERT_EQ(Copy->Format.Anc.DidSdid[1].Did, 0x41);
+    NMOS_ASSERT_STR(Copy->DestinationIp, "239.100.9.11");
+    DtNmosFlow_Free(Copy);
+
+    NMOS_ASSERT_EQ(DtNmosFlow_Copy(NULL, &Copy), DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT(Copy == NULL);
+    DtNmosFlow_Free(NULL);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFormatTakesDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // The colorimetry of an empty format follows its raster, SD, HD or UHD, whatever its
@@ -705,4 +730,4 @@ NMOS_TEST_MAIN("Sdp", NMOS_RUN(SdpReadsVideoOnTwoPaths), NMOS_RUN(SdpReadsAudio)
                NMOS_RUN(SdpNamesThePathsOfEachPair), NMOS_RUN(FlowIsCopiedWithAssignment),
                NMOS_RUN(SdpReadsTheFormsOfTsRefclk),
                NMOS_RUN(SdpRefusesAValueLongerThanItsField),
-               NMOS_RUN(VideoFormatTakesDefaults))
+               NMOS_RUN(FlowCopyOutlivesItsSdp), NMOS_RUN(VideoFormatTakesDefaults))

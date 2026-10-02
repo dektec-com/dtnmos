@@ -6,9 +6,18 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "NmosFlow.h"
+
+// A flow DtNmosFlow_Copy() made, with the store of what it points to. The flow comes
+// first, so that the copy's address is the flow's, which DtNmosFlow_Free() is given.
+typedef struct NmosOwnedFlow
+{
+    DtNmosFlow Flow;
+    NmosStore Store;
+} NmosOwnedFlow;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
@@ -64,4 +73,52 @@ DtNmosResult NmosFlow_Copy(DtNmosFlow* Target, NmosStore* Store, const DtNmosFlo
     }
     *Target = Copy;
     return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosFlow_Copy -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult DtNmosFlow_Copy(const DtNmosFlow* Flow, DtNmosFlow** Copy)
+{
+    if (Copy != NULL)
+    {
+        *Copy = NULL;
+    }
+    if (Copy == NULL || Flow == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosFlow_Copy() needs a flow and a place for its copy.");
+    }
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(Flow, DtNmosFlow, sizeof(DtNmosFlow));
+    if (Sized != DTNMOS_OK)
+    {
+        return Sized;
+    }
+    NmosOwnedFlow* Owned = (NmosOwnedFlow*)calloc(1, sizeof(*Owned));
+    if (Owned == NULL)
+    {
+        return NmosError_FailMemory();
+    }
+    const DtNmosResult Result = NmosFlow_Copy(&Owned->Flow, &Owned->Store, Flow);
+    if (Result != DTNMOS_OK)
+    {
+        NmosStore_Free(&Owned->Store);
+        free(Owned);
+        return Result;
+    }
+    Owned->Flow.Size = sizeof(Owned->Flow);
+    *Copy = &Owned->Flow;
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosFlow_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void DtNmosFlow_Free(DtNmosFlow* Flow)
+{
+    if (Flow == NULL)
+    {
+        return;
+    }
+    NmosOwnedFlow* Owned = (NmosOwnedFlow*)(void*)Flow;
+    NmosStore_Free(&Owned->Store);
+    free(Owned);
 }

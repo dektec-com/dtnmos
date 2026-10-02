@@ -191,6 +191,18 @@ typedef struct DtNmosSession
 // A parsed SDP: its session and its flows, which it owns with their strings.
 typedef struct DtNmosSdp DtNmosSdp;
 
+// Makes *Copy a copy of Flow that owns its strings and arrays, ChannelOrder, Fmtp,
+// DidSdid and RefClock.Text, so that it stays valid after what Flow came from is gone:
+// a flow a node passes to a callback, or one of an SDP that is freed. Frees it with
+// DtNmosFlow_Free(). Fails with DTNMOS_E_INVALID_ARGUMENT for a null flow or copy or a
+// Size the library does not know, and with DTNMOS_E_NO_MEMORY; *Copy is null after a
+// failure.
+DTNMOS_API DtNmosResult DtNmosFlow_Copy(const DtNmosFlow* Flow, DtNmosFlow** Copy);
+
+// Frees a flow DtNmosFlow_Copy() made, with what it owns; null does nothing. A flow made
+// otherwise must not be given.
+DTNMOS_API void DtNmosFlow_Free(DtNmosFlow* Flow);
+
 // Returns the name of a media, e.g. "video"; a static string.
 DTNMOS_API const char* DtNmosMedia_Name(DtNmosMedia Media);
 
