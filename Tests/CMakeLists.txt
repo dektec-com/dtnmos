@@ -76,6 +76,12 @@ if(DTNMOS_INSTALL)
       "-DVCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}"
       "-DVCPKG_MANIFEST_MODE=OFF")
   endif()
+  # Under Visual Studio the consumer is built without vcpkg's integration, which a user may
+  # have installed for every project and which would put the headers of another dtnmos
+  # before those of the package under test.
+  if(CMAKE_GENERATOR MATCHES "Visual Studio")
+    list(APPEND _package_vcpkg_options "-DCMAKE_VS_GLOBALS=VcpkgEnabled=false")
+  endif()
   # The consumer is configured afresh on every run, as a toolchain takes effect only in
   # the first configuration of a build directory. Under a generator of several
   # configurations it has only the one installed, as the package holds no other, and is
