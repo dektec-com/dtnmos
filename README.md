@@ -372,8 +372,12 @@ static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
 
 An immediate activation calls the function while the controller waits for the answer. A
 scheduled one, absolute or relative, is answered with 202 and called from
-`DtNmosNode_Poll()` when its time comes, never before it; until then the staged
-parameters take only a PATCH that cancels it. The bulk interface applies each of its
+`DtNmosNode_Poll()` when its time comes; until then the staged parameters take only a
+PATCH that cancels it. A sender or receiver whose applying takes time says how long in
+`ActivationLeadMs`: its function is called that much before the time, which it gets in
+`AtNs`, and the parameters still become active at the time, never before it. While the
+function runs, a PATCH of the same sender or receiver is answered with 423, as what it
+applies cannot be taken back. The bulk interface applies each of its
 patches as a PATCH of its own would. The active parameters hold no `"auto"`: a sender's
 `source_ip` is its `SourceIp`, a receiver's `interface_ip` its `InterfaceIp`, and a
 receiver given a transport file takes the group, source and port of its flow.

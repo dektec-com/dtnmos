@@ -47,6 +47,7 @@ typedef struct NmosNodeSender
     int MasterEnable;
     uint64_t SessionId; // of its SDP
     uint64_t SessionVersion;
+    uint64_t LeadNs;  // how long before a scheduled activation its callback is called
     void* Connection; // the staged parameters of IS-05, which NmosConnection.c owns
 } NmosNodeSender;
 
@@ -65,6 +66,7 @@ typedef struct NmosNodeReceiver
     int Registered;
     int WasRegistered;
     int MasterEnable;
+    uint64_t LeadNs;  // how long before a scheduled activation its callback is called
     void* Connection; // the staged and active parameters of IS-05, of NmosConnection.c
 } NmosNodeReceiver;
 

@@ -92,6 +92,9 @@ typedef struct DtNmosSenderConfig
     // The address it sends from, that of the network port of the card; required. Its
     // source_ip "auto" stands for it, and its SDP gives it as origin and source-filter.
     const char* SourceIp;
+    // How long applying an activation takes, by which the callback of a scheduled one is
+    // called before its time, so that it is in place then; 0 calls it at the time.
+    uint32_t ActivationLeadMs;
 } DtNmosSenderConfig;
 
 typedef struct DtNmosReceiverConfig
@@ -105,6 +108,8 @@ typedef struct DtNmosReceiverConfig
     // The address it receives on, that of the network port of the card; required. Its
     // interface_ip "auto" stands for it.
     const char* InterfaceIp;
+    // How long applying an activation takes, as DtNmosSenderConfig has it.
+    uint32_t ActivationLeadMs;
 } DtNmosReceiverConfig;
 
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
@@ -119,6 +124,10 @@ typedef struct DtNmosReceiverActivation
     int HasFlow;
     DtNmosFlow Flow;
     DtNmosId SenderId; // empty when not given
+    // When it takes place, in nanoseconds of TAI since the epoch of PTP: the time a
+    // scheduled activation asked for, which a callback called its ActivationLeadMs early
+    // may wait for; or now, for an immediate one.
+    uint64_t AtNs;
 } DtNmosReceiverActivation;
 
 // What a controller activates on a sender: whether it sends, where to and from where,
@@ -129,14 +138,18 @@ typedef struct DtNmosSenderActivation
     char DestinationIp[DTNMOS_MAX_ADDRESS_SIZE];
     uint16_t DestinationPort;
     char SourceIp[DTNMOS_MAX_ADDRESS_SIZE];
+    uint64_t AtNs; // when it takes place, as DtNmosReceiverActivation has it
 } DtNmosSenderActivation;
 
 // Called when a controller activates a receiver or a sender. The callback applies it and
 // returns DTNMOS_OK, or fails with DtNmos_SetLastError(), whose message the node answers
 // the controller with. It is called without the lock of the node, and may block for as
 // long as applying takes: on the thread that handles the request for an immediate
-// activation, and in DtNmosNode_Poll() for a scheduled one, when it is due; the failure
-// of a scheduled one goes to the log. While it runs, a PATCH of the same sender or
+// activation, and in DtNmosNode_Poll() for a scheduled one, its ActivationLeadMs before
+// it is due, or at once when that is past; the failure of a scheduled one goes to the
+// log. The parameters become active at AtNs, or when the callback returns when that is
+// later, and activation_time says when, so that a controller never sees them active
+// before the time it asked for. While it runs, a PATCH of the same sender or
 // receiver is answered with 423, as what the callback applies cannot be taken back; the
 // callback is never called twice at once for one sender or receiver.
 typedef DtNmosResult (*DtNmosReceiverActivateFunc)(

@@ -722,6 +722,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
         a->User = s->User;
         a->Resource = s->Id;
         a->Sender.MasterEnable = Enabled;
+        a->Sender.AtNs = Staged->DueNs != 0 ? Staged->DueNs : NmosOs_TaiNowNs();
         const int Automatic =
             t->DestinationIp[0] == '\0' || strcmp(t->DestinationIp, "auto") == 0;
         snprintf(a->Sender.DestinationIp, sizeof(a->Sender.DestinationIp), "%s",
@@ -736,6 +737,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
     a->User = r->User;
     a->Resource = r->Id;
     a->Receiver.MasterEnable = Enabled;
+    a->Receiver.AtNs = Staged->DueNs != 0 ? Staged->DueNs : NmosOs_TaiNowNs();
     snprintf(a->Receiver.SenderId.Text, sizeof(a->Receiver.SenderId.Text), "%s",
              Staged->PeerId);
     if (Staged->TransportFile != NULL)
@@ -1065,9 +1067,9 @@ static void PostBulk(DtNmosNode* Node, int Sender, const DtNmosHttpRequest* Requ
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FindDue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Finds a sender or receiver whose scheduled activation is due at NowNs; sets *NextNs to
-// the time of the first that is not due yet, when one is sooner. The caller holds the
-// lock.
+// Finds a sender or receiver whose scheduled activation is due at NowNs, its lead before
+// the time it asked for; sets *NextNs to when the first that is not due yet is, when one
+// is sooner. The caller holds the lock.
 //
 static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender** s,
                                NmosNodeReceiver** r, uint64_t* NextNs)
@@ -1080,7 +1082,10 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
         const int IsSender = i < Node->SenderCount;
         NmosConnection* c = IsSender ? Node->Senders[i].Connection
                                      : Node->Receivers[i - Node->SenderCount].Connection;
-        const uint64_t At = c->Staged.DueNs;
+        const uint64_t Lead = IsSender ? Node->Senders[i].LeadNs
+                                       : Node->Receivers[i - Node->SenderCount].LeadNs;
+        const uint64_t Time = c->Staged.DueNs;
+        const uint64_t At = Time == 0 ? 0 : Time > Lead ? Time - Lead : 1;
         if (At != 0 && At <= NowNs && Due == NULL)
         {
             Due = c;
@@ -1097,6 +1102,23 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
 
 // The margin before a scheduled activation within which the poll waits for it itself.
 #define NMOS_DUE_SPIN_NS 3000000u
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WaitUntil -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Waits until AtNs on the clock of TAI: sleeping to the margin before it, and spinning
+// the rest, so that what follows takes place at its time rather than at the next
+// millisecond of a sleep. Returns at once for a time that is past.
+//
+static void WaitUntil(uint64_t AtNs)
+{
+    for (uint64_t Now = NmosOs_TaiNowNs(); Now < AtNs; Now = NmosOs_TaiNowNs())
+    {
+        const uint64_t Left = AtNs - Now;
+        NmosOs_SleepMs(Left > NMOS_DUE_SPIN_NS
+                           ? (uint32_t)((Left - NMOS_DUE_SPIN_NS) / 1000000u)
+                           : 0);
+    }
+}
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_Poll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
@@ -1116,10 +1138,7 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
             // Due within the margin: waited for here, on the clock of TAI, so that it
             // takes place at its time rather than at the next millisecond of a sleep.
             NmosNode_Unlock(Node);
-            while (NmosOs_TaiNowNs() < Next)
-            {
-                NmosOs_SleepMs(0);
-            }
+            WaitUntil(Next);
             continue;
         }
         if (c == NULL)
@@ -1163,6 +1182,13 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
         {
             Failure = DtNmos_GetLastError()[0] != '\0' ? DtNmos_GetLastError()
                                                        : "The activation failed.";
+        }
+
+        // A callback called its lead early that returns before the time asked for: the
+        // parameters become active at that time, never before it.
+        if (Failure == NULL)
+        {
+            WaitUntil(Staged.DueNs);
         }
 
         NmosNode_Lock(Node);

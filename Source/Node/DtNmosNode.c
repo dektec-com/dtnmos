@@ -993,8 +993,8 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "A sender needs an ID and a flow.");
     }
-    const DtNmosResult Sized =
-        DTNMOS_CHECK_SIZE(Sender, DtNmosSenderConfig, sizeof(DtNmosSenderConfig));
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(
+        Sender, DtNmosSenderConfig, offsetof(DtNmosSenderConfig, ActivationLeadMs));
     if (Sized != DTNMOS_OK)
     {
         return Sized;
@@ -1050,6 +1050,11 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         Added->MasterEnable = 1;
         Added->SessionId = Node->LastVersion / 1000000000u;
         Added->SessionVersion = 1;
+        if (Sender->Size >= offsetof(DtNmosSenderConfig, ActivationLeadMs) +
+                                sizeof(Sender->ActivationLeadMs))
+        {
+            Added->LeadNs = (uint64_t)Sender->ActivationLeadMs * 1000000u;
+        }
         if (Added->Label == NULL || Added->Description == NULL ||
             Added->SourceIp == NULL ||
             NmosFlow_Copy(&Added->Flow, &Added->FlowStore, Sender->Flow) != DTNMOS_OK ||
@@ -1084,8 +1089,8 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
     {
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT, "A receiver needs an ID.");
     }
-    const DtNmosResult Sized =
-        DTNMOS_CHECK_SIZE(Receiver, DtNmosReceiverConfig, sizeof(DtNmosReceiverConfig));
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(
+        Receiver, DtNmosReceiverConfig, offsetof(DtNmosReceiverConfig, ActivationLeadMs));
     if (Sized != DTNMOS_OK)
     {
         return Sized;
@@ -1130,6 +1135,11 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
         Added->InterfaceIp = CopyText(Receiver->InterfaceIp);
         Added->Activate = Activate;
         Added->User = User;
+        if (Receiver->Size >= offsetof(DtNmosReceiverConfig, ActivationLeadMs) +
+                                  sizeof(Receiver->ActivationLeadMs))
+        {
+            Added->LeadNs = (uint64_t)Receiver->ActivationLeadMs * 1000000u;
+        }
         if (Added->Label == NULL || Added->Description == NULL ||
             Added->InterfaceIp == NULL || NmosConnection_InitReceiver(Added) != DTNMOS_OK)
         {

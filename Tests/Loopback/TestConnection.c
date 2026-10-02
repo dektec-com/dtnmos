@@ -46,6 +46,8 @@ typedef struct NmosActivations
     void (*During)(struct NmosActivations* Seen);
     DtNmosNode* Node;
     int DuringStatus;
+    uint64_t CalledNs; // of the early sender: when its callback was called, in TAI
+    uint64_t AtNs;     // and the time its activation takes place
 } NmosActivations;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -162,12 +164,17 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
     Flow.Format.Video.Depth = 10;
     snprintf(Flow.Format.Video.Sampling, sizeof(Flow.Format.Video.Sampling), "%s",
              "YCbCr-4:2:2");
-    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID},  {DEVICE_ID}, "camera", "",
-                                 &Flow,          "192.168.1.5"};
+    DtNmosSenderConfig Sender = {
+        sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "", &Flow, "192.168.1.5", 0};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
-    DtNmosReceiverConfig Receiver = {
-        sizeof(Receiver),   {RECEIVER_ID}, {DEVICE_ID}, "monitor", "",
-        DTNMOS_MEDIA_AUDIO, "192.168.1.5"};
+    DtNmosReceiverConfig Receiver = {sizeof(Receiver),
+                                     {RECEIVER_ID},
+                                     {DEVICE_ID},
+                                     "monitor",
+                                     "",
+                                     DTNMOS_MEDIA_AUDIO,
+                                     "192.168.1.5",
+                                     0};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, ActivateReceiver, Seen) ==
                 DTNMOS_OK);
     NMOS_EXPECT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
@@ -730,6 +737,83 @@ static void ActivationMode(DtNmosNode* Node, const char* Leaf, char* Mode, size_
     NmosJson_Free(Json);
 }
 
+#define EARLY_ID "bbbbbbbb-0000-4000-8000-000000000006"
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateEarly -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The callback of a sender with a lead: records when it was called and for when.
+//
+static DtNmosResult ActivateEarly(void* User, const DtNmosId* Sender,
+                                  const DtNmosSenderActivation* Activation)
+{
+    NmosActivations* Seen = User;
+    NMOS_EXPECT(strcmp(Sender->Text, EARLY_ID) == 0);
+    ++Seen->SenderCalls;
+    Seen->CalledNs = NmosOs_TaiNowNs();
+    Seen->AtNs = Activation->AtNs;
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionCallsItsLeadEarly -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The callback of a scheduled activation of a sender with an ActivationLeadMs of 150 is
+// called that much before the time, which it is given; the parameters become active at
+// the time, not when the callback returns.
+//
+NMOS_TEST(ConnectionCallsItsLeadEarly)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    DtNmosFlow Flow = {0};
+    Flow.Size = sizeof(Flow);
+    Flow.Media = DTNMOS_MEDIA_AUDIO;
+    snprintf(Flow.DestinationIp, sizeof(Flow.DestinationIp), "%s", "239.0.0.2");
+    Flow.DestinationPort = 5004;
+    Flow.PayloadType = 97;
+    Flow.ClockRate = 48000;
+    snprintf(Flow.Format.Audio.Encoding, sizeof(Flow.Format.Audio.Encoding), "%s", "L24");
+    Flow.Format.Audio.SampleRate = 48000;
+    Flow.Format.Audio.Channels = 2;
+    Flow.Format.Audio.PacketTimeNs = 1000000;
+    DtNmosSenderConfig Early = {sizeof(Early), {EARLY_ID},    {DEVICE_ID}, "early", "",
+                                &Flow,         "192.168.1.5", 150};
+    NMOS_ASSERT(DtNmosNode_AddSender(Node, &Early, ActivateEarly, &Seen) == DTNMOS_OK);
+
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" EARLY_ID "/staged",
+                       "{\"master_enable\": false, \"activation\": {\"mode\": "
+                       "\"activate_scheduled_relative\", \"requested_time\": "
+                       "\"0:400000000\"}}",
+                       NULL),
+                   202);
+    // Polled for two seconds at most, however soon the poll asks to be called again.
+    const uint64_t Until = NmosOs_MonotonicMs() + 2000;
+    while (Seen.SenderCalls == 0 && NmosOs_MonotonicMs() < Until)
+    {
+        uint32_t NextMs = 1000;
+        NMOS_ASSERT(DtNmosNode_Poll(Node, &NextMs) == DTNMOS_OK);
+        NmosOs_SleepMs(NextMs < 20 ? NextMs : 20);
+    }
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(Seen.AtNs > Seen.CalledNs);
+    NMOS_ASSERT(Seen.AtNs - Seen.CalledNs >= 100000000u);
+
+    // The poll returned once the time had come, and the activation shows that time.
+    NMOS_ASSERT(NmosOs_TaiNowNs() >= Seen.AtNs);
+    NmosJson* Json = NULL;
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" EARLY_ID "/active", NULL, &Json), 200);
+    const char* Time =
+        NmosJson_MemberText(NmosJson_Member(Json, "activation"), "activation_time");
+    unsigned long long Seconds = 0;
+    unsigned long long Nanoseconds = 0;
+    NMOS_ASSERT(Time != NULL && sscanf(Time, "%llu:%llu", &Seconds, &Nanoseconds) == 2);
+    NMOS_ASSERT((uint64_t)Seconds * 1000000000u + Nanoseconds >= Seen.AtNs);
+    NmosJson_Free(Json);
+    DtNmosNode_Free(Node);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionSchedulesActivations -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A scheduled activation is answered with 202, locks the staged parameters but for a
@@ -826,4 +910,5 @@ NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionAnswersCorsAndTheTarget),
                NMOS_RUN(ConnectionResolvesAuto), NMOS_RUN(ConnectionSchedulesActivations),
                NMOS_RUN(ConnectionAnswersBulk),
-               NMOS_RUN(ConnectionRefusesAPatchWhileApplying))
+               NMOS_RUN(ConnectionRefusesAPatchWhileApplying),
+               NMOS_RUN(ConnectionCallsItsLeadEarly))
