@@ -40,23 +40,35 @@ extern "C"
 
 // What a function that can fail returns. A result at DTNMOS_E or above is a failure;
 // DtNmos_GetLastError() then says what went wrong.
+//
+// Each code has its value written out, as a program built against one version compares
+// with these numbers. The values never change; a new code is added at the end.
 typedef enum DtNmosResult
 {
     DTNMOS_OK = 0,
     DTNMOS_E = 0x1000,
-    DTNMOS_E_INVALID_ARGUMENT =
-        DTNMOS_E + 1,                  // a parameter is null, empty or out of range
-    DTNMOS_E_PARSE = DTNMOS_E + 2,     // an SDP or JSON document is malformed
-    DTNMOS_E_NOT_FOUND = DTNMOS_E + 3, // the registry has no such resource
-    DTNMOS_E_AMBIGUOUS = DTNMOS_E + 4, // a label names more than one resource
-    DTNMOS_E_HTTP = DTNMOS_E + 5, // a request failed or was answered with an error status
-    DTNMOS_E_TIMEOUT = DTNMOS_E + 6, // a request got no answer in time
-    DTNMOS_E_STATE = DTNMOS_E + 7,   // the object is not in a state for the call, e.g.
-                                     // a node that is not open
+    // A parameter is NULL, empty or out of range.
+    DTNMOS_E_INVALID_ARGUMENT = DTNMOS_E + 1,
+    // An SDP or JSON document is malformed.
+    DTNMOS_E_PARSE = DTNMOS_E + 2,
+    // The registry has no such resource.
+    DTNMOS_E_NOT_FOUND = DTNMOS_E + 3,
+    // A label names more than one resource.
+    DTNMOS_E_AMBIGUOUS = DTNMOS_E + 4,
+    // A request failed, or was answered with an error status.
+    DTNMOS_E_HTTP = DTNMOS_E + 5,
+    // A request got no answer in time.
+    DTNMOS_E_TIMEOUT = DTNMOS_E + 6,
+    // The object is not in a state for the call, e.g. a node that is not open.
+    DTNMOS_E_STATE = DTNMOS_E + 7,
+    // Not enough memory.
     DTNMOS_E_NO_MEMORY = DTNMOS_E + 8,
+    // An error inside the library.
     DTNMOS_E_INTERNAL = DTNMOS_E + 9,
-    DTNMOS_E_NETWORK = DTNMOS_E + 10, // a socket could not be opened, or could not send
-    DTNMOS_E_BUFFER_TOO_SMALL = DTNMOS_E + 11 // a text does not fit the caller's buffer
+    // A socket could not be opened, or could not send.
+    DTNMOS_E_NETWORK = DTNMOS_E + 10,
+    // A text does not fit the caller's buffer.
+    DTNMOS_E_BUFFER_TOO_SMALL = DTNMOS_E + 11
 } DtNmosResult;
 
 // The ID of an NMOS resource (a node, device, sender, receiver, flow or source): a

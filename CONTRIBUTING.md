@@ -121,6 +121,10 @@ function. Before anything else, it tells what the function is for.
 - **The results as a short table**: the code, then when it occurs. "And the errors of
   X()" stands for those of a function called underneath.
 - **A field of a struct has its own comment**, saying what it holds and when it is used.
+  When the comment does not fit after the field, it goes on the line above.
+- **A result code has its value written out**, `DTNMOS_E + n`, as a program built
+  against one version compares with these numbers. A value never changes, and a new
+  code is added at the end.
 - **A section of a header starts by explaining the concept** before its functions: what
   the parts are, how they relate, and the steps a program takes.
 
