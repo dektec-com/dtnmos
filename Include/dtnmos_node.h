@@ -115,9 +115,13 @@ typedef struct DtNmosReceiverConfig
 // What a controller activates on a receiver (IS-05): whether it receives, and the flow it
 // receives: the flow of the media of the receiver in the transport file, with the
 // multicast_ip, source_ip and destination_port of the transport parameters over it.
-// HasFlow is 0 when the staged parameters hold no transport file, as the parameters
-// alone do not describe a flow. The node owns the strings of the flow it passes to a
-// callback, valid during the callback; the callback copies what it keeps.
+// HasFlow is false when the staged parameters hold no transport file: the format is then
+// unknown, and the flow carries the transport alone, its Media that of the receiver, its
+// DestinationIp the multicast_ip or, for unicast, the receiver's interface_ip, its
+// SourceIp and DestinationPort those of the parameters, and its Format empty, so that a
+// receiver can keep its format and move to the new address. The node owns the strings
+// of the flow it passes to a callback, valid during the callback; the callback copies
+// what it keeps.
 typedef struct DtNmosReceiverActivation
 {
     bool MasterEnable;

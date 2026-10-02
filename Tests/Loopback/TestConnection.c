@@ -444,6 +444,44 @@ NMOS_TEST(ConnectionRefusesAPatchWhileApplying)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.- ConnectionGivesTheTransportWithoutAFile -.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A receiver given transport parameters without a transport file gets them in the flow,
+// with no format: the group, the source and the port; for unicast its own address.
+NMOS_TEST(ConnectionGivesTheTransportWithoutAFile)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+            "{\"master_enable\": true, \"transport_params\": [{\"multicast_ip\": "
+            "\"239.2.2.2\", \"source_ip\": \"192.168.1.8\", "
+            "\"destination_port\": 5010}], "
+            "\"activation\": {\"mode\": \"activate_immediate\"}}",
+            NULL),
+        200);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 1);
+    NMOS_ASSERT(!Seen.HasFlow);
+    NMOS_ASSERT_EQ(Seen.Media, DTNMOS_MEDIA_AUDIO);
+    NMOS_ASSERT_STR(Seen.Receives, "239.2.2.2");
+    NMOS_ASSERT_STR(Seen.ReceivesFrom, "192.168.1.8");
+    NMOS_ASSERT_EQ(Seen.ReceivesPort, 5010);
+
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "receivers/" RECEIVER_ID "/staged",
+                       "{\"transport_params\": [{\"multicast_ip\": null, \"source_ip\": "
+                       "null, \"destination_port\": \"auto\"}], "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.ReceiverCalls, 2);
+    NMOS_ASSERT_STR(Seen.Receives, "192.168.1.5");
+    NMOS_ASSERT_STR(Seen.ReceivesFrom, "");
+    NMOS_ASSERT_EQ(Seen.ReceivesPort, 5004);
+    DtNmosNode_Free(Node);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionAnswersCorsAndTheTarget -.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Every answer carries the headers of CORS, with PATCH among the methods, and a
@@ -911,4 +949,5 @@ NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionResolvesAuto), NMOS_RUN(ConnectionSchedulesActivations),
                NMOS_RUN(ConnectionAnswersBulk),
                NMOS_RUN(ConnectionRefusesAPatchWhileApplying),
-               NMOS_RUN(ConnectionCallsItsLeadEarly))
+               NMOS_RUN(ConnectionCallsItsLeadEarly),
+               NMOS_RUN(ConnectionGivesTheTransportWithoutAFile))

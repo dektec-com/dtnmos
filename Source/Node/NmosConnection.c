@@ -751,6 +751,22 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
             return "The transport file describes no flow that the receiver receives.";
         }
     }
+    else
+    {
+        // Without a transport file the format is unknown, and the flow carries the
+        // transport alone: the group, or for unicast the receiver's own address, the
+        // source and the port, "auto" resolved.
+        DtNmosFlow* Flow = &a->Receiver.Flow;
+        Flow->Size = sizeof(*Flow);
+        Flow->Media = r->Media;
+        const char* Destination = t->MulticastIp[0] != '\0' ? t->MulticastIp
+                                  : IsAuto(t->InterfaceIp)  ? r->InterfaceIp
+                                                            : t->InterfaceIp;
+        snprintf(Flow->DestinationIp, sizeof(Flow->DestinationIp), "%s", Destination);
+        snprintf(Flow->SourceIp, sizeof(Flow->SourceIp), "%s", t->SourceIp);
+        Flow->DestinationPort =
+            (uint16_t)(t->DestinationPort >= 0 ? t->DestinationPort : NMOS_RTP_PORT);
+    }
     return NULL;
 }
 
