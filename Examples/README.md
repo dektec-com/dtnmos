@@ -8,7 +8,7 @@ file, built with the library unless `DTNMOS_BUILD_EXAMPLES` is off.
 | `DtNmosReadSdp` | Reads the SDP of an ST 2110 sender and prints its session and flows; `--write` writes them back as the SDP a sender of dtnmos gives |
 | `DtNmosListSenders` | Lists the senders a registry holds, with `--receivers` its receivers too, and with `--sdp` the SDP of each sender |
 | `DtNmosConnect` | Connects a receiver of a registry to a sender, each by its ID or label, as a controller of IS-05 does; `--disconnect` disconnects it |
-| `DtNmosRegisterNode` | Registers a node with a sender and a receiver, serves its Node API and Connection API, and prints what a controller activates on them |
+| `DtNmosRegisterNode` | Registers a node with a sender and a receiver, serves its Node API and Connection API, and prints what a controller activates on them; with `--ptp` the node has a PTP clock |
 
 Every program lists its options with `--help`. A program that talks to a registry takes
 its base URL with `--registry`, or without it finds one with DNS-SD, through multicast

@@ -13,8 +13,9 @@
 // The sender describes the first stream of the SDP file --sdp, or by default 1080p25 to
 // 239.100.1.1:5004, sent from --address; the receiver receives on that address too. With
 // a card, give the address of its network port. The IDs are made from --label, so that
-// the node keeps them when it starts again. Each activation a controller makes is
-// printed; the program only prints, and sends or receives nothing:
+// the node keeps them when it starts again. The node's clock is internal, or with --ptp
+// that of a PTP grandmaster, --locked and --traceable as given. Each activation a
+// controller makes is printed; the program only prints, and sends or receives nothing:
 //
 //     node "dtnmos example" 6aac9516-..., registering with http://192.168.1.5:8010
 //     sender 9dfb9312-..., receiver a3b1ccff-...
@@ -48,6 +49,11 @@ static const ExampleOption Options[] = {
     {"--port", true, "The port of the APIs of the node; any free one by default"},
     {"--seconds", true, "How long the node runs; 60 by default"},
     {"--verbose", false, "Prints what the node does"},
+    {"--ptp", true,
+     "The node's clock is that of this PTP grandmaster, an EUI-64 such as "
+     "00-1b-19-ff-fe-00-00-01; internal by default"},
+    {"--locked", false, "With --ptp: the node is locked to the grandmaster"},
+    {"--traceable", false, "With --ptp: the grandmaster is traceable to TAI"},
 };
 
 // The namespace of this example's node IDs, a version 4 UUID of its own.
@@ -345,6 +351,19 @@ int main(int Argc, char** Argv)
     Config.Http = DtNmos_CurlHttp;
     Config.Log = Example_Log;
     Config.LogUser = Example_HasFlag(Argc, Argv, "--verbose") ? (void*)Label : NULL;
+    DtNmosClock Clock;
+    memset(&Clock, 0, sizeof(Clock));
+    Clock.Size = sizeof(Clock);
+    Clock.Kind = DTNMOS_CLOCK_INTERNAL;
+    const char* Grandmaster = Example_Value(Argc, Argv, "--ptp");
+    if (Grandmaster != NULL)
+    {
+        Clock.Kind = DTNMOS_CLOCK_PTP;
+        snprintf(Clock.Grandmaster, sizeof(Clock.Grandmaster), "%s", Grandmaster);
+        Clock.Locked = Example_HasFlag(Argc, Argv, "--locked");
+        Clock.Traceable = Example_HasFlag(Argc, Argv, "--traceable");
+    }
+    Config.Clock = &Clock;
     DtNmosNode* Node = DtNmosNode_Alloc();
     DtNmosResult Result = Node == NULL ? DTNMOS_E_NO_MEMORY : DTNMOS_OK;
     if (Result == DTNMOS_OK)
