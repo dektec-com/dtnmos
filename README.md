@@ -339,6 +339,13 @@ the host that has the address, a port of a DekTec card among them. A sender's SD
 the address as origin and source filter, and the MAC address of the interface as a
 reference clock of `localmac`.
 
+A node has one clock, `clk0`, which every source names: internal unless the `Clock` of
+its config says otherwise. A node whose senders follow a PTP grandmaster gives it a
+clock of `DTNMOS_CLOCK_PTP`, with the grandmaster's EUI-64 and whether the grandmaster is
+traceable and the node locked to it, and `DtNmosNode_SetClock()` changes it, e.g. each
+time the program checks its lock; a change registers the node again, and the same clock
+changes nothing.
+
 A node without a `RegistrationUrl` takes its registries from the `Search` of its config,
 which it borrows; a node with neither fails to open. It registers with the most
 preferred usable registry; and when that fails, moves on at once to the next one the

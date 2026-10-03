@@ -127,6 +127,8 @@ struct DtNmosNode
     // answered with 200 rather than 201, the registry still has an old node with this ID.
     // The poll thread's own.
     bool FirstRegistration;
+    // The node's clock, clk0; a PTP clock's grandmaster in lower case.
+    DtNmosClock Clock;
     NmosNodeDevice* Devices;
     size_t DeviceCount;
     size_t DeviceCapacity;

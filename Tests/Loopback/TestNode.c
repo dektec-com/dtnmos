@@ -250,7 +250,7 @@ NMOS_TEST(NodeRegistersAgainWhenTheRegistryLostIt)
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.- NodeDeletesAnOldNodeOfItsIdFirst -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.- NodeDeletesAnOldNodeOfItsIdFirst -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A registry that answers the first registration of the node with 200 holds an old node
 // of its ID, which the node deletes before it registers again, as IS-04 asks.
@@ -576,7 +576,7 @@ NMOS_TEST(NodeAnswersItsNodeApiAndTransportFiles)
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BindingOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BindingOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Asks the node for the one sender or receiver of Path and writes the name of its one
 // interface binding into Name; returns how many bindings it has.
@@ -603,7 +603,7 @@ static size_t BindingOf(DtNmosNode* Node, const char* Path, char* Name, size_t S
     return Count;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeBindsToTheInterfaceOfItsAddress -.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.- NodeBindsToTheInterfaceOfItsAddress -.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // The node lists the network interfaces of the host, and binds a sender and a receiver to
 // the one that has their address; one on an address of no interface is bound to none.
@@ -705,6 +705,208 @@ NMOS_TEST(NodeServesItselfOverHttp)
     DtNmosNode_Free(Node);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TextIs -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Whether Text is there and is Expected.
+//
+static bool TextIs(const char* Text, const char* Expected)
+{
+    return Text != NULL && strcmp(Text, Expected) == 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SelfClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The node's own resource, as its Node API serves it, with the first of its clocks in
+// *Clock; the caller frees the resource with NmosJson_Free(). Null when it cannot be
+// read or has no clock.
+//
+static NmosJson* SelfClock(DtNmosNode* Node, const NmosJson** Clock)
+{
+    DtNmosHttpResponse* Response = Ask(Node, "GET", "/x-nmos/node/v1.3/self");
+    size_t Length = 0;
+    const char* Body = DtNmosHttpResponse_Body(Response, &Length);
+    NmosJson* Json = NULL;
+    const bool Parsed = NmosJson_Parse(Body, Length, &Json) == DTNMOS_OK;
+    DtNmosHttpResponse_Free(Response);
+    const NmosJson* Clocks = Parsed ? NmosJson_Member(Json, "clocks") : NULL;
+    if (Clocks == NULL || Clocks->Count != 1)
+    {
+        NmosJson_Free(Json);
+        return NULL;
+    }
+    *Clock = &Clocks->Items[0];
+    return Json;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- IsTrue -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// 1 when member Key of Value is true, 0 when it is false, and -1 when it is neither.
+//
+static int IsTrue(const NmosJson* Value, const char* Key)
+{
+    const NmosJson* Member = NmosJson_Member(Value, Key);
+    if (Member == NULL ||
+        (Member->Type != DTNMOS_JSON_TRUE && Member->Type != DTNMOS_JSON_FALSE))
+    {
+        return -1;
+    }
+    return Member->Type == DTNMOS_JSON_TRUE ? 1 : 0;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeHasTheClockItIsGiven -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+NMOS_TEST(NodeHasTheClockItIsGiven)
+{
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosNode* Node = MakeNode(&Registry, "127.0.0.1", 8080, RecordHttp);
+    NMOS_ASSERT(Node != NULL);
+
+    // A node starts with an internal clock.
+    const NmosJson* Clock = NULL;
+    NmosJson* Json = SelfClock(Node, &Clock);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "name"), "clk0"));
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "ref_type"), "internal"));
+    NMOS_EXPECT(NmosJson_Member(Clock, "gmid") == NULL);
+    NmosJson_Free(Json);
+
+    // A PTP clock, its grandmaster given in upper case and written in lower case, as
+    // IS-04 asks; the node gets a new version.
+    char Version[sizeof(Node->Version)];
+    snprintf(Version, sizeof(Version), "%s", Node->Version);
+    DtNmosClock Ptp;
+    memset(&Ptp, 0, sizeof(Ptp));
+    Ptp.Size = sizeof(Ptp);
+    Ptp.Kind = DTNMOS_CLOCK_PTP;
+    snprintf(Ptp.Grandmaster, sizeof(Ptp.Grandmaster), "%s", "00-1B-19-FF-FE-00-00-01");
+    Ptp.Traceable = true;
+    Ptp.Locked = false;
+    NMOS_ASSERT(DtNmosNode_SetClock(Node, &Ptp) == DTNMOS_OK);
+    NMOS_EXPECT(strcmp(Node->Version, Version) != 0);
+    NMOS_EXPECT(!Node->NodeRegistered);
+    Json = SelfClock(Node, &Clock);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "name"), "clk0"));
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "ref_type"), "ptp"));
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "version"), "IEEE1588-2008"));
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "gmid"), "00-1b-19-ff-fe-00-00-01"));
+    NMOS_EXPECT(IsTrue(Clock, "traceable") == 1);
+    NMOS_EXPECT(IsTrue(Clock, "locked") == 0);
+    NmosJson_Free(Json);
+
+    // The same clock again, in another case, changes nothing; a lock does.
+    snprintf(Version, sizeof(Version), "%s", Node->Version);
+    snprintf(Ptp.Grandmaster, sizeof(Ptp.Grandmaster), "%s", "00-1b-19-ff-fe-00-00-01");
+    NMOS_ASSERT(DtNmosNode_SetClock(Node, &Ptp) == DTNMOS_OK);
+    NMOS_EXPECT(strcmp(Node->Version, Version) == 0);
+    Ptp.Locked = true;
+    NMOS_ASSERT(DtNmosNode_SetClock(Node, &Ptp) == DTNMOS_OK);
+    NMOS_EXPECT(strcmp(Node->Version, Version) != 0);
+
+    // Back to internal.
+    DtNmosClock Internal;
+    memset(&Internal, 0, sizeof(Internal));
+    Internal.Size = sizeof(Internal);
+    Internal.Kind = DTNMOS_CLOCK_INTERNAL;
+    NMOS_ASSERT(DtNmosNode_SetClock(Node, &Internal) == DTNMOS_OK);
+    Json = SelfClock(Node, &Clock);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Clock, "ref_type"), "internal"));
+    NmosJson_Free(Json);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeRefusesABadClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+NMOS_TEST(NodeRefusesABadClock)
+{
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosNode* Node = MakeNode(&Registry, "127.0.0.1", 8080, RecordHttp);
+    NMOS_ASSERT(Node != NULL);
+    DtNmosClock Clock;
+    memset(&Clock, 0, sizeof(Clock));
+    Clock.Size = sizeof(Clock);
+    NMOS_EXPECT(DtNmosNode_SetClock(Node, NULL) == DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_EXPECT(DtNmosNode_SetClock(Node, &Clock) == DTNMOS_E_INVALID_ARGUMENT);
+    Clock.Kind = DTNMOS_CLOCK_PTP;
+    static const char* const Bad[] = {
+        "", "00-1b-19-ff-fe-00-00", "00:1b:19:ff:fe:00:00:01", "00-1b-19-ff-fe-00-00-0g",
+        "0-01b-19-ff-fe-00-00-01"};
+    for (size_t i = 0; i < sizeof(Bad) / sizeof(Bad[0]); ++i)
+    {
+        snprintf(Clock.Grandmaster, sizeof(Clock.Grandmaster), "%s", Bad[i]);
+        NMOS_EXPECT(DtNmosNode_SetClock(Node, &Clock) == DTNMOS_E_INVALID_ARGUMENT);
+    }
+    NMOS_EXPECT(strstr(DtNmos_GetLastError(), "EUI-64") != NULL);
+    snprintf(Clock.Grandmaster, sizeof(Clock.Grandmaster), "%s",
+             "00-1b-19-ff-fe-00-00-01");
+    Clock.Size = 0;
+    NMOS_EXPECT(DtNmosNode_SetClock(Node, &Clock) == DTNMOS_E_INVALID_ARGUMENT);
+    Clock.Size = sizeof(Clock);
+
+    // The node keeps its internal clock.
+    const NmosJson* Self = NULL;
+    NmosJson* Json = SelfClock(Node, &Self);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Self, "ref_type"), "internal"));
+    NmosJson_Free(Json);
+    NMOS_ASSERT(DtNmosNode_Close(Node) == DTNMOS_OK);
+    NMOS_EXPECT(DtNmosNode_SetClock(Node, &Clock) == DTNMOS_E_STATE);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- NodeOpensWithTheClockOfItsConfig -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+NMOS_TEST(NodeOpensWithTheClockOfItsConfig)
+{
+    NmosFakeRegistration Registry;
+    memset(&Registry, 0, sizeof(Registry));
+    DtNmosClock Clock;
+    memset(&Clock, 0, sizeof(Clock));
+    Clock.Size = sizeof(Clock);
+    Clock.Kind = DTNMOS_CLOCK_PTP;
+    snprintf(Clock.Grandmaster, sizeof(Clock.Grandmaster), "%s",
+             "EC-46-70-FF-FE-0A-1B-2C");
+    Clock.Locked = true;
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){NODE_ID};
+    Config.RegistrationUrl = "http://registry.test/";
+    Config.Http = RecordHttp;
+    Config.HttpUser = &Registry;
+    Config.Clock = &Clock;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    const NmosJson* Self = NULL;
+    NmosJson* Json = SelfClock(Node, &Self);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Self, "gmid"), "ec-46-70-ff-fe-0a-1b-2c"));
+    NMOS_EXPECT(IsTrue(Self, "locked") == 1);
+    NMOS_EXPECT(IsTrue(Self, "traceable") == 0);
+    NmosJson_Free(Json);
+    NMOS_ASSERT(DtNmosNode_Close(Node) == DTNMOS_OK);
+
+    // A config of 0.5's size ends before the clock: the node's clock is internal.
+    Config.Size = offsetof(DtNmosNodeConfig, Clock);
+    NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    Json = SelfClock(Node, &Self);
+    NMOS_ASSERT(Json != NULL);
+    NMOS_EXPECT(TextIs(NmosJson_MemberText(Self, "ref_type"), "internal"));
+    NmosJson_Free(Json);
+    NMOS_ASSERT(DtNmosNode_Close(Node) == DTNMOS_OK);
+
+    // A bad clock in the config keeps the node closed.
+    Config.Size = sizeof(Config);
+    Clock.Kind = DTNMOS_CLOCK_NONE;
+    NMOS_EXPECT(DtNmosNode_Open(Node, &Config) == DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_EXPECT(!Node->Open);
+    DtNmosNode_Free(Node);
+}
+
 NMOS_TEST_MAIN("Node", NMOS_RUN(NodeRegistersParentsBeforeChildren),
                NMOS_RUN(NodeRegistersAgainWhenTheRegistryLostIt),
                NMOS_RUN(NodeDeletesAnOldNodeOfItsIdFirst),
@@ -713,4 +915,6 @@ NMOS_TEST_MAIN("Node", NMOS_RUN(NodeRegistersParentsBeforeChildren),
                NMOS_RUN(NodeDeletesWhatIsRemovedAndWhatItHad),
                NMOS_RUN(NodeAnswersItsNodeApiAndTransportFiles),
                NMOS_RUN(NodeServesItselfOverHttp),
-               NMOS_RUN(NodeBindsToTheInterfaceOfItsAddress))
+               NMOS_RUN(NodeBindsToTheInterfaceOfItsAddress),
+               NMOS_RUN(NodeHasTheClockItIsGiven), NMOS_RUN(NodeRefusesABadClock),
+               NMOS_RUN(NodeOpensWithTheClockOfItsConfig))

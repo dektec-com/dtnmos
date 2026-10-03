@@ -147,6 +147,61 @@ DtNmosResult NmosNode_CheckOpen(const DtNmosNode* Node, const char* Function)
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Checks the clock a program gives, and copies it into *Taken, with a PTP grandmaster in
+// lower case, as IS-04 writes it, and the fields its kind does not have cleared.
+//
+static DtNmosResult TakeClock(const DtNmosClock* Clock, DtNmosClock* Taken)
+{
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(Clock, DtNmosClock, sizeof(DtNmosClock));
+    if (Sized != DTNMOS_OK)
+    {
+        return Sized;
+    }
+    memset(Taken, 0, sizeof(*Taken));
+    Taken->Size = sizeof(*Taken);
+    Taken->Kind = Clock->Kind;
+    if (Clock->Kind == DTNMOS_CLOCK_INTERNAL)
+    {
+        return DTNMOS_OK;
+    }
+    if (Clock->Kind != DTNMOS_CLOCK_PTP)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "A clock is internal or PTP, not of kind %d.",
+                              (int)Clock->Kind);
+    }
+    // Eight pairs of hexadecimal digits, joined by '-'.
+    const char* Id = Clock->Grandmaster;
+    const char* End = memchr(Id, '\0', sizeof(Clock->Grandmaster));
+    bool Valid = End != NULL && End - Id == 23;
+    for (int i = 0; Valid && i < 23; ++i)
+    {
+        Valid = i % 3 == 2 ? Id[i] == '-' : isxdigit((unsigned char)Id[i]) != 0;
+        Taken->Grandmaster[i] = (char)tolower((unsigned char)Id[i]);
+    }
+    if (!Valid)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "The grandmaster of a PTP clock is an EUI-64, such as "
+                              "00-1b-19-ff-fe-00-00-01.");
+    }
+    Taken->Traceable = Clock->Traceable;
+    Taken->Locked = Clock->Locked;
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SameClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Whether two clocks that TakeClock() made are the same.
+//
+static bool SameClock(const DtNmosClock* A, const DtNmosClock* B)
+{
+    return A->Kind == B->Kind && strcmp(A->Grandmaster, B->Grandmaster) == 0 &&
+           A->Traceable == B->Traceable && A->Locked == B->Locked;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
@@ -190,7 +245,25 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
                               "A node needs the URL of its registry, or a search that "
                               "finds the Registration API.");
     }
+    // A config of an older header ends before the clock, which is internal then.
+    DtNmosClock Clock;
+    memset(&Clock, 0, sizeof(Clock));
+    Clock.Size = sizeof(Clock);
+    Clock.Kind = DTNMOS_CLOCK_INTERNAL;
+    const DtNmosClock* Given =
+        Config->Size >= offsetof(DtNmosNodeConfig, Clock) + sizeof(Config->Clock)
+            ? Config->Clock
+            : NULL;
+    if (Given != NULL)
+    {
+        const DtNmosResult Taken = TakeClock(Given, &Clock);
+        if (Taken != DTNMOS_OK)
+        {
+            return Taken;
+        }
+    }
     DtNmosNode* Result = Node;
+    Result->Clock = Clock;
     Result->Searches = Searches;
     Result->Search = Searches ? Search : NULL;
     Result->Mutex = NmosOs_MutexCreate();
@@ -506,6 +579,24 @@ static void WriteBindings(NmosBuffer* b, const char* Address)
     free(List);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Writes the node's clock, clk0, as IS-04's clock_internal or clock_ptp.
+//
+static void WriteClock(const DtNmosClock* Clock, NmosBuffer* b)
+{
+    if (Clock->Kind != DTNMOS_CLOCK_PTP)
+    {
+        DTNMOS_APPEND_LITERAL(b, "{\"name\": \"clk0\", \"ref_type\": \"internal\"}");
+        return;
+    }
+    NmosBuffer_Printf(b,
+                      "{\"name\": \"clk0\", \"ref_type\": \"ptp\", \"traceable\": %s, "
+                      "\"version\": \"IEEE1588-2008\", \"gmid\": \"%s\", \"locked\": %s}",
+                      Clock->Traceable ? "true" : "false", Clock->Grandmaster,
+                      Clock->Locked ? "true" : "false");
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_WriteSelf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 void NmosNode_WriteSelf(const DtNmosNode* Node, NmosBuffer* b)
@@ -519,12 +610,12 @@ void NmosNode_WriteSelf(const DtNmosNode* Node, NmosBuffer* b)
     DTNMOS_APPEND_LITERAL(
         b, ", \"api\": {\"versions\": [\"v1.3\"], \"endpoints\": [{\"host\": ");
     NmosJson_WriteString(b, Node->ApiHost);
-    NmosBuffer_Printf(
-        b,
-        ", \"port\": %u, \"protocol\": \"http\"}]}, \"caps\": {}, \"services\": "
-        "[], \"clocks\": [{\"name\": \"clk0\", \"ref_type\": \"internal\"}], "
-        "\"interfaces\": ",
-        (unsigned)Node->ApiPort);
+    NmosBuffer_Printf(b,
+                      ", \"port\": %u, \"protocol\": \"http\"}]}, \"caps\": {}, "
+                      "\"services\": [], \"clocks\": [",
+                      (unsigned)Node->ApiPort);
+    WriteClock(&Node->Clock, b);
+    DTNMOS_APPEND_LITERAL(b, "], \"interfaces\": ");
     WriteInterfaces(Node, b);
     DTNMOS_APPEND_LITERAL(b, "}");
 }
@@ -1285,6 +1376,38 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
     }
     NmosNode_Unlock(Node);
     return Result;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_SetClock -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A clock that changed gives the node a new version, which the next poll registers.
+//
+DtNmosResult DtNmosNode_SetClock(DtNmosNode* Node, const DtNmosClock* Clock)
+{
+    const DtNmosResult Open = NmosNode_CheckOpen(Node, "DtNmosNode_SetClock");
+    if (Open != DTNMOS_OK)
+    {
+        return Open;
+    }
+    if (Clock == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosNode_SetClock() needs a clock.");
+    }
+    DtNmosClock Taken;
+    const DtNmosResult Result = TakeClock(Clock, &Taken);
+    if (Result != DTNMOS_OK)
+    {
+        return Result;
+    }
+    NmosNode_Lock(Node);
+    if (!SameClock(&Node->Clock, &Taken))
+    {
+        Node->Clock = Taken;
+        NmosNode_Touch(Node);
+    }
+    NmosNode_Unlock(Node);
+    return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_UpdateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

@@ -48,6 +48,28 @@ typedef bool (*DtNmosRegistryFailedFunc)(void* User, uint32_t Failures, char* Ne
                                          size_t Size);
 
 // How a node is opened. Strings are copied.
+// The kinds of a node's clock.
+typedef enum DtNmosClockKind
+{
+    DTNMOS_CLOCK_NONE = 0,     // Refused
+    DTNMOS_CLOCK_INTERNAL = 1, // No external reference
+    DTNMOS_CLOCK_PTP = 2,      // A PTP grandmaster
+} DtNmosClockKind;
+
+// The node's clock, clk0, which every source names (IS-04's clocks). Strings are
+// copied.
+typedef struct DtNmosClock
+{
+    size_t Size; // sizeof(DtNmosClock)
+    DtNmosClockKind Kind;
+    // PTP: the grandmaster's EUI-64, eight pairs of hexadecimal digits joined by '-',
+    // in either case, e.g. "00-1B-19-FF-FE-00-00-01". The node writes it in lower
+    // case, as IS-04 asks.
+    char Grandmaster[DTNMOS_MAX_EUI64_SIZE];
+    bool Traceable; // PTP: the grandmaster is traceable to TAI
+    bool Locked;    // PTP: the node follows the grandmaster; false: not yet, or no more
+} DtNmosClock;
+
 typedef struct DtNmosNodeConfig
 {
     size_t Size; // sizeof(DtNmosNodeConfig)
@@ -81,6 +103,9 @@ typedef struct DtNmosNodeConfig
     // RegistryFailed if set, and otherwise moves to the next registry that has not failed
     // yet; after all have failed, it starts again from the first.
     DtNmosRegistrySearch* Search;
+    // The node's clock from the start; NULL: internal. Copied. DtNmosNode_SetClock()
+    // changes it.
+    const DtNmosClock* Clock;
 } DtNmosNodeConfig;
 
 // How a device is added. Strings are copied.
@@ -292,6 +317,17 @@ DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);
 //   DTNMOS_E_STATE  the library was built without the server (see DtNmos_HasServer())
 //   DTNMOS_E_HTTP   the server cannot listen at the address and port
 DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* Node);
+
+// Sets the node's clock, clk0, which every source names, and registers the node again
+// when it changed. Setting the clock the node has changes nothing, so a program may
+// set it each time it checks its clock.
+//
+// Returns DTNMOS_OK, or:
+//   DTNMOS_E_INVALID_ARGUMENT  Clock is NULL, its Size is wrong, its Kind is not
+//                              internal or PTP, or a PTP clock's Grandmaster is not
+//                              an EUI-64
+//   DTNMOS_E_STATE             the node is not open
+DTNMOS_API DtNmosResult DtNmosNode_SetClock(DtNmosNode* Node, const DtNmosClock* Clock);
 
 // Replaces the flow of sender Id, e.g. after its format changed. Its SDP changes with it,
 // and the next poll registers the new version.
