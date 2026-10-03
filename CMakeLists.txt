@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
   dtnmos
-  VERSION 0.5.1
+  VERSION 0.5.2
   DESCRIPTION "SDP of SMPTE ST 2110 flows, and NMOS"
   HOMEPAGE_URL "https://github.com/dektec-com/dtnmos"
   LANGUAGES C)
