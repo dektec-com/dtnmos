@@ -27,7 +27,7 @@
 #include "dtnmos.hpp"
 #include "dtnmos_sdp.h"
 
-namespace dtnmos
+namespace DtNmos
 {
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Values +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
@@ -191,12 +191,12 @@ struct VideoFormat
     bool Interlaced = false; // Interlaced video (interlace)
     bool Segmented = false;  // Progressive frames sent as two fields, PsF (segmented)
     uint32_t Depth = 0;      // Bits per sample
-    dtnmos::Sampling Sampling = dtnmos::Sampling::None;
-    dtnmos::Colorimetry Colorimetry = dtnmos::Colorimetry::None;
-    dtnmos::Tcs Tcs = dtnmos::Tcs::None;
-    dtnmos::Range Range = dtnmos::Range::None;
-    dtnmos::PackingMode PackingMode = dtnmos::PackingMode::None;
-    dtnmos::TransmitterType TransmitterType = dtnmos::TransmitterType::None;
+    DtNmos::Sampling Sampling = DtNmos::Sampling::None;
+    DtNmos::Colorimetry Colorimetry = DtNmos::Colorimetry::None;
+    DtNmos::Tcs Tcs = DtNmos::Tcs::None;
+    DtNmos::Range Range = DtNmos::Range::None;
+    DtNmos::PackingMode PackingMode = DtNmos::PackingMode::None;
+    DtNmos::TransmitterType TransmitterType = DtNmos::TransmitterType::None;
     std::string Ssn; // The edition of the standard (SSN), e.g. "ST2110-20:2017"
     std::string OtherParameters;
 
@@ -238,11 +238,11 @@ struct CompressedVideoFormat
     bool Interlaced = false;
     bool Segmented = false;
     uint32_t Depth = 0;
-    dtnmos::Sampling Sampling = dtnmos::Sampling::None;
-    dtnmos::Colorimetry Colorimetry = dtnmos::Colorimetry::None;
-    dtnmos::Tcs Tcs = dtnmos::Tcs::None;
-    dtnmos::Range Range = dtnmos::Range::None;
-    dtnmos::TransmitterType TransmitterType = dtnmos::TransmitterType::None;
+    DtNmos::Sampling Sampling = DtNmos::Sampling::None;
+    DtNmos::Colorimetry Colorimetry = DtNmos::Colorimetry::None;
+    DtNmos::Tcs Tcs = DtNmos::Tcs::None;
+    DtNmos::Range Range = DtNmos::Range::None;
+    DtNmos::TransmitterType TransmitterType = DtNmos::TransmitterType::None;
     std::string Ssn;
     std::string Profile;
     std::string Level;
@@ -268,7 +268,7 @@ struct DidSdid
 // The format of an ST 2110-40 ancillary data stream, from its a=fmtp line.
 struct AncFormat
 {
-    std::vector<dtnmos::DidSdid> DidSdid; // The kinds of packet the stream carries
+    std::vector<DtNmos::DidSdid> DidSdid; // The kinds of packet the stream carries
     uint32_t VpidCode = 0;                // VPID_Code; 0 when not given
     uint32_t RateNumerator = 0;           // exactframerate; 0 when not given
     uint32_t RateDenominator = 0;
@@ -321,7 +321,7 @@ struct Flow
     uint8_t PayloadType = 0;      // The RTP payload type (the first in m=)
     uint32_t ClockRate = 0; // RTP clock (a=rtpmap): 90000 for video, the sample rate for
                             // audio
-    dtnmos::RefClock RefClock;     // The clock the timestamps follow (a=ts-refclk)
+    DtNmos::RefClock RefClock;     // The clock the timestamps follow (a=ts-refclk)
     bool MediaClockDirect = false; // a=mediaclk:direct=<offset> is present
     uint32_t MediaClockOffset = 0; // Its offset
     uint32_t Leg = 0; // 0, or 1 for the second path of an ST 2022-7 pair (a=group:DUP)
@@ -356,7 +356,7 @@ struct Sdp
     //   Result::InvalidArgument  the SDP has no media sections
     [[nodiscard]] static Expected<Sdp> Parse(std::string_view Text);
 
-    dtnmos::Session Session;
+    DtNmos::Session Session;
     std::vector<Flow> Flows; // In the order of the media sections
 
     // Writes the SDP as text. A flow with Leg 1 is the second path of the flow with Leg 0
@@ -373,7 +373,7 @@ struct Sdp
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-namespace detail
+namespace Detail
 {
 
 // Returns the C text of an optional text: NULL for "".
@@ -833,7 +833,7 @@ class NativeSession
 
     // Makes the C session that Value is. Fails with Result::InvalidArgument when its
     // OriginIp is longer than the C field.
-    [[nodiscard]] Status Set(const dtnmos::Session& Value);
+    [[nodiscard]] Status Set(const DtNmos::Session& Value);
 
   private:
     DtNmosSession Native{};
@@ -966,7 +966,7 @@ inline Status NativeFlow::SetFormat(const Flow& Value)
     {
         DtNmosAncFormat& n = Native.Format.Anc;
         Pairs.clear();
-        for (const dtnmos::DidSdid& Pair : Anc->DidSdid)
+        for (const DtNmos::DidSdid& Pair : Anc->DidSdid)
         {
             Pairs.push_back({Pair.Did, Pair.Sdid});
         }
@@ -995,7 +995,7 @@ inline Status NativeFlow::SetFormat(const Flow& Value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NativeSession::Set -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-inline Status NativeSession::Set(const dtnmos::Session& Value)
+inline Status NativeSession::Set(const DtNmos::Session& Value)
 {
     Native = DtNmosSession{};
     Native.Size = sizeof(Native);
@@ -1012,7 +1012,7 @@ struct SdpFree
     void operator()(DtNmosSdp* Sdp) const { DtNmosSdp_Free(Sdp); }
 };
 
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -1022,81 +1022,81 @@ struct SdpFree
 //
 template <> inline AudioEncoding FromText<AudioEncoding>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosAudioEncoding_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosAudioEncoding_FromText(std::string(Text).c_str()));
 }
 
 template <> inline Colorimetry FromText<Colorimetry>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosColorimetry_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosColorimetry_FromText(std::string(Text).c_str()));
 }
 
 template <> inline PackingMode FromText<PackingMode>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosPackingMode_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosPackingMode_FromText(std::string(Text).c_str()));
 }
 
 template <> inline Range FromText<Range>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosRange_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosRange_FromText(std::string(Text).c_str()));
 }
 
 template <> inline Sampling FromText<Sampling>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosSampling_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosSampling_FromText(std::string(Text).c_str()));
 }
 
 template <> inline Tcs FromText<Tcs>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosTcs_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosTcs_FromText(std::string(Text).c_str()));
 }
 
 template <> inline TransmitterType FromText<TransmitterType>(std::string_view Text)
 {
-    return detail::FromNative(DtNmosTransmitterType_FromText(std::string(Text).c_str()));
+    return Detail::FromNative(DtNmosTransmitterType_FromText(std::string(Text).c_str()));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Name -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 inline std::string_view Name(Media Kind)
 {
-    return DtNmosMedia_Name(detail::ToNative(Kind));
+    return DtNmosMedia_Name(Detail::ToNative(Kind));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Text -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 inline std::string_view Text(AudioEncoding Value)
 {
-    return DtNmosAudioEncoding_Text(detail::ToNative(Value));
+    return DtNmosAudioEncoding_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(Colorimetry Value)
 {
-    return DtNmosColorimetry_Text(detail::ToNative(Value));
+    return DtNmosColorimetry_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(PackingMode Value)
 {
-    return DtNmosPackingMode_Text(detail::ToNative(Value));
+    return DtNmosPackingMode_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(Range Value)
 {
-    return DtNmosRange_Text(detail::ToNative(Value));
+    return DtNmosRange_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(Sampling Value)
 {
-    return DtNmosSampling_Text(detail::ToNative(Value));
+    return DtNmosSampling_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(Tcs Value)
 {
-    return DtNmosTcs_Text(detail::ToNative(Value));
+    return DtNmosTcs_Text(Detail::ToNative(Value));
 }
 
 inline std::string_view Text(TransmitterType Value)
 {
-    return DtNmosTransmitterType_Text(detail::ToNative(Value));
+    return DtNmosTransmitterType_Text(Detail::ToNative(Value));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFormat::SetDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1107,11 +1107,11 @@ inline void VideoFormat::SetDefaults()
 {
     DtNmosVideoFormat Native{};
     Native.Height = Height;
-    Native.Colorimetry = detail::ToNative(Colorimetry);
-    Native.Tcs = detail::ToNative(Tcs);
+    Native.Colorimetry = Detail::ToNative(Colorimetry);
+    Native.Tcs = Detail::ToNative(Tcs);
     DtNmosVideoFormat_SetDefaults(&Native);
-    Colorimetry = detail::FromNative(Native.Colorimetry);
-    Tcs = detail::FromNative(Native.Tcs);
+    Colorimetry = Detail::FromNative(Native.Colorimetry);
+    Tcs = Detail::FromNative(Native.Tcs);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Flow::GetMedia -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1133,17 +1133,17 @@ inline Expected<Sdp> Sdp::Parse(std::string_view Text)
 {
     DtNmosSdp* Parsed = nullptr;
     const Status Checked =
-        detail::Check(DtNmosSdp_Parse(Text.data(), Text.size(), &Parsed));
-    const std::unique_ptr<DtNmosSdp, detail::SdpFree> Owned(Parsed);
+        Detail::Check(DtNmosSdp_Parse(Text.data(), Text.size(), &Parsed));
+    const std::unique_ptr<DtNmosSdp, Detail::SdpFree> Owned(Parsed);
     if (!Checked)
     {
         return std::unexpected(Checked.error());
     }
     Sdp Value;
-    Value.Session = detail::FromNative(*DtNmosSdp_Session(Parsed));
+    Value.Session = Detail::FromNative(*DtNmosSdp_Session(Parsed));
     for (std::size_t i = 0; i < DtNmosSdp_FlowCount(Parsed); ++i)
     {
-        Value.Flows.push_back(detail::FromNative(*DtNmosSdp_Flow(Parsed, i)));
+        Value.Flows.push_back(Detail::FromNative(*DtNmosSdp_Flow(Parsed, i)));
     }
     return Value;
 }
@@ -1154,10 +1154,10 @@ inline Expected<Sdp> Sdp::Parse(std::string_view Text)
 //
 inline Expected<std::string> Sdp::Write() const
 {
-    detail::NativeSession Head;
+    Detail::NativeSession Head;
     Status Made = Head.Set(Session);
-    const std::unique_ptr<detail::NativeFlow[]> Natives(
-        new detail::NativeFlow[Flows.size()]);
+    const std::unique_ptr<Detail::NativeFlow[]> Natives(
+        new Detail::NativeFlow[Flows.size()]);
     std::vector<DtNmosFlow> NativeFlows;
     for (std::size_t i = 0; Made && i < Flows.size(); ++i)
     {
@@ -1174,11 +1174,11 @@ inline Expected<std::string> Sdp::Write() const
     if (Asked != DTNMOS_E_BUFFER_TOO_SMALL)
     {
         return std::unexpected(
-            detail::LastError(Asked == DTNMOS_OK ? DTNMOS_E_INTERNAL : Asked));
+            Detail::LastError(Asked == DTNMOS_OK ? DTNMOS_E_INTERNAL : Asked));
     }
     std::string Text(Size, '\0');
     Size = Text.size();
-    const Status Written = detail::Check(DtNmosSdp_Write(
+    const Status Written = Detail::Check(DtNmosSdp_Write(
         &Head.Get(), NativeFlows.data(), NativeFlows.size(), Text.data(), &Size));
     if (!Written)
     {
@@ -1188,4 +1188,4 @@ inline Expected<std::string> Sdp::Write() const
     return Text;
 }
 
-} // namespace dtnmos
+} // namespace DtNmos

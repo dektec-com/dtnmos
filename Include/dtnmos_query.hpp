@@ -22,15 +22,15 @@
 #include "dtnmos_http.hpp"
 #include "dtnmos_query.h"
 
-namespace dtnmos
+namespace DtNmos
 {
 
 class Node;
 
-namespace detail
+namespace Detail
 {
 struct RegistrySearchState;
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+= Finding registries through DNS-SD +=+=+=+=+=+=+=+=+=+=+=+=+=
 //
@@ -61,7 +61,7 @@ enum class Search : unsigned
 // How Discover() searches.
 struct DiscoveryConfig
 {
-    dtnmos::Service Service = dtnmos::Service::None; // Which API to look for
+    DtNmos::Service Service = DtNmos::Service::None; // Which API to look for
     // The IPv4 address of the network interface to search on; "" for the one of the
     // default route.
     std::string InterfaceAddress;
@@ -70,7 +70,7 @@ struct DiscoveryConfig
     std::string Destination;
     uint32_t TimeoutMs = 0; // How long to collect answers; 1000 when 0
     LogFunction Log;        // Receives log messages; may be empty
-    dtnmos::Search Searches = dtnmos::Search::Both;
+    DtNmos::Search Searches = DtNmos::Search::Both;
     // The DNS server, "<IPv4 address>:<port>"; "" for the host's first IPv4 DNS server,
     // at port 53.
     std::string DnsServer;
@@ -82,7 +82,7 @@ struct DiscoveryConfig
 // One API of a registry that was found. A string not announced is "".
 struct RegistryInfo
 {
-    dtnmos::Service Service = dtnmos::Service::None; // Which API this is
+    DtNmos::Service Service = DtNmos::Service::None; // Which API this is
     std::string Instance; // The announced name, e.g. "Registry 1"
     std::string Host;     // The host name, e.g. "registry-1.local"
     std::string Address;  // The host's IPv4 address, when announced
@@ -95,7 +95,7 @@ struct RegistryInfo
     int Priority = -1; // Lower is preferred; 100 and up are for development; -1 for none
     bool Auth = false; // The API asks for authorization (IS-10)
     bool Usable = false; // dtnmos can use it: v1.3, over http or https, without auth
-    dtnmos::Search FoundBy = dtnmos::Search::Multicast; // The search that found it
+    DtNmos::Search FoundBy = DtNmos::Search::Multicast; // The search that found it
 
     friend bool operator==(const RegistryInfo&, const RegistryInfo&) = default;
 };
@@ -125,7 +125,7 @@ enum class Finds : unsigned
 // How a search is opened.
 struct RegistrySearchConfig
 {
-    dtnmos::Finds Finds = dtnmos::Finds::Both; // The APIs to look for
+    DtNmos::Finds Finds = DtNmos::Finds::Both; // The APIs to look for
     // How to search, as for Discover(), for each API in Finds; its Service is not used.
     // Without one: multicast DNS and the host's DNS server, on the interface of the
     // default route.
@@ -155,26 +155,26 @@ class RegistrySearch
     // had. Fails with Result::State when the search is not fed, and
     // Result::InvalidArgument when it does not look for Kind, or a URL is not http or
     // https.
-    [[nodiscard]] Status Feed(dtnmos::Service Kind, const std::vector<std::string>& Urls);
+    [[nodiscard]] Status Feed(DtNmos::Service Kind, const std::vector<std::string>& Urls);
 
     // Returns the registries for Kind found so far, in the order of Discover(); none
     // until the first search ends. The registries of a fed search are usable, with their
     // URL as name and their place in the list as priority. Fails with
     // Result::InvalidArgument when the search does not look for Kind.
-    [[nodiscard]] Expected<std::vector<RegistryInfo>> List(dtnmos::Service Kind) const;
+    [[nodiscard]] Expected<std::vector<RegistryInfo>> List(DtNmos::Service Kind) const;
 
   private:
     friend class Node;
 
     DtNmosRegistrySearch* GetNative() const;
 
-    std::shared_ptr<detail::RegistrySearchState> State;
+    std::shared_ptr<Detail::RegistrySearchState> State;
 };
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-namespace detail
+namespace Detail
 {
 
 // Converts a service of the C API, as FromNative(DtNmosResult) does.
@@ -287,7 +287,7 @@ struct RegistrySearchState
     std::unique_ptr<DtNmosRegistrySearch, RegistrySearchFree> Native;
 };
 
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -295,14 +295,14 @@ struct RegistrySearchState
 //
 inline Expected<std::vector<RegistryInfo>> Discover(const DiscoveryConfig& Config)
 {
-    const DtNmosDiscoveryConfig Native = detail::ToNative(Config, Config.Log);
+    const DtNmosDiscoveryConfig Native = Detail::ToNative(Config, Config.Log);
     DtNmosRegistryList* List = nullptr;
-    const Status Found = detail::Check(DtNmos_Discover(&Native, &List));
+    const Status Found = Detail::Check(DtNmos_Discover(&Native, &List));
     if (!Found)
     {
         return std::unexpected(Found.error());
     }
-    return detail::TakeList(List);
+    return Detail::TakeList(List);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -311,7 +311,7 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosRegistrySearchConfig, Fed);
     RegistrySearch Made;
-    Made.State = std::make_shared<detail::RegistrySearchState>();
+    Made.State = std::make_shared<Detail::RegistrySearchState>();
     Made.State->Native.reset(DtNmosRegistrySearch_Alloc());
     if (Made.State->Native == nullptr)
     {
@@ -325,11 +325,11 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
     if (Config.Discovery.has_value())
     {
         Made.State->Log = Config.Discovery->Log;
-        Discovery = detail::ToNative(*Config.Discovery, Made.State->Log);
+        Discovery = Detail::ToNative(*Config.Discovery, Made.State->Log);
         Native.Discovery = &Discovery;
     }
     const Status Opened =
-        detail::Check(DtNmosRegistrySearch_Open(Made.State->Native.get(), &Native));
+        Detail::Check(DtNmosRegistrySearch_Open(Made.State->Native.get(), &Native));
     if (!Opened)
     {
         return std::unexpected(Opened.error());
@@ -339,7 +339,7 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::Feed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-inline Status RegistrySearch::Feed(dtnmos::Service Kind,
+inline Status RegistrySearch::Feed(DtNmos::Service Kind,
                                    const std::vector<std::string>& Urls)
 {
     std::vector<const char*> Natives;
@@ -347,7 +347,7 @@ inline Status RegistrySearch::Feed(dtnmos::Service Kind,
     {
         Natives.push_back(Url.c_str());
     }
-    return detail::Check(DtNmosRegistrySearch_Feed(GetNative(), detail::ToNative(Kind),
+    return Detail::Check(DtNmosRegistrySearch_Feed(GetNative(), Detail::ToNative(Kind),
                                                    Natives.data(), Natives.size()));
 }
 
@@ -361,16 +361,16 @@ inline DtNmosRegistrySearch* RegistrySearch::GetNative() const
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::List -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 inline Expected<std::vector<RegistryInfo>>
-RegistrySearch::List(dtnmos::Service Kind) const
+RegistrySearch::List(DtNmos::Service Kind) const
 {
     DtNmosRegistryList* Found = nullptr;
-    const Status Listed = detail::Check(
-        DtNmosRegistrySearch_List(GetNative(), detail::ToNative(Kind), &Found));
+    const Status Listed = Detail::Check(
+        DtNmosRegistrySearch_List(GetNative(), Detail::ToNative(Kind), &Found));
     if (!Listed)
     {
         return std::unexpected(Listed.error());
     }
-    return detail::TakeList(Found);
+    return Detail::TakeList(Found);
 }
 
-} // namespace dtnmos
+} // namespace DtNmos

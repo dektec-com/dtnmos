@@ -80,14 +80,15 @@ The `.hpp` headers in `Include/` are a C++23 wrapper over the C API, header only
 the C header each wraps. The rules above hold for them, but for rule 10, which is for C
 functions, and with these:
 
-- **Names are those of the C API without the prefix**, in PascalCase: types, functions,
-  fields, parameters and local variables alike, e.g. `dtnmos::Node::AddSender()`. A
-  getter whose name would be a type's is `Get...`, e.g. `GetId()`, and a parameter does
-  not take the name of a type. What the standard library calls by name keeps the
-  standard's name: `begin()`, `end()`, `size()`, `value_type`.
+- **Names are those of the C API, with its prefix as the namespace**, in PascalCase:
+  namespaces, types, functions, fields, parameters and local variables alike, e.g.
+  `DtNmos::Node::AddSender()` for `DtNmosNode_AddSender()`. A getter whose name would be
+  a type's is `Get...`, e.g. `GetId()`, and a parameter does not take the name of a
+  type. What the standard library calls by name keeps the standard's name: `begin()`,
+  `end()`, `size()`, `value_type`.
 - **A private member has no mark**, no `_` and no `m`. It never takes the name of a type
   or of a function of its class: the types that only the wrapper uses are in
-  `dtnmos::detail`, not nested in the class, and the C handle of a class is `Native`.
+  `DtNmos::Detail`, not nested in the class, and the C handle of a class is `Native`.
 - **No C struct and no C enum in the API.** Each struct has a value type and each enum an
   `enum class` with the C values; the wrapper converts at the boundary. A conversion
   asserts with `DTNMOS_DETAIL_LAST_FIELD` which field it knows to be the last of its C

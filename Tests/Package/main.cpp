@@ -12,7 +12,7 @@
 //
 int main()
 {
-    const auto Namespace = dtnmos::Id::FromText("bbbbbbbb-0000-4000-8000-000000000001");
-    const auto Made = Namespace ? dtnmos::Id::FromName(*Namespace, "device") : Namespace;
+    const auto Namespace = DtNmos::Id::FromText("bbbbbbbb-0000-4000-8000-000000000001");
+    const auto Made = Namespace ? DtNmos::Id::FromName(*Namespace, "device") : Namespace;
     return Made && !Made->IsEmpty() ? 0 : 1;
 }

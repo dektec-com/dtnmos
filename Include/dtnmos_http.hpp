@@ -23,7 +23,7 @@
 #include "dtnmos.hpp"
 #include "dtnmos_http.h"
 
-namespace dtnmos
+namespace DtNmos
 {
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= HTTP +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
@@ -90,7 +90,7 @@ bool HasCurl();
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-namespace detail
+namespace Detail
 {
 
 // Returns the result of a callback of the C library: DTNMOS_OK, or the code of Done's
@@ -230,7 +230,7 @@ inline NativeHttp ToNative(const HttpFunction& Http)
     return {HttpTrampoline, const_cast<HttpFunction*>(&Http)};
 }
 
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 
@@ -239,19 +239,19 @@ inline NativeHttp ToNative(const HttpFunction& Http)
 inline Expected<HttpResponse>
 CurlHttpFunction::operator()(const HttpRequest& Request) const
 {
-    const std::unique_ptr<DtNmosHttpResponse, detail::HttpResponseFree> Response(
+    const std::unique_ptr<DtNmosHttpResponse, Detail::HttpResponseFree> Response(
         DtNmosHttpResponse_Alloc());
     if (Response == nullptr)
     {
         return std::unexpected(Error{Result::NoMemory, "Out of memory."});
     }
-    const DtNmosHttpRequest Native = detail::ToNative(Request);
-    const Status Sent = detail::Check(DtNmos_CurlHttp(nullptr, &Native, Response.get()));
+    const DtNmosHttpRequest Native = Detail::ToNative(Request);
+    const Status Sent = Detail::Check(DtNmos_CurlHttp(nullptr, &Native, Response.get()));
     if (!Sent)
     {
         return std::unexpected(Sent.error());
     }
-    return detail::FromNative(Response.get());
+    return Detail::FromNative(Response.get());
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasCurl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -282,4 +282,4 @@ inline const std::string* HttpResponse::FindHeader(std::string_view Name) const
     return nullptr;
 }
 
-} // namespace dtnmos
+} // namespace DtNmos

@@ -13,7 +13,7 @@
 #include "NmosTest.h"
 #include "dtnmos_http.hpp"
 
-using ResponsePtr = std::unique_ptr<DtNmosHttpResponse, dtnmos::detail::HttpResponseFree>;
+using ResponsePtr = std::unique_ptr<DtNmosHttpResponse, DtNmos::Detail::HttpResponseFree>;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppHttpConverts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
@@ -23,22 +23,22 @@ using ResponsePtr = std::unique_ptr<DtNmosHttpResponse, dtnmos::detail::HttpResp
 //
 NMOS_TEST(CppHttpConverts)
 {
-    dtnmos::HttpRequest Request;
+    DtNmos::HttpRequest Request;
     Request.Method = "PATCH";
     Request.Url = "/x-nmos/connection/v1.1/single/senders/";
     Request.ContentType = "application/json";
     Request.Body = std::string("{\"a\": 1}\0tail", 13);
     Request.TimeoutMs = 2500;
-    const DtNmosHttpRequest Native = dtnmos::detail::ToNative(Request);
+    const DtNmosHttpRequest Native = DtNmos::Detail::ToNative(Request);
     NMOS_ASSERT_EQ(Native.BodyLength, 13);
-    NMOS_ASSERT(dtnmos::detail::FromNative(Native) == Request);
+    NMOS_ASSERT(DtNmos::Detail::FromNative(Native) == Request);
 
-    const dtnmos::HttpRequest Get{"GET", "http://registry.test/", "", "", 0};
-    const DtNmosHttpRequest NativeGet = dtnmos::detail::ToNative(Get);
+    const DtNmos::HttpRequest Get{"GET", "http://registry.test/", "", "", 0};
+    const DtNmosHttpRequest NativeGet = DtNmos::Detail::ToNative(Get);
     NMOS_ASSERT(NativeGet.Body == nullptr);
     NMOS_ASSERT(NativeGet.ContentType == nullptr);
 
-    dtnmos::HttpResponse Response;
+    DtNmos::HttpResponse Response;
     Response.Status = 201;
     Response.Headers = {{"Location", "/x-nmos/registration/v1.3/resource/nodes/1"},
                         {"X-Other", "2"}};
@@ -46,8 +46,8 @@ NMOS_TEST(CppHttpConverts)
     Response.Body = "{}";
     const ResponsePtr Filled(DtNmosHttpResponse_Alloc());
     NMOS_ASSERT(Filled != nullptr);
-    NMOS_ASSERT(dtnmos::detail::ToNative(Response, Filled.get()).has_value());
-    const dtnmos::HttpResponse Back = dtnmos::detail::FromNative(Filled.get());
+    NMOS_ASSERT(DtNmos::Detail::ToNative(Response, Filled.get()).has_value());
+    const DtNmos::HttpResponse Back = DtNmos::Detail::FromNative(Filled.get());
     NMOS_ASSERT_EQ(Back.Status, 201);
     NMOS_ASSERT(Back.ContentType == "application/json");
     NMOS_ASSERT(Back.Body == "{}");
@@ -61,12 +61,12 @@ NMOS_TEST(CppHttpConverts)
 //
 // Calls Http as the C library calls it, with a GET of the registry, into Response.
 //
-static DtNmosResult CallTrampoline(const dtnmos::HttpFunction& Http,
+static DtNmosResult CallTrampoline(const DtNmos::HttpFunction& Http,
                                    DtNmosHttpResponse* Response)
 {
-    const dtnmos::HttpRequest Get{"GET", "http://registry.test/x-nmos", "", "", 1000};
-    const DtNmosHttpRequest Native = dtnmos::detail::ToNative(Get);
-    const dtnmos::detail::NativeHttp C = dtnmos::detail::ToNative(Http);
+    const DtNmos::HttpRequest Get{"GET", "http://registry.test/x-nmos", "", "", 1000};
+    const DtNmosHttpRequest Native = DtNmos::Detail::ToNative(Get);
+    const DtNmos::Detail::NativeHttp C = DtNmos::Detail::ToNative(Http);
     return C.Function(C.User, &Native, Response);
 }
 
@@ -80,11 +80,11 @@ static DtNmosResult CallTrampoline(const dtnmos::HttpFunction& Http,
 NMOS_TEST(CppHttpTrampoline)
 {
     std::string Asked;
-    const dtnmos::HttpFunction Answers =
-        [&](const dtnmos::HttpRequest& Request) -> dtnmos::Expected<dtnmos::HttpResponse>
+    const DtNmos::HttpFunction Answers =
+        [&](const DtNmos::HttpRequest& Request) -> DtNmos::Expected<DtNmos::HttpResponse>
     {
         Asked = Request.Method + " " + Request.Url;
-        return dtnmos::HttpResponse{200, {}, "application/json", "[]"};
+        return DtNmos::HttpResponse{200, {}, "application/json", "[]"};
     };
     const ResponsePtr Response(DtNmosHttpResponse_Alloc());
     NMOS_ASSERT_EQ(CallTrampoline(Answers, Response.get()), DTNMOS_OK);
@@ -92,20 +92,20 @@ NMOS_TEST(CppHttpTrampoline)
     NMOS_ASSERT_EQ(DtNmosHttpResponse_Status(Response.get()), 200);
     NMOS_ASSERT_STR(DtNmosHttpResponse_Body(Response.get(), nullptr), "[]");
 
-    const dtnmos::HttpFunction TimesOut =
-        [](const dtnmos::HttpRequest&) -> dtnmos::Expected<dtnmos::HttpResponse>
-    { return std::unexpected(dtnmos::Error{dtnmos::Result::Timeout, "no answer"}); };
+    const DtNmos::HttpFunction TimesOut =
+        [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
+    { return std::unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no answer"}); };
     const ResponsePtr Empty(DtNmosHttpResponse_Alloc());
     NMOS_ASSERT_EQ(CallTrampoline(TimesOut, Empty.get()), DTNMOS_E_TIMEOUT);
     NMOS_ASSERT_STR(DtNmos_GetLastError(), "no answer");
 
-    const dtnmos::HttpFunction FailsWithOk =
-        [](const dtnmos::HttpRequest&) -> dtnmos::Expected<dtnmos::HttpResponse>
-    { return std::unexpected(dtnmos::Error{dtnmos::Result::Ok, "not a failure"}); };
+    const DtNmos::HttpFunction FailsWithOk =
+        [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
+    { return std::unexpected(DtNmos::Error{DtNmos::Result::Ok, "not a failure"}); };
     NMOS_ASSERT_EQ(CallTrampoline(FailsWithOk, Empty.get()), DTNMOS_E_HTTP);
 #if defined(__cpp_exceptions)
-    const dtnmos::HttpFunction Throws =
-        [](const dtnmos::HttpRequest&) -> dtnmos::Expected<dtnmos::HttpResponse>
+    const DtNmos::HttpFunction Throws =
+        [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
     { throw std::runtime_error("the socket broke"); };
     NMOS_ASSERT_EQ(CallTrampoline(Throws, Empty.get()), DTNMOS_E_HTTP);
     NMOS_ASSERT_STR(DtNmos_GetLastError(), "the socket broke");
@@ -121,21 +121,21 @@ NMOS_TEST(CppHttpTrampoline)
 NMOS_TEST(CppHttpCurl)
 {
     NMOS_ASSERT(
-        dtnmos::detail::ToNative(dtnmos::HttpFunction(dtnmos::CurlHttp)).Function ==
+        DtNmos::Detail::ToNative(DtNmos::HttpFunction(DtNmos::CurlHttp)).Function ==
         DtNmos_CurlHttp);
-    const dtnmos::HttpFunction Other =
-        [](const dtnmos::HttpRequest&) -> dtnmos::Expected<dtnmos::HttpResponse>
-    { return dtnmos::HttpResponse{}; };
-    NMOS_ASSERT(dtnmos::detail::ToNative(Other).Function ==
-                dtnmos::detail::HttpTrampoline);
-    NMOS_ASSERT(dtnmos::detail::ToNative(dtnmos::HttpFunction()).Function == nullptr);
+    const DtNmos::HttpFunction Other =
+        [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
+    { return DtNmos::HttpResponse{}; };
+    NMOS_ASSERT(DtNmos::Detail::ToNative(Other).Function ==
+                DtNmos::Detail::HttpTrampoline);
+    NMOS_ASSERT(DtNmos::Detail::ToNative(DtNmos::HttpFunction()).Function == nullptr);
 
-    const dtnmos::Expected<dtnmos::HttpResponse> Answer =
-        dtnmos::CurlHttp(dtnmos::HttpRequest{"GET", "http://127.0.0.1:9/", "", "", 1000});
+    const DtNmos::Expected<DtNmos::HttpResponse> Answer =
+        DtNmos::CurlHttp(DtNmos::HttpRequest{"GET", "http://127.0.0.1:9/", "", "", 1000});
     NMOS_ASSERT(!Answer.has_value());
-    if (!dtnmos::HasCurl())
+    if (!DtNmos::HasCurl())
     {
-        NMOS_ASSERT(Answer.error().Code == dtnmos::Result::State);
+        NMOS_ASSERT(Answer.error().Code == DtNmos::Result::State);
     }
 }
 

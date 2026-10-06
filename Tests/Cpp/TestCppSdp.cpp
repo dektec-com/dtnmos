@@ -59,45 +59,45 @@ static const char* const CameraSdp =
 //
 NMOS_TEST(CppSdpReadsCamera)
 {
-    const dtnmos::Expected<dtnmos::Sdp> Read = dtnmos::Sdp::Parse(CameraSdp);
+    const DtNmos::Expected<DtNmos::Sdp> Read = DtNmos::Sdp::Parse(CameraSdp);
     NMOS_ASSERT(Read.has_value());
     NMOS_ASSERT(Read->Session.Name == "Camera 1");
     NMOS_ASSERT(Read->Session.OriginIp == "192.168.1.10");
     NMOS_ASSERT_EQ(Read->Session.SessionId, 1443716955u);
     NMOS_ASSERT_EQ(Read->Flows.size(), 3);
 
-    const dtnmos::Flow& Primary = Read->Flows[0];
-    NMOS_ASSERT(Primary.GetMedia() == dtnmos::Media::Video);
+    const DtNmos::Flow& Primary = Read->Flows[0];
+    NMOS_ASSERT(Primary.GetMedia() == DtNmos::Media::Video);
     NMOS_ASSERT(Primary.DestinationIp == "239.10.1.1");
     NMOS_ASSERT_EQ(Primary.DestinationPort, 5004);
     NMOS_ASSERT(Primary.SourceIp == "192.168.1.10");
     NMOS_ASSERT_EQ(Primary.Leg, 0);
-    NMOS_ASSERT(Primary.RefClock.Kind == dtnmos::RefClockKind::Ptp);
+    NMOS_ASSERT(Primary.RefClock.Kind == DtNmos::RefClockKind::Ptp);
     NMOS_ASSERT(Primary.RefClock.Grandmaster == "39-A7-94-FF-FE-07-CB-D0");
     NMOS_ASSERT_EQ(Primary.RefClock.Domain, 127);
-    const auto& Video = std::get<dtnmos::VideoFormat>(Primary.Format);
+    const auto& Video = std::get<DtNmos::VideoFormat>(Primary.Format);
     NMOS_ASSERT_EQ(Video.Width, 1920);
     NMOS_ASSERT_EQ(Video.Height, 1080);
     NMOS_ASSERT(Video.Interlaced);
-    NMOS_ASSERT(Video.Sampling == dtnmos::Sampling::YCbCr422);
-    NMOS_ASSERT(Video.Colorimetry == dtnmos::Colorimetry::Bt709);
+    NMOS_ASSERT(Video.Sampling == DtNmos::Sampling::YCbCr422);
+    NMOS_ASSERT(Video.Colorimetry == DtNmos::Colorimetry::Bt709);
     NMOS_ASSERT(Video.Ssn == "ST2110-20:2017");
     NMOS_ASSERT_EQ(Read->Flows[1].Leg, 1);
     NMOS_ASSERT(Read->Flows[1].DestinationIp == "239.20.1.1");
 
-    const dtnmos::Flow& Sound = Read->Flows[2];
-    NMOS_ASSERT(Sound.GetMedia() == dtnmos::Media::Audio);
-    const auto& Audio = std::get<dtnmos::AudioFormat>(Sound.Format);
-    NMOS_ASSERT(Audio.Encoding == dtnmos::AudioEncoding::L24);
+    const DtNmos::Flow& Sound = Read->Flows[2];
+    NMOS_ASSERT(Sound.GetMedia() == DtNmos::Media::Audio);
+    const auto& Audio = std::get<DtNmos::AudioFormat>(Sound.Format);
+    NMOS_ASSERT(Audio.Encoding == DtNmos::AudioEncoding::L24);
     NMOS_ASSERT_EQ(Audio.SampleRate, 48000);
     NMOS_ASSERT_EQ(Audio.Channels, 2);
     NMOS_ASSERT_EQ(Audio.PacketTimeNs, 1000000);
     NMOS_ASSERT(Audio.ChannelOrder == "SMPTE2110.(ST)");
 
-    const dtnmos::Expected<std::string> Written = Read->Write();
+    const DtNmos::Expected<std::string> Written = Read->Write();
     NMOS_ASSERT(Written.has_value());
     NMOS_ASSERT(Written->find("a=group:DUP") != std::string::npos);
-    const dtnmos::Expected<dtnmos::Sdp> Again = dtnmos::Sdp::Parse(*Written);
+    const DtNmos::Expected<DtNmos::Sdp> Again = DtNmos::Sdp::Parse(*Written);
     NMOS_ASSERT(Again.has_value());
     NMOS_ASSERT(*Again == *Read);
 }
@@ -106,14 +106,14 @@ NMOS_TEST(CppSdpReadsCamera)
 //
 // Returns whether Value converts to the C API and back to itself.
 //
-static bool RoundTrip(const dtnmos::Flow& Value)
+static bool RoundTrip(const DtNmos::Flow& Value)
 {
-    dtnmos::detail::NativeFlow Native;
+    DtNmos::Detail::NativeFlow Native;
     if (!Native.Set(Value))
     {
         return false;
     }
-    return dtnmos::detail::FromNative(Native.Get()) == Value;
+    return DtNmos::Detail::FromNative(Native.Get()) == Value;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Transport -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -121,15 +121,15 @@ static bool RoundTrip(const dtnmos::Flow& Value)
 // Returns a flow whose fields outside its format all differ from their defaults, with
 // Format.
 //
-static dtnmos::Flow Transport(dtnmos::FlowFormat Format)
+static DtNmos::Flow Transport(DtNmos::FlowFormat Format)
 {
-    dtnmos::Flow Value;
+    DtNmos::Flow Value;
     Value.DestinationIp = "239.1.2.3";
     Value.DestinationPort = 5010;
     Value.SourceIp = "192.168.1.9";
     Value.PayloadType = 98;
     Value.ClockRate = 90000;
-    Value.RefClock.Kind = dtnmos::RefClockKind::Ptp;
+    Value.RefClock.Kind = DtNmos::RefClockKind::Ptp;
     Value.RefClock.PtpVersion = "IEEE1588-2008";
     Value.RefClock.Grandmaster = "39-A7-94-FF-FE-07-CB-D0";
     Value.RefClock.Traceable = true;
@@ -152,7 +152,7 @@ static dtnmos::Flow Transport(dtnmos::FlowFormat Format)
 //
 NMOS_TEST(CppSdpRoundTrips)
 {
-    dtnmos::VideoFormat Video;
+    DtNmos::VideoFormat Video;
     Video.Width = 1280;
     Video.Height = 720;
     Video.RateNumerator = 60000;
@@ -160,18 +160,18 @@ NMOS_TEST(CppSdpRoundTrips)
     Video.Interlaced = true;
     Video.Segmented = true;
     Video.Depth = 12;
-    Video.Sampling = dtnmos::Sampling::Rgb;
-    Video.Colorimetry = dtnmos::Colorimetry::Bt2100;
-    Video.Tcs = dtnmos::Tcs::Hlg;
-    Video.Range = dtnmos::Range::Full;
-    Video.PackingMode = dtnmos::PackingMode::Block;
-    Video.TransmitterType = dtnmos::TransmitterType::Wide;
+    Video.Sampling = DtNmos::Sampling::Rgb;
+    Video.Colorimetry = DtNmos::Colorimetry::Bt2100;
+    Video.Tcs = DtNmos::Tcs::Hlg;
+    Video.Range = DtNmos::Range::Full;
+    Video.PackingMode = DtNmos::PackingMode::Block;
+    Video.TransmitterType = DtNmos::TransmitterType::Wide;
     Video.Ssn = "ST2110-20:2022";
     Video.OtherParameters = "TROFF=37";
     NMOS_EXPECT(RoundTrip(Transport(Video)));
 
-    dtnmos::AudioFormat Audio;
-    Audio.Encoding = dtnmos::AudioEncoding::Am824;
+    DtNmos::AudioFormat Audio;
+    Audio.Encoding = DtNmos::AudioEncoding::Am824;
     Audio.SampleRate = 96000;
     Audio.Channels = 8;
     Audio.PacketTimeNs = 125000;
@@ -179,7 +179,7 @@ NMOS_TEST(CppSdpRoundTrips)
     Audio.OtherParameters = "MAXPTIME=1";
     NMOS_EXPECT(RoundTrip(Transport(Audio)));
 
-    dtnmos::CompressedVideoFormat Compressed;
+    DtNmos::CompressedVideoFormat Compressed;
     Compressed.Encoding = "jxsv";
     Compressed.Width = 3840;
     Compressed.Height = 2160;
@@ -188,11 +188,11 @@ NMOS_TEST(CppSdpRoundTrips)
     Compressed.Interlaced = true;
     Compressed.Segmented = true;
     Compressed.Depth = 10;
-    Compressed.Sampling = dtnmos::Sampling::YCbCr444;
-    Compressed.Colorimetry = dtnmos::Colorimetry::Bt2020;
-    Compressed.Tcs = dtnmos::Tcs::Pq;
-    Compressed.Range = dtnmos::Range::Narrow;
-    Compressed.TransmitterType = dtnmos::TransmitterType::NarrowLinear;
+    Compressed.Sampling = DtNmos::Sampling::YCbCr444;
+    Compressed.Colorimetry = DtNmos::Colorimetry::Bt2020;
+    Compressed.Tcs = DtNmos::Tcs::Pq;
+    Compressed.Range = DtNmos::Range::Narrow;
+    Compressed.TransmitterType = DtNmos::TransmitterType::NarrowLinear;
     Compressed.Ssn = "ST2110-22:2019";
     Compressed.Profile = "High444.12";
     Compressed.Level = "4k-1";
@@ -203,7 +203,7 @@ NMOS_TEST(CppSdpRoundTrips)
     Compressed.OtherParameters = "MAXUDP=8960";
     NMOS_EXPECT(RoundTrip(Transport(Compressed)));
 
-    dtnmos::AncFormat Anc;
+    DtNmos::AncFormat Anc;
     Anc.DidSdid = {{0x61, 0x02}, {0x41, 0x05}};
     Anc.VpidCode = 133;
     Anc.RateNumerator = 30000;
@@ -212,7 +212,7 @@ NMOS_TEST(CppSdpRoundTrips)
     Anc.Ssn = "ST2110-40:2023";
     NMOS_EXPECT(RoundTrip(Transport(Anc)));
 
-    dtnmos::OtherFormat Other;
+    DtNmos::OtherFormat Other;
     Other.Encoding = "H264";
     Other.Fmtp = "profile-level-id=42e01f";
     NMOS_EXPECT(RoundTrip(Transport(Other)));
@@ -222,14 +222,14 @@ NMOS_TEST(CppSdpRoundTrips)
     NMOS_EXPECT(RoundTrip(Transport(Other)));
     NMOS_EXPECT(RoundTrip(Transport(std::monostate())));
 
-    dtnmos::Session Session;
+    DtNmos::Session Session;
     Session.Name = "Camera 2";
     Session.OriginIp = "192.168.1.20";
     Session.SessionId = 12;
     Session.SessionVersion = 13;
-    dtnmos::detail::NativeSession Native;
+    DtNmos::Detail::NativeSession Native;
     NMOS_ASSERT(Native.Set(Session).has_value());
-    NMOS_ASSERT(dtnmos::detail::FromNative(Native.Get()) == Session);
+    NMOS_ASSERT(DtNmos::Detail::FromNative(Native.Get()) == Session);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpGetsMedia -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -238,21 +238,21 @@ NMOS_TEST(CppSdpRoundTrips)
 //
 NMOS_TEST(CppSdpGetsMedia)
 {
-    const std::pair<dtnmos::FlowFormat, dtnmos::Media> Kinds[] = {
-        {std::monostate(), dtnmos::Media::None},
-        {dtnmos::VideoFormat(), dtnmos::Media::Video},
-        {dtnmos::AudioFormat(), dtnmos::Media::Audio},
-        {dtnmos::CompressedVideoFormat(), dtnmos::Media::CompressedVideo},
-        {dtnmos::AncFormat(), dtnmos::Media::Anc},
-        {dtnmos::OtherFormat(), dtnmos::Media::Other},
+    const std::pair<DtNmos::FlowFormat, DtNmos::Media> Kinds[] = {
+        {std::monostate(), DtNmos::Media::None},
+        {DtNmos::VideoFormat(), DtNmos::Media::Video},
+        {DtNmos::AudioFormat(), DtNmos::Media::Audio},
+        {DtNmos::CompressedVideoFormat(), DtNmos::Media::CompressedVideo},
+        {DtNmos::AncFormat(), DtNmos::Media::Anc},
+        {DtNmos::OtherFormat(), DtNmos::Media::Other},
     };
     for (const auto& [Format, Kind] : Kinds)
     {
-        dtnmos::Flow Value;
+        DtNmos::Flow Value;
         Value.Format = Format;
         NMOS_EXPECT(Value.GetMedia() == Kind);
     }
-    NMOS_ASSERT(dtnmos::Name(dtnmos::Media::Video) == "video");
+    NMOS_ASSERT(DtNmos::Name(DtNmos::Media::Video) == "video");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpTexts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -262,26 +262,26 @@ NMOS_TEST(CppSdpGetsMedia)
 //
 NMOS_TEST(CppSdpTexts)
 {
-    NMOS_ASSERT(dtnmos::Text(dtnmos::Sampling::YCbCr422) == "YCbCr-4:2:2");
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Sampling>("YCbCr-4:2:2") ==
-                dtnmos::Sampling::YCbCr422);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Sampling>("") == dtnmos::Sampling::None);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Sampling>("YCbCr-4:1:1") ==
-                dtnmos::Sampling::Other);
-    NMOS_ASSERT(dtnmos::Text(dtnmos::Sampling::Other).empty());
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Colorimetry>(dtnmos::Text(
-                    dtnmos::Colorimetry::Bt2100)) == dtnmos::Colorimetry::Bt2100);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Tcs>(dtnmos::Text(dtnmos::Tcs::Hlg)) ==
-                dtnmos::Tcs::Hlg);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::Range>(dtnmos::Text(dtnmos::Range::Full)) ==
-                dtnmos::Range::Full);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::PackingMode>(dtnmos::Text(
-                    dtnmos::PackingMode::Block)) == dtnmos::PackingMode::Block);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::TransmitterType>(dtnmos::Text(
-                    dtnmos::TransmitterType::Wide)) == dtnmos::TransmitterType::Wide);
-    NMOS_ASSERT(dtnmos::FromText<dtnmos::AudioEncoding>("L24") ==
-                dtnmos::AudioEncoding::L24);
-    NMOS_ASSERT(dtnmos::Text(dtnmos::AudioEncoding::Am824) == "AM824");
+    NMOS_ASSERT(DtNmos::Text(DtNmos::Sampling::YCbCr422) == "YCbCr-4:2:2");
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Sampling>("YCbCr-4:2:2") ==
+                DtNmos::Sampling::YCbCr422);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Sampling>("") == DtNmos::Sampling::None);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Sampling>("YCbCr-4:1:1") ==
+                DtNmos::Sampling::Other);
+    NMOS_ASSERT(DtNmos::Text(DtNmos::Sampling::Other).empty());
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Colorimetry>(DtNmos::Text(
+                    DtNmos::Colorimetry::Bt2100)) == DtNmos::Colorimetry::Bt2100);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Tcs>(DtNmos::Text(DtNmos::Tcs::Hlg)) ==
+                DtNmos::Tcs::Hlg);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::Range>(DtNmos::Text(DtNmos::Range::Full)) ==
+                DtNmos::Range::Full);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::PackingMode>(DtNmos::Text(
+                    DtNmos::PackingMode::Block)) == DtNmos::PackingMode::Block);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::TransmitterType>(DtNmos::Text(
+                    DtNmos::TransmitterType::Wide)) == DtNmos::TransmitterType::Wide);
+    NMOS_ASSERT(DtNmos::FromText<DtNmos::AudioEncoding>("L24") ==
+                DtNmos::AudioEncoding::L24);
+    NMOS_ASSERT(DtNmos::Text(DtNmos::AudioEncoding::Am824) == "AM824");
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -291,26 +291,26 @@ NMOS_TEST(CppSdpTexts)
 //
 NMOS_TEST(CppSdpDefaults)
 {
-    dtnmos::VideoFormat Hd;
+    DtNmos::VideoFormat Hd;
     Hd.Height = 1080;
     Hd.SetDefaults();
-    NMOS_ASSERT(Hd.Colorimetry == dtnmos::Colorimetry::Bt709);
-    NMOS_ASSERT(Hd.Tcs == dtnmos::Tcs::Sdr);
-    dtnmos::VideoFormat Uhd;
+    NMOS_ASSERT(Hd.Colorimetry == DtNmos::Colorimetry::Bt709);
+    NMOS_ASSERT(Hd.Tcs == DtNmos::Tcs::Sdr);
+    DtNmos::VideoFormat Uhd;
     Uhd.Height = 2160;
     Uhd.SetDefaults();
-    NMOS_ASSERT(Uhd.Colorimetry == dtnmos::Colorimetry::Bt2020);
-    dtnmos::VideoFormat Hdr;
+    NMOS_ASSERT(Uhd.Colorimetry == DtNmos::Colorimetry::Bt2020);
+    DtNmos::VideoFormat Hdr;
     Hdr.Height = 2160;
-    Hdr.Colorimetry = dtnmos::Colorimetry::Bt2100;
-    Hdr.Tcs = dtnmos::Tcs::Pq;
+    Hdr.Colorimetry = DtNmos::Colorimetry::Bt2100;
+    Hdr.Tcs = DtNmos::Tcs::Pq;
     Hdr.SetDefaults();
-    NMOS_ASSERT(Hdr.Colorimetry == dtnmos::Colorimetry::Bt2100);
-    NMOS_ASSERT(Hdr.Tcs == dtnmos::Tcs::Pq);
-    dtnmos::VideoFormat Unsized;
+    NMOS_ASSERT(Hdr.Colorimetry == DtNmos::Colorimetry::Bt2100);
+    NMOS_ASSERT(Hdr.Tcs == DtNmos::Tcs::Pq);
+    DtNmos::VideoFormat Unsized;
     Unsized.SetDefaults();
-    NMOS_ASSERT(Unsized.Colorimetry == dtnmos::Colorimetry::None);
-    NMOS_ASSERT(Unsized.Tcs == dtnmos::Tcs::Sdr);
+    NMOS_ASSERT(Unsized.Colorimetry == DtNmos::Colorimetry::None);
+    NMOS_ASSERT(Unsized.Tcs == DtNmos::Tcs::Sdr);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpRefusesToWrite -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -321,21 +321,21 @@ NMOS_TEST(CppSdpDefaults)
 //
 NMOS_TEST(CppSdpRefusesToWrite)
 {
-    dtnmos::Sdp Empty;
+    DtNmos::Sdp Empty;
     Empty.Session.OriginIp = "192.168.1.10";
-    const dtnmos::Expected<std::string> NoFlows = Empty.Write();
+    const DtNmos::Expected<std::string> NoFlows = Empty.Write();
     NMOS_ASSERT(!NoFlows.has_value());
-    NMOS_ASSERT(NoFlows.error().Code == dtnmos::Result::InvalidArgument);
+    NMOS_ASSERT(NoFlows.error().Code == DtNmos::Result::InvalidArgument);
 
-    dtnmos::Sdp Long = Empty;
-    Long.Flows.push_back(Transport(dtnmos::AudioFormat()));
+    DtNmos::Sdp Long = Empty;
+    Long.Flows.push_back(Transport(DtNmos::AudioFormat()));
     Long.Flows[0].DestinationIp = std::string(300, 'a');
-    const dtnmos::Expected<std::string> TooLong = Long.Write();
+    const DtNmos::Expected<std::string> TooLong = Long.Write();
     NMOS_ASSERT(!TooLong.has_value());
-    NMOS_ASSERT(TooLong.error().Code == dtnmos::Result::InvalidArgument);
+    NMOS_ASSERT(TooLong.error().Code == DtNmos::Result::InvalidArgument);
     NMOS_ASSERT(TooLong.error().Message.find("DestinationIp") != std::string::npos);
 
-    const dtnmos::Expected<dtnmos::Sdp> NoSdp = dtnmos::Sdp::Parse("no SDP");
+    const DtNmos::Expected<DtNmos::Sdp> NoSdp = DtNmos::Sdp::Parse("no SDP");
     NMOS_ASSERT(!NoSdp.has_value());
     NMOS_ASSERT(!NoSdp.error().Message.empty());
 }

@@ -9,8 +9,8 @@
 // A program sees C++ types only: every struct of the C API has a value type that owns
 // what it holds, and every enum an enum class with the same values. A call that can fail
 // returns an Expected, which holds its value or the Error of the call, and the compiler
-// warns when a program ignores one. The names are those of the C API without the prefix,
-// e.g. dtnmos::Node::AddSender() for DtNmosNode_AddSender().
+// warns when a program ignores one. The names are those of the C API, with its prefix as
+// the namespace: DtNmos::Node::AddSender() for DtNmosNode_AddSender().
 //
 // It needs C++23, for std::expected: GCC 12, Clang 16 or Visual Studio 2022 17.3 or
 // newer. Link the CMake target dtnmos::cpp, which asks for it.
@@ -38,15 +38,15 @@
 
 #include "dtnmos.h"
 
-namespace dtnmos
+namespace DtNmos
 {
 
 class Id;
 
-namespace detail
+namespace Detail
 {
 struct Access;
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Results +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
@@ -123,7 +123,7 @@ class Id
     friend bool operator==(const Id&, const Id&) = default;
 
   private:
-    friend struct detail::Access;
+    friend struct Detail::Access;
     std::array<char, sizeof(DtNmosId::Text)> Uuid{}; // The text and its null, zero after
 };
 
@@ -168,7 +168,7 @@ std::string_view Name(Result Code);
 // those of the C API, and to call the C API.
 //
 
-namespace detail
+namespace Detail
 {
 
 // Asserts that Field is the last field of the C struct Type, as the conversion of Type
@@ -393,7 +393,7 @@ inline std::string_view Access::View(const Id& Value)
     return std::string_view(Value.Uuid.data());
 }
 
-} // namespace detail
+} // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
@@ -402,16 +402,16 @@ inline std::string_view Access::View(const Id& Value)
 //
 inline Expected<Id> Id::FromName(const Id& Namespace, std::string_view Name)
 {
-    const DtNmosId NativeNamespace = detail::Access::ToNative(Namespace);
+    const DtNmosId NativeNamespace = Detail::Access::ToNative(Namespace);
     const std::string NameText(Name);
     DtNmosId Made{};
     const Status Checked =
-        detail::Check(DtNmosId_FromName(&NativeNamespace, NameText.c_str(), &Made));
+        Detail::Check(DtNmosId_FromName(&NativeNamespace, NameText.c_str(), &Made));
     if (!Checked)
     {
         return std::unexpected(Checked.error());
     }
-    return detail::Access::FromNative(Made);
+    return Detail::Access::FromNative(Made);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Id::FromText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -450,7 +450,7 @@ inline bool Id::IsEmpty() const
 //
 inline std::string Id::ToString() const
 {
-    return std::string(detail::Access::View(*this));
+    return std::string(Detail::Access::View(*this));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GetVersion -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -466,19 +466,19 @@ inline Version GetVersion()
 //
 inline std::string_view Name(Result Code)
 {
-    return DtNmosResult_Name(detail::ToNative(Code));
+    return DtNmosResult_Name(Detail::ToNative(Code));
 }
 
-} // namespace dtnmos
+} // namespace DtNmos
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- std::hash<dtnmos::Id> -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- std::hash<DtNmos::Id> -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Hashes an ID as its text, so that it is a key of a std::unordered_map.
 //
-template <> struct std::hash<dtnmos::Id>
+template <> struct std::hash<DtNmos::Id>
 {
-    std::size_t operator()(const dtnmos::Id& Value) const noexcept
+    std::size_t operator()(const DtNmos::Id& Value) const noexcept
     {
-        return std::hash<std::string_view>{}(dtnmos::detail::Access::View(Value));
+        return std::hash<std::string_view>{}(DtNmos::Detail::Access::View(Value));
     }
 };
