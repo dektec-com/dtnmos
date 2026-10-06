@@ -41,27 +41,34 @@ dtnmos_add_test(Query Loopback/TestQuery.c)
 dtnmos_add_test(Sdp Unit/TestSdp.c)
 dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 
-# The C++ API's suite, on NmosTest.h as the others. Each C++ header has a source of its
-# own that includes only it, so that it compiles alone, and so that a function it defines
-# without inline fails to link. MSVC warns of a switch that misses a value of its enum,
-# which the conversions rely on, only when asked. The suite is built a second time
-# without exceptions, except by MSVC, whose standard library does not support that.
+# The suites of the C++ API, one per C++ header, on NmosTest.h as the others. Each C++
+# header has a source of its own that includes only it, so that it compiles alone, and so
+# that a function it defines without inline fails to link. MSVC warns of a switch that
+# misses a value of its enum, which the conversions rely on, only when asked. Each suite
+# is built a second time without exceptions, as <suite>NoExceptions, except by MSVC,
+# whose standard library does not support that.
 if(DTNMOS_WITH_CPP)
-  set(_dtnmos_cpp_sources Cpp/TestCpp.cpp Cpp/OnlyDtNmos.cpp)
-  set(_dtnmos_cpp_suites Cpp)
-  if(NOT MSVC)
-    list(APPEND _dtnmos_cpp_suites CppNoExceptions)
-  endif()
-  foreach(suite IN LISTS _dtnmos_cpp_suites)
-    dtnmos_add_test(${suite} ${_dtnmos_cpp_sources})
-    target_link_libraries(test_${suite} PRIVATE dtnmos::cpp)
-    if(MSVC)
-      target_compile_options(test_${suite} PRIVATE /we4062)
+  set(_dtnmos_cpp_suites "Cpp TestCpp OnlyDtNmos" "CppSdp TestCppSdp OnlyDtNmosSdp")
+  foreach(entry IN LISTS _dtnmos_cpp_suites)
+    separate_arguments(entry)
+    list(POP_FRONT entry suite)
+    list(TRANSFORM entry PREPEND "Cpp/")
+    list(TRANSFORM entry APPEND ".cpp")
+    set(variants ${suite})
+    if(NOT MSVC)
+      list(APPEND variants ${suite}NoExceptions)
+    endif()
+    foreach(variant IN LISTS variants)
+      dtnmos_add_test(${variant} ${entry})
+      target_link_libraries(test_${variant} PRIVATE dtnmos::cpp)
+      if(MSVC)
+        target_compile_options(test_${variant} PRIVATE /we4062)
+      endif()
+    endforeach()
+    if(NOT MSVC)
+      target_compile_options(test_${suite}NoExceptions PRIVATE -fno-exceptions)
     endif()
   endforeach()
-  if(NOT MSVC)
-    target_compile_options(test_CppNoExceptions PRIVATE -fno-exceptions)
-  endif()
 endif()
 
 # The interop tests run the suites of the AMWA NMOS Testing Tool against a node of
