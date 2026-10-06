@@ -8,6 +8,7 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "NmosTest.h"
@@ -16,8 +17,7 @@
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryFedSearch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // A fed search holds the two registries it is fed, in that order and usable, and refuses
-// a service it does not look for. A copy shares it: what the copy is fed, the original
-// lists, also after the original is gone.
+// a service it does not look for. Moved, it keeps what it was fed, and is fed again.
 //
 NMOS_TEST(CppQueryFedSearch)
 {
@@ -26,7 +26,7 @@ NMOS_TEST(CppQueryFedSearch)
         auto Opened = DtNmos::RegistrySearch::Open(
             {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = true});
         NMOS_ASSERT(Opened.has_value());
-        Search = *Opened;
+        Search.emplace(std::move(*Opened));
     }
     NMOS_ASSERT(Search
                     ->Feed(DtNmos::Service::Registration,
@@ -45,12 +45,12 @@ NMOS_TEST(CppQueryFedSearch)
     NMOS_ASSERT(Refused.error().Code == DtNmos::Result::InvalidArgument);
     NMOS_ASSERT(!Search->List(DtNmos::Service::Query).has_value());
 
-    DtNmos::RegistrySearch Copy = *Search;
-    NMOS_ASSERT(
-        Copy.Feed(DtNmos::Service::Registration, {"http://registry-c.test"}).has_value());
-    NMOS_ASSERT_EQ(Search->List(DtNmos::Service::Registration)->size(), 1);
+    DtNmos::RegistrySearch Moved = std::move(*Search);
     Search.reset();
-    const auto Kept = Copy.List(DtNmos::Service::Registration);
+    NMOS_ASSERT_EQ(Moved.List(DtNmos::Service::Registration)->size(), 2);
+    NMOS_ASSERT(Moved.Feed(DtNmos::Service::Registration, {"http://registry-c.test"})
+                    .has_value());
+    const auto Kept = Moved.List(DtNmos::Service::Registration);
     NMOS_ASSERT(Kept.has_value() && Kept->size() == 1);
     NMOS_ASSERT((*Kept)[0].Url == "http://registry-c.test");
 }

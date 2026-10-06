@@ -18,6 +18,11 @@
 #include "dtnmos_query.h"
 #include "dtnmos_sdp.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Exit codes +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 
 #define EXAMPLE_OK 0      // Did what was asked
@@ -75,3 +80,7 @@ bool Example_ReadFile(const char* Path, char** Text, size_t* Length);
 
 // Sleeps for about Ms milliseconds.
 void Example_SleepMs(int Ms);
+
+#ifdef __cplusplus
+}
+#endif

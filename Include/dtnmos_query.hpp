@@ -12,7 +12,10 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <atomic>
 #include <cstdint>
+#include <cstdio>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <string>
@@ -139,9 +142,11 @@ struct RegistrySearchConfig
 // program opens one, and gives it to its nodes (NodeConfig.Search); several nodes share
 // one. A program that finds registries in another way "feeds" the search the list.
 //
-// A copy shares the search; it does not start another. The search stops when its last
-// copy is gone, the copies its nodes keep included, so it lives as long as a node that
-// uses it.
+// The program owns the search, which is moved, not copied, and stops when it is
+// destroyed. A node borrows it, and the program destroys the search after the nodes that
+// borrow it are closed or destroyed: a search destroyed while a node borrows it prints
+// so and calls std::terminate(), as a std::thread destroyed without join() does. Moving
+// the search moves no node off it.
 class RegistrySearch
 {
   public:
@@ -149,6 +154,12 @@ class RegistrySearch
     // Result::InvalidArgument when Config looks for nothing.
     [[nodiscard]] static Expected<RegistrySearch>
     Open(const RegistrySearchConfig& Config);
+
+    RegistrySearch(RegistrySearch&&) noexcept = default;
+    // Stops this search, which no node may borrow, before it takes Other's.
+    RegistrySearch& operator=(RegistrySearch&& Other) noexcept;
+    // Stops the search; calls std::terminate() while a node borrows it.
+    ~RegistrySearch();
 
     // Gives a fed search its list of registries for Kind: base URLs, e.g.
     // "http://registry.local:8010", the most preferred first. It replaces the list it
@@ -166,9 +177,13 @@ class RegistrySearch
   private:
     friend class Node;
 
+    RegistrySearch() = default;
+
+    // Calls std::terminate() when a node borrows the search.
+    void CheckUnborrowed() const noexcept;
     DtNmosRegistrySearch* GetNative() const;
 
-    std::shared_ptr<Detail::RegistrySearchState> State;
+    std::unique_ptr<Detail::RegistrySearchState> State;
 };
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -279,12 +294,14 @@ struct RegistrySearchFree
     }
 };
 
-// What the copies of a RegistrySearch share: the C search, and the log function it calls
-// for as long as it runs, which is declared first so that it is freed after the search.
+// What a RegistrySearch owns on the heap, where its nodes find it when it moves: the C
+// search, the log function it calls for as long as it runs, which is declared first so
+// that it is freed after the search, and how many nodes borrow it.
 struct RegistrySearchState
 {
     LogFunction Log;
     std::unique_ptr<DtNmosRegistrySearch, RegistrySearchFree> Native;
+    std::atomic<int> Borrowers = 0;
 };
 
 } // namespace Detail
@@ -311,7 +328,7 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosRegistrySearchConfig, Fed);
     RegistrySearch Made;
-    Made.State = std::make_shared<Detail::RegistrySearchState>();
+    Made.State = std::make_unique<Detail::RegistrySearchState>();
     Made.State->Native.reset(DtNmosRegistrySearch_Alloc());
     if (Made.State->Native == nullptr)
     {
@@ -335,6 +352,38 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
         return std::unexpected(Opened.error());
     }
     return Made;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::= -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+inline RegistrySearch& RegistrySearch::operator=(RegistrySearch&& Other) noexcept
+{
+    if (this != &Other)
+    {
+        CheckUnborrowed();
+        State = std::move(Other.State);
+    }
+    return *this;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::~ -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+inline RegistrySearch::~RegistrySearch()
+{
+    CheckUnborrowed();
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::CheckUnborrowed -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+inline void RegistrySearch::CheckUnborrowed() const noexcept
+{
+    if (State != nullptr && State->Borrowers > 0)
+    {
+        std::fputs("DtNmos::RegistrySearch destroyed while a node borrows it: destroy or "
+                   "close the node first.\n",
+                   stderr);
+        std::terminate();
+    }
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::Feed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

@@ -23,6 +23,24 @@ foreach(program IN LISTS _dtnmos_examples)
   dtnmos_set_warnings(${program})
 endforeach()
 
+# DtNmosRegisterNode written with the C++ API, as DtNmosRegisterNodeCpp, on the same
+# helpers.
+if(DTNMOS_WITH_CPP)
+  set(sources "${CMAKE_CURRENT_SOURCE_DIR}/DtNmosRegisterNode.cpp"
+              "${CMAKE_CURRENT_SOURCE_DIR}/Common/ExampleCommon.c"
+              "${CMAKE_CURRENT_SOURCE_DIR}/Common/ExampleCommon.h")
+  add_executable(DtNmosRegisterNodeCpp ${sources})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Examples" FILES ${sources})
+  set_target_properties(DtNmosRegisterNodeCpp PROPERTIES FOLDER "Examples")
+  target_include_directories(DtNmosRegisterNodeCpp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(DtNmosRegisterNodeCpp PRIVATE dtnmos::cpp)
+  if(MSVC)
+    target_compile_definitions(DtNmosRegisterNodeCpp PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(DtNmosRegisterNodeCpp PRIVATE /we4062)
+  endif()
+  dtnmos_set_warnings(DtNmosRegisterNodeCpp)
+endif()
+
 # +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+ Smoke tests +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 #
 # What a program does without a network: an SDP read and written back, and the failures
