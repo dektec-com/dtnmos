@@ -72,13 +72,15 @@ if(DTNMOS_WITH_CPP)
       target_compile_options(test_${suite}NoExceptions PRIVATE -fno-exceptions)
     endif()
   endforeach()
-  # A search destroyed while a node borrows it calls std::terminate(), whose handler in
-  # the program ends it with 0.
-  add_executable(test_CppBorrowedSearch Cpp/BorrowedSearch.cpp)
-  set_target_properties(test_CppBorrowedSearch PROPERTIES FOLDER "Tests")
-  target_link_libraries(test_CppBorrowedSearch PRIVATE dtnmos::cpp)
-  dtnmos_set_warnings(test_CppBorrowedSearch)
-  add_test(NAME dtnmos.CppBorrowedSearch COMMAND test_CppBorrowedSearch)
+  # A search destroyed while a node borrows it, and a query destroyed while a
+  # subscription borrows it, call std::terminate(), whose handler in the program ends it
+  # with 0.
+  add_executable(test_CppBorrowed Cpp/Borrowed.cpp)
+  set_target_properties(test_CppBorrowed PROPERTIES FOLDER "Tests")
+  target_link_libraries(test_CppBorrowed PRIVATE dtnmos::cpp)
+  dtnmos_set_warnings(test_CppBorrowed)
+  add_test(NAME dtnmos.CppBorrowedSearch COMMAND test_CppBorrowed search)
+  add_test(NAME dtnmos.CppBorrowedQuery COMMAND test_CppBorrowed query)
 endif()
 
 # The interop tests run the suites of the AMWA NMOS Testing Tool against a node of

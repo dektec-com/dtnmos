@@ -251,6 +251,12 @@ template <std::size_t N> std::string FromArray(const char (&Field)[N])
     return std::string(Field, Length);
 }
 
+// Returns a text for the C API: NULL for "", where NULL means none or the default.
+inline const char* NullIfEmpty(const std::string& Text)
+{
+    return Text.empty() ? nullptr : Text.c_str();
+}
+
 // Returns a text of the C API as a std::string, "" for NULL.
 inline std::string FromNative(const char* Native)
 {

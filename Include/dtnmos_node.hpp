@@ -523,12 +523,6 @@ inline bool RegistryFailedTrampoline(void* User, uint32_t Failures, char* NextUr
     return true;
 }
 
-// Returns a text for the C API: NULL for "", where NULL means the default.
-inline const char* NullIfEmpty(const std::string& Text)
-{
-    return Text.empty() ? nullptr : Text.c_str();
-}
-
 } // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=

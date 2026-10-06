@@ -13,6 +13,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -86,6 +87,36 @@ inline constexpr CurlHttpFunction CurlHttp{};
 
 // Returns whether the library was built with libcurl, so that CurlHttp works.
 bool HasCurl();
+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The WebSocket of a client +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+//
+// A subscription to a registry (dtnmos_query.hpp) receives its changes over a WebSocket.
+// The program gives the function that opens one, a WebSocketConnect, or none for the one
+// on libcurl. The library calls it on the thread that called the library, for one
+// connection at a time.
+//
+
+// A WebSocket that the program's WebSocketConnect opened. The library owns it, and
+// destroying it closes it.
+class WebSocketConnection
+{
+  public:
+    virtual ~WebSocketConnection() = default;
+
+    // Waits up to Timeout for a whole text message, and returns it. Fails with
+    // Result::Timeout when no whole message came, keeping a part that did for the next
+    // call, and with Result::Network when the connection closed or failed.
+    virtual Expected<std::string> Receive(std::chrono::milliseconds Timeout) = 0;
+};
+
+// The program's function that connects to Url ("ws://" or "wss://") within Timeout, and
+// returns the connection. It fails with Result::Timeout or Result::Network.
+using WebSocketConnect = std::function<Expected<std::unique_ptr<WebSocketConnection>>(
+    const std::string& Url, std::chrono::milliseconds Timeout)>;
+
+// Returns whether the WebSocket on libcurl works: the library was built with it, and the
+// libcurl it runs with supports WebSockets.
+bool HasCurlWebSocket();
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
@@ -230,6 +261,96 @@ inline NativeHttp ToNative(const HttpFunction& Http)
     return {HttpTrampoline, const_cast<HttpFunction*>(&Http)};
 }
 
+// A connection a WebSocketConnect opened, as the C library holds it: the connection, and
+// the message it received last, which the C library reads until the next Receive.
+struct OpenWebSocket
+{
+    std::unique_ptr<WebSocketConnection> Connection;
+    std::string Message;
+};
+
+// The C transport of a WebSocketConnect, which it keeps; User of the C functions points
+// to it. It is not copied or moved, as the C library holds its address.
+struct NativeWebSocket
+{
+    WebSocketConnect Connect;
+    DtNmosWebSocketTransport Transport{};
+
+    NativeWebSocket() = default;
+    NativeWebSocket(const NativeWebSocket&) = delete;
+    NativeWebSocket& operator=(const NativeWebSocket&) = delete;
+
+    // Returns the C transport of Connect, or NULL for none, which is libcurl's.
+    const DtNmosWebSocketTransport* Get();
+};
+
+// The C function that connects, through the WebSocketConnect of the NativeWebSocket that
+// User points to. The C library owns the connection it is given, until it closes it.
+inline DtNmosResult WebSocketConnectTrampoline(void* User, const char* Url,
+                                               uint32_t TimeoutMs,
+                                               void** Connection) noexcept
+{
+    const NativeWebSocket& WebSocket = *static_cast<const NativeWebSocket*>(User);
+    std::unique_ptr<OpenWebSocket> Opened;
+    const Status Done = Guard(
+        Result::Network,
+        [&]() -> Status
+        {
+            auto Made =
+                WebSocket.Connect(FromNative(Url), std::chrono::milliseconds(TimeoutMs));
+            if (!Made)
+            {
+                return std::unexpected(Made.error());
+            }
+            if (*Made == nullptr)
+            {
+                return std::unexpected(Error{Result::Network, "No connection was made."});
+            }
+            Opened = std::make_unique<OpenWebSocket>();
+            Opened->Connection = std::move(*Made);
+            return {};
+        });
+    if (Done)
+    {
+        *Connection = Opened.release();
+    }
+    return Fail(Done, Result::Network);
+}
+
+// The C function that receives a message on a connection the trampoline above made.
+inline DtNmosResult WebSocketReceiveTrampoline(void* User, void* Connection,
+                                               uint32_t TimeoutMs, const char** Message,
+                                               size_t* Length) noexcept
+{
+    (void)User;
+    OpenWebSocket& Open = *static_cast<OpenWebSocket*>(Connection);
+    const Status Done = Guard(Result::Network,
+                              [&]() -> Status
+                              {
+                                  auto Received = Open.Connection->Receive(
+                                      std::chrono::milliseconds(TimeoutMs));
+                                  if (!Received)
+                                  {
+                                      return std::unexpected(Received.error());
+                                  }
+                                  Open.Message = std::move(*Received);
+                                  return {};
+                              });
+    if (Done)
+    {
+        *Message = Open.Message.c_str();
+        *Length = Open.Message.size();
+    }
+    return Fail(Done, Result::Network);
+}
+
+// The C function that closes a connection the trampoline above made, and frees it.
+inline void WebSocketCloseTrampoline(void* User, void* Connection) noexcept
+{
+    (void)User;
+    const std::unique_ptr<OpenWebSocket> Closed(static_cast<OpenWebSocket*>(Connection));
+}
+
 } // namespace Detail
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Definitions +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -261,6 +382,13 @@ inline bool HasCurl()
     return DtNmos_HasCurl();
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HasCurlWebSocket -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+inline bool HasCurlWebSocket()
+{
+    return DtNmos_HasCurlWebSocket();
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HttpResponse::FindHeader -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 inline const std::string* HttpResponse::FindHeader(std::string_view Name) const
@@ -280,6 +408,23 @@ inline const std::string* HttpResponse::FindHeader(std::string_view Name) const
         }
     }
     return nullptr;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- Detail::NativeWebSocket::Get -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+inline const DtNmosWebSocketTransport* Detail::NativeWebSocket::Get()
+{
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosWebSocketTransport, Close);
+    if (!Connect)
+    {
+        return nullptr;
+    }
+    Transport.Size = sizeof(Transport);
+    Transport.User = this;
+    Transport.Connect = WebSocketConnectTrampoline;
+    Transport.Receive = WebSocketReceiveTrampoline;
+    Transport.Close = WebSocketCloseTrampoline;
+    return &Transport;
 }
 
 } // namespace DtNmos

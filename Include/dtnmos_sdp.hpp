@@ -376,12 +376,6 @@ struct Sdp
 namespace Detail
 {
 
-// Returns the C text of an optional text: NULL for "".
-inline const char* ToNativeOrNull(const std::string& Text)
-{
-    return Text.empty() ? nullptr : Text.c_str();
-}
-
 // Convert the enums of an SDP from the C API, as FromNative(DtNmosResult) does.
 inline Media FromNative(DtNmosMedia Native)
 {
@@ -875,7 +869,7 @@ inline Status NativeFlow::Set(const Flow& Value)
         Copied = CopyText(NativeClock.LocalMac, Clock.LocalMac, "RefClock.LocalMac");
     }
     RefClockText = Clock.Text;
-    NativeClock.Text = ToNativeOrNull(RefClockText);
+    NativeClock.Text = NullIfEmpty(RefClockText);
     Native.MediaClockDirect = Value.MediaClockDirect;
     Native.MediaClockOffset = Value.MediaClockOffset;
     Native.Leg = Value.Leg;
@@ -903,7 +897,7 @@ inline Status NativeFlow::SetFormat(const Flow& Value)
         v.PackingMode = ToNative(Video->PackingMode);
         v.TransmitterType = ToNative(Video->TransmitterType);
         OtherParameters = Video->OtherParameters;
-        v.OtherParameters = ToNativeOrNull(OtherParameters);
+        v.OtherParameters = NullIfEmpty(OtherParameters);
         return CopyText(v.Ssn, Video->Ssn, "VideoFormat.Ssn");
     }
     if (const AudioFormat* Audio = std::get_if<AudioFormat>(&Value.Format))
@@ -914,9 +908,9 @@ inline Status NativeFlow::SetFormat(const Flow& Value)
         a.Channels = Audio->Channels;
         a.PacketTimeNs = Audio->PacketTimeNs;
         ChannelOrder = Audio->ChannelOrder;
-        a.ChannelOrder = ToNativeOrNull(ChannelOrder);
+        a.ChannelOrder = NullIfEmpty(ChannelOrder);
         OtherParameters = Audio->OtherParameters;
-        a.OtherParameters = ToNativeOrNull(OtherParameters);
+        a.OtherParameters = NullIfEmpty(OtherParameters);
         return {};
     }
     if (const CompressedVideoFormat* Compressed =
@@ -939,7 +933,7 @@ inline Status NativeFlow::SetFormat(const Flow& Value)
         c.TransmissionMode = Compressed->TransmissionMode;
         c.BandwidthKbps = Compressed->BandwidthKbps;
         OtherParameters = Compressed->OtherParameters;
-        c.OtherParameters = ToNativeOrNull(OtherParameters);
+        c.OtherParameters = NullIfEmpty(OtherParameters);
         Status Copied =
             CopyText(c.Encoding, Compressed->Encoding, "CompressedVideoFormat.Encoding");
         if (Copied)
@@ -1000,10 +994,22 @@ inline Status NativeSession::Set(const DtNmos::Session& Value)
     Native = DtNmosSession{};
     Native.Size = sizeof(Native);
     Name = Value.Name;
-    Native.Name = ToNativeOrNull(Name);
+    Native.Name = NullIfEmpty(Name);
     Native.SessionId = Value.SessionId;
     Native.SessionVersion = Value.SessionVersion;
     return CopyText(Native.OriginIp, Value.OriginIp, "Session.OriginIp");
+}
+
+// Converts a parsed SDP of the C API.
+inline Sdp FromNative(const DtNmosSdp* Native)
+{
+    Sdp Value;
+    Value.Session = FromNative(*DtNmosSdp_Session(Native));
+    for (std::size_t i = 0; i < DtNmosSdp_FlowCount(Native); ++i)
+    {
+        Value.Flows.push_back(FromNative(*DtNmosSdp_Flow(Native, i)));
+    }
+    return Value;
 }
 
 // Frees a DtNmosSdp, for a std::unique_ptr.
@@ -1139,13 +1145,7 @@ inline Expected<Sdp> Sdp::Parse(std::string_view Text)
     {
         return std::unexpected(Checked.error());
     }
-    Sdp Value;
-    Value.Session = Detail::FromNative(*DtNmosSdp_Session(Parsed));
-    for (std::size_t i = 0; i < DtNmosSdp_FlowCount(Parsed); ++i)
-    {
-        Value.Flows.push_back(Detail::FromNative(*DtNmosSdp_Flow(Parsed, i)));
-    }
-    return Value;
+    return Detail::FromNative(Parsed);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Sdp::Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
