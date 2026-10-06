@@ -36,6 +36,16 @@ option(
   DTNMOS_WITH_SERVER
   "Build the server of the node on civetweb, dtnmos_node_serve()"
   OFF)
+# The C++ API is headers over the C library, which a C++ program compiles itself; the
+# library is C alone. Its tests and example need a C++23 compiler, and are built by
+# default where a C++ compiler is found.
+include(CheckLanguage)
+check_language(CXX)
+set(_dtnmos_cpp_default OFF)
+if(CMAKE_CXX_COMPILER AND (DTNMOS_BUILD_TESTS OR DTNMOS_BUILD_EXAMPLES))
+  set(_dtnmos_cpp_default ON)
+endif()
+option(DTNMOS_WITH_CPP "Build the tests and the example of the C++ API" ${_dtnmos_cpp_default})
 # The flags of the sanitizers the library is built with, which the package test builds its
 # consumer with as well; a project that builds dtnmos with sanitizers sets them.
 set(DTNMOS_SANITIZER_FLAGS
@@ -87,7 +97,8 @@ add_library(dtnmos::dtnmos ALIAS dtnmos)
 # them, and source_group turns the directories on disk into the Visual Studio filters. The
 # glob only decides what is shown; what is compiled stays the list above.
 file(GLOB_RECURSE _dtnmos_headers CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.in"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.hpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Include/*.in"
      "${CMAKE_CURRENT_SOURCE_DIR}/Source/*.h")
 target_sources(dtnmos PRIVATE ${_dtnmos_headers})
 get_target_property(_dtnmos_sources dtnmos SOURCES)
@@ -139,11 +150,38 @@ if(MSVC)
 endif()
 dtnmos_set_warnings(dtnmos)
 
+# The C++ API, dtnmos::cpp: the C library with C++23, which the headers need. The feature
+# is set as a property rather than with target_compile_features, which would need C++
+# enabled here; it is checked where a program links the target.
+add_library(dtnmos_cpp INTERFACE)
+add_library(dtnmos::cpp ALIAS dtnmos_cpp)
+target_link_libraries(dtnmos_cpp INTERFACE dtnmos)
+set_target_properties(dtnmos_cpp PROPERTIES EXPORT_NAME cpp INTERFACE_COMPILE_FEATURES
+                                                           cxx_std_23)
+
+if(DTNMOS_WITH_CPP)
+  enable_language(CXX)
+  set(CMAKE_CXX_STANDARD 23)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+  include(CheckCXXSourceCompiles)
+  check_cxx_source_compiles(
+    "#include <expected>\nint main() { std::expected<int, int> e = 1; return *e - 1; }"
+    DTNMOS_HAS_EXPECTED)
+  if(NOT DTNMOS_HAS_EXPECTED)
+    message(
+      FATAL_ERROR
+        "The C++ API needs C++23 with std::expected: GCC 12, Clang 16 or Visual Studio "
+        "2022 17.3 or newer. Configure with -DDTNMOS_WITH_CPP=OFF to build the C library "
+        "without its C++ tests and example.")
+  endif()
+endif()
+
 if(DTNMOS_INSTALL)
   include(CMakePackageConfigHelpers)
   set(_dtnmos_package_dir "${CMAKE_INSTALL_LIBDIR}/cmake/dtnmos")
   install(
-    TARGETS dtnmos
+    TARGETS dtnmos dtnmos_cpp
     EXPORT dtnmos-targets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -152,7 +190,8 @@ if(DTNMOS_INSTALL)
     DIRECTORY Include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING
-    PATTERN "*.h")
+    PATTERN "*.h"
+    PATTERN "*.hpp")
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Generated/dtnmos_version.h"
           DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
   install(

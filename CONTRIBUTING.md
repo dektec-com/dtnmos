@@ -74,6 +74,37 @@ The first line must name the file it is in. The style check verifies that, becau
 copy-pasted header naming the wrong file otherwise survives for years.
 `Scripts/fix_banners.py` draws a banner at the right width.
 
+## The C++ API
+
+The `.hpp` headers in `Include/` are a C++23 wrapper over the C API, header only, beside
+the C header each wraps. The rules above hold for them, but for rule 10, which is for C
+functions, and with these:
+
+- **Names are those of the C API without the prefix**, in PascalCase: types, functions,
+  fields, parameters and local variables alike, e.g. `dtnmos::Node::AddSender()`. A
+  getter whose name would be a type's is `Get...`, e.g. `GetId()`, and a parameter does
+  not take the name of a type. What the standard library calls by name keeps the
+  standard's name: `begin()`, `end()`, `size()`, `value_type`.
+- **A private member has no mark**, no `_` and no `m`. It never takes the name of a type
+  or of a function of its class: the types that only the wrapper uses are in
+  `dtnmos::detail`, not nested in the class, and the C handle of a class is `Native`.
+- **No C struct and no C enum in the API.** Each struct has a value type and each enum an
+  `enum class` with the C values; the wrapper converts at the boundary. A conversion
+  asserts with `DTNMOS_DETAIL_LAST_FIELD` which field it knows to be the last of its C
+  struct, and converts an enum with a `switch` over every value and no `default`, so that
+  the compiler refuses a field or a value that the C API adds and the wrapper does not
+  convert. A field small enough to fit in the struct's padding escapes the assertion, so
+  **a field added to a public struct, or a value to a public enum, is converted in the
+  same commit**, and review checks it.
+- **A call that can fail returns an `Expected` or a `Status`**, marked `[[nodiscard]]`;
+  the wrapper throws nothing of its own, and builds without exceptions.
+- **Rule 11 holds for the public members of a class**: alphabetical, with the static
+  functions that make an object, such as `Open`, first. Review checks it, as
+  `Scripts/check_style.sh` reads only the `DTNMOS_API` lines of a `.h`.
+
+`Tests/Cpp` has its suite, built with `DTNMOS_WITH_CPP`, which is on where CMake finds a
+C++ compiler; it is built a second time with `-fno-exceptions`, except by MSVC.
+
 ## Tools
 
 `Scripts/check_tools.sh`, or `Scripts/check_tools.ps1` on Windows, says what is there and
@@ -84,8 +115,8 @@ what is missing:
 | clang-format | exactly 18.1.8 | Rules 4 and 6. Another build formats differently and would reformat files that are right. `pip install clang-format==18.1.8` is the surest way to the same one the CI uses |
 | CMake | 3.25 or newer | Everything |
 | Python | 3.8 or newer | `Scripts/fix_banners.py` |
-| Visual Studio | 2022 or newer | The Windows presets |
-| GCC | 11 or newer | The Linux presets |
+| Visual Studio | 2022 or newer; 2022 17.3 for the C++ API | The Windows presets |
+| GCC | 11 or newer; 12 for the C++ API | The Linux presets. With GCC 11, configure with `-DDTNMOS_WITH_CPP=OFF` |
 | Ninja | any | What the Linux presets build with |
 | vcpkg | any | The presets `windows-full` and `linux-full`, which build with libcurl and civetweb; set `VCPKG_ROOT` |
 | Git | any | |

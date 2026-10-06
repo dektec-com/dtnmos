@@ -4,16 +4,18 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# dtnmos_add_test(<suite> <source>) builds the suite of one source file into a program of
-# its own, test_<suite>, and registers it with CTest as dtnmos.<suite>, as CDTAPI does.
-# NmosTest.h is the whole framework.
+# dtnmos_add_test(<suite> <source>...) builds the suite of a source file, and of the
+# sources after it, into a program of its own, test_<suite>, and registers it with CTest
+# as dtnmos.<suite>, as CDTAPI does. NmosTest.h is the whole framework.
 function(dtnmos_add_test suite source)
   set(target "test_${suite}")
   set(framework "${CMAKE_CURRENT_SOURCE_DIR}/NmosTest.h")
-  add_executable(${target} "${source}" "${framework}")
+  set(sources "${source}" ${ARGN})
+  list(TRANSFORM sources PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
+  add_executable(${target} ${sources} "${framework}")
   # The directories on disk are the Visual Studio filters.
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Tests"
-               FILES "${CMAKE_CURRENT_SOURCE_DIR}/${source}" "${framework}")
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Tests" FILES ${sources}
+                                                                     "${framework}")
   set_target_properties(${target} PROPERTIES FOLDER "Tests")
   target_link_libraries(${target} PRIVATE dtnmos::dtnmos)
   # The tests reach the internal headers of the library, and NmosTest.h here.
@@ -38,6 +40,29 @@ dtnmos_add_test(Node Loopback/TestNode.c)
 dtnmos_add_test(Query Loopback/TestQuery.c)
 dtnmos_add_test(Sdp Unit/TestSdp.c)
 dtnmos_add_test(Subscription Loopback/TestSubscription.c)
+
+# The C++ API's suite, on NmosTest.h as the others. Each C++ header has a source of its
+# own that includes only it, so that it compiles alone, and so that a function it defines
+# without inline fails to link. MSVC warns of a switch that misses a value of its enum,
+# which the conversions rely on, only when asked. The suite is built a second time
+# without exceptions, except by MSVC, whose standard library does not support that.
+if(DTNMOS_WITH_CPP)
+  set(_dtnmos_cpp_sources Cpp/TestCpp.cpp Cpp/OnlyDtNmos.cpp)
+  set(_dtnmos_cpp_suites Cpp)
+  if(NOT MSVC)
+    list(APPEND _dtnmos_cpp_suites CppNoExceptions)
+  endif()
+  foreach(suite IN LISTS _dtnmos_cpp_suites)
+    dtnmos_add_test(${suite} ${_dtnmos_cpp_sources})
+    target_link_libraries(test_${suite} PRIVATE dtnmos::cpp)
+    if(MSVC)
+      target_compile_options(test_${suite} PRIVATE /we4062)
+    endif()
+  endforeach()
+  if(NOT MSVC)
+    target_compile_options(test_CppNoExceptions PRIVATE -fno-exceptions)
+  endif()
+endif()
 
 # The interop tests run the suites of the AMWA NMOS Testing Tool against a node of
 # dtnmos, and use a registry as a client: they take minutes, and need the test bed, whose
@@ -82,6 +107,16 @@ if(DTNMOS_INSTALL)
   if(CMAKE_GENERATOR MATCHES "Visual Studio")
     list(APPEND _package_vcpkg_options "-DCMAKE_VS_GLOBALS=VcpkgEnabled=false")
   endif()
+  # A consumer of the C++ API as well, which links dtnmos::cpp, when there is a compiler
+  # for it.
+  set(_package_cpp_options)
+  if(DTNMOS_WITH_CPP)
+    list(APPEND _package_cpp_options "-DDTNMOS_PACKAGE_CPP=ON"
+         "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
+    if(DTNMOS_SANITIZER_FLAGS)
+      list(APPEND _package_cpp_options "-DCMAKE_CXX_FLAGS=${DTNMOS_SANITIZER_FLAGS}")
+    endif()
+  endif()
   # The consumer is configured afresh on every run, as a toolchain takes effect only in
   # the first configuration of a build directory. Under a generator of several
   # configurations it has only the one installed, as the package holds no other, and is
@@ -102,6 +137,7 @@ if(DTNMOS_INSTALL)
       "-DCMAKE_PREFIX_PATH=${_package_prefix_path}"
       "-DCMAKE_C_FLAGS=${DTNMOS_SANITIZER_FLAGS}"
       "-DCMAKE_EXE_LINKER_FLAGS=${DTNMOS_SANITIZER_FLAGS}" ${_package_vcpkg_options}
+      ${_package_cpp_options}
       --test-command dtnmos-package-test)
   set_tests_properties(dtnmos.package.clean dtnmos.package.install
                        PROPERTIES FIXTURES_SETUP dtnmos-package)

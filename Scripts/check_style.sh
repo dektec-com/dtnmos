@@ -20,8 +20,8 @@
 # internal notes, CLAUDE.md and CLAUDE.local.md, are tracked: both belong outside this
 # public repository.
 #
-# With --staged, which the pre-commit hook passes, the rules look only at the C files the
-# commit adds or changes, so that a commit does not wait for the whole tree. A staged
+# With --staged, which the pre-commit hook passes, the rules look only at the source files
+# the commit adds or changes, so that a commit does not wait for the whole tree. A staged
 # .clang-format or check_style.sh changes what every file is held to, so either of them
 # brings the whole tree back. The checks that are not per file always run, and CI and
 # Scripts/build.sh check everything.
@@ -47,8 +47,8 @@ Fail()
     Failures=$((Failures + 1))
 }
 
-# Files the rules apply to: dtnmos's C sources and headers, and with --staged only those
-# of them the commit adds or changes.
+# Files the rules apply to: dtnmos's sources and headers, C and C++, and with --staged
+# only those of them the commit adds or changes.
 OwnFiles()
 {
     if [ "$Staged" -eq 1 ]; then
@@ -56,7 +56,7 @@ OwnFiles()
             -- Examples Include Source Tests
     else
         find Examples Include Source Tests -type f 2>/dev/null
-    fi | grep -E '\.[ch]$' | sort
+    fi | grep -E '\.(c|h|cpp|hpp)$' | sort
 }
 
 # .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Rule 4: line length -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -99,7 +99,7 @@ done < <(OwnFiles)
 echo "Rule 8: headers guarded by #pragma once"
 while IFS= read -r File; do
     case "$File" in
-        *.h) ;;
+        *.h | *.hpp) ;;
         *) continue ;;
     esac
     FirstCode="$(awk '!/^[[:space:]]*(\/\/.*)?$/ { print; exit }' "$File")"
