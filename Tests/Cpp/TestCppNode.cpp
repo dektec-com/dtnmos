@@ -394,10 +394,9 @@ NMOS_TEST(CppNodeUsesASearch)
     NMOS_ASSERT(Opened.has_value());
     NMOS_ASSERT(
         Opened->Feed(DtNmos::Service::Registration, {"http://fed.test"}).has_value());
-    std::optional<DtNmos::RegistrySearch> Search;
-    Search.emplace(std::move(*Opened));
+    auto Search = std::make_unique<DtNmos::RegistrySearch>(std::move(*Opened));
     static const DtNmos::RegistrySearch* Given = nullptr;
-    Given = &*Search;
+    Given = Search.get();
     auto Node = OpenNode(Registry,
                          [](DtNmos::NodeConfig& Config)
                          {
@@ -405,8 +404,7 @@ NMOS_TEST(CppNodeUsesASearch)
                              Config.Search = Given;
                          });
     NMOS_ASSERT(Node.has_value());
-    std::optional<DtNmos::RegistrySearch> Moved;
-    Moved.emplace(std::move(*Search));
+    auto Moved = std::make_unique<DtNmos::RegistrySearch>(std::move(*Search));
     NMOS_ASSERT(Node->Poll().has_value());
     NMOS_ASSERT(Node->IsRegistered());
     NMOS_ASSERT(Registry.Count("http://fed.test/") > 0);

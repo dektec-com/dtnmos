@@ -13,7 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
-#include <optional>
+#include <memory>
 #include <utility>
 
 #include "dtnmos_node.hpp"
@@ -41,14 +41,13 @@ int main()
     {
         return 1;
     }
-    std::optional<DtNmos::RegistrySearch> Search;
-    Search.emplace(std::move(*Opened));
+    auto Search = std::make_unique<DtNmos::RegistrySearch>(std::move(*Opened));
     DtNmos::NodeConfig Config;
     Config.Id = *DtNmos::Id::FromText("dddddddd-0000-4000-8000-000000000001");
     Config.ApiHost = "192.168.1.5";
     Config.Http = [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
     { return DtNmos::HttpResponse{200, {}, "", ""}; };
-    Config.Search = &*Search;
+    Config.Search = Search.get();
     auto Node = DtNmos::Node::Open(Config);
     if (!Node)
     {

@@ -6,7 +6,7 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
-#include <optional>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,13 +21,10 @@
 //
 NMOS_TEST(CppQueryFedSearch)
 {
-    std::optional<DtNmos::RegistrySearch> Search;
-    {
-        auto Opened = DtNmos::RegistrySearch::Open(
-            {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = true});
-        NMOS_ASSERT(Opened.has_value());
-        Search.emplace(std::move(*Opened));
-    }
+    auto Opened = DtNmos::RegistrySearch::Open(
+        {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = true});
+    NMOS_ASSERT(Opened.has_value());
+    auto Search = std::make_unique<DtNmos::RegistrySearch>(std::move(*Opened));
     NMOS_ASSERT(Search
                     ->Feed(DtNmos::Service::Registration,
                            {"http://registry-a.test:8010", "http://registry-b.test"})

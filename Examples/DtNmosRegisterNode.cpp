@@ -20,7 +20,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -351,7 +351,7 @@ int main(int Argc, char** Argv)
     // borrows the search, so the program declares it before the node, which is then
     // destroyed first.
     const char* Url = Example_Value(Argc, Argv, "--registry");
-    std::optional<DtNmos::RegistrySearch> Search;
+    std::unique_ptr<DtNmos::RegistrySearch> Search;
     if (Url != nullptr)
     {
         Config.RegistrationUrl = Url;
@@ -364,8 +364,8 @@ int main(int Argc, char** Argv)
         {
             return Failed("RegistrySearch::Open", Opened.error());
         }
-        Search.emplace(std::move(*Opened));
-        Config.Search = &*Search;
+        Search = std::make_unique<DtNmos::RegistrySearch>(std::move(*Opened));
+        Config.Search = Search.get();
     }
 
     auto Node = DtNmos::Node::Open(Config);
