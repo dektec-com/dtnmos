@@ -267,6 +267,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     Result->Searches = Searches;
     Result->Search = Searches ? Search : NULL;
     Result->Mutex = NmosOs_MutexCreate();
+    Result->CallbackReturned = NmosOs_ConditionCreate();
     Result->Id = Config->Id;
     Result->Label = CopyText(Config->Label);
     Result->Description = CopyText(Config->Description);
@@ -313,7 +314,8 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
         Result->FailuresBeforeSwitch = Searches ? 1 : 3;
     }
     Result->FirstRegistration = true;
-    if (Result->Mutex == NULL || Result->Label == NULL || Result->Description == NULL ||
+    if (Result->Mutex == NULL || Result->CallbackReturned == NULL ||
+        Result->Label == NULL || Result->Description == NULL ||
         Result->Hostname == NULL || Result->ApiHost == NULL ||
         (!Searches && Result->Registration == NULL))
     {
@@ -373,6 +375,7 @@ void NmosNode_Release(DtNmosNode* Node)
     free(Node->ApiHost);
     free(Node->Registration);
     ForgetFailed(Node);
+    NmosOs_ConditionFree(Node->CallbackReturned);
     NmosOs_MutexFree(Node->Mutex);
     memset(Node, 0, sizeof(*Node));
 }
@@ -1317,7 +1320,43 @@ static void RemoveReceiverAt(DtNmosNode* Node, size_t Index)
     --Node->ReceiverCount;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HoldForRemoval -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Marks what removing Id removes, the sender or receiver Id or the senders and receivers
+// of the device Id, as being removed, so that no activation of it starts. Returns
+// whether the callback of one of them runs on another thread, which the removal waits
+// for. The caller holds the lock.
+//
+static bool HoldForRemoval(DtNmosNode* Node, const DtNmosId* Id)
+{
+    const bool Device = NmosNode_FindDevice(Node, Id) != NULL;
+    bool Waits = false;
+    for (size_t i = 0; i < Node->SenderCount; ++i)
+    {
+        const NmosNodeSender* s = &Node->Senders[i];
+        const DtNmosId* Of = Device ? &s->DeviceId : &s->Id;
+        if (strcmp(Of->Text, Id->Text) == 0)
+        {
+            Waits = NmosConnection_HoldForRemoval(Node, s->Connection, &s->Id) || Waits;
+        }
+    }
+    for (size_t i = 0; i < Node->ReceiverCount; ++i)
+    {
+        const NmosNodeReceiver* r = &Node->Receivers[i];
+        const DtNmosId* Of = Device ? &r->DeviceId : &r->Id;
+        if (strcmp(Of->Text, Id->Text) == 0)
+        {
+            Waits = NmosConnection_HoldForRemoval(Node, r->Connection, &r->Id) || Waits;
+        }
+    }
+    return Waits;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// What is removed is first held, so that no activation of it starts, and removed once no
+// callback of it runs on another thread; the lock is released while it waits, and what
+// it removes is found again after.
 //
 DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
 {
@@ -1332,6 +1371,10 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
                               "DtNmosNode_Remove() needs an ID.");
     }
     NmosNode_Lock(Node);
+    while (HoldForRemoval(Node, Id))
+    {
+        NmosOs_ConditionWait(Node->CallbackReturned, Node->Mutex);
+    }
     DtNmosResult Result = DTNMOS_OK;
     NmosNodeDevice* Device = NmosNode_FindDevice(Node, Id);
     if (Device != NULL)

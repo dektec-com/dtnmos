@@ -90,11 +90,6 @@ const char* DtNmosMedia_Name(DtNmosMedia Media)
 
 // The message of the last failure on each thread. A fixed array, so that a failure never
 // allocates, and thread-local, as CDTAPI's GetLastException is.
-#if defined(_MSC_VER)
-    #define NMOS_THREAD_LOCAL __declspec(thread)
-#else
-    #define NMOS_THREAD_LOCAL _Thread_local
-#endif
 static NMOS_THREAD_LOCAL char LastError[512];
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_GetLastError -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

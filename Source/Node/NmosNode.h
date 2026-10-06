@@ -89,6 +89,9 @@ struct DtNmosNode
 {
     bool Open;
     NmosMutex* Mutex;
+    // Signalled, with Mutex, when the callback of an activation returns, for which
+    // DtNmosNode_Remove() may wait.
+    NmosCondition* CallbackReturned;
     DtNmosId Id;
     char* Label;
     char* Description;
@@ -200,6 +203,11 @@ void NmosConnection_ClearSender(NmosNodeSender* Sender);
 DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver,
                                          const DtNmosReceiverConfig* Config);
 void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver);
+// Marks the connection of the sender or receiver Id as being removed, so that no new
+// activation of it starts, and returns whether its callback runs on another thread,
+// which DtNmosNode_Remove() then waits for. The caller holds the lock.
+bool NmosConnection_HoldForRemoval(const DtNmosNode* Node, void* Connection,
+                                   const DtNmosId* Id);
 DtNmosResult NmosConnection_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Request,
                                    char** Segments, size_t Count,
                                    DtNmosHttpResponse* Response);

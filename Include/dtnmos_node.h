@@ -307,6 +307,12 @@ DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 // Removes a device, sender or receiver from Node; removing a device also removes its
 // senders and receivers. The next poll unregisters them.
 //
+// Returns when no callback of what it removes runs: an activation being applied is
+// waited for, and none starts meanwhile. The User of its callbacks may then be freed.
+// The wait lasts as long as the callback takes, so a program must not call this while
+// it holds a lock that the callback takes. Called from the callback of what it removes,
+// it does not wait for that callback.
+//
 // Returns DTNMOS_OK, or DTNMOS_E_NOT_FOUND when the node has no such ID.
 DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);
 

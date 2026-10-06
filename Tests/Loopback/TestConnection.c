@@ -945,7 +945,7 @@ NMOS_TEST(ConnectionAnswersBulk)
     DtNmosNode_Free(Node);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionStartsWithTheTransport -.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionStartsWithTheTransport -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A receiver given the stream it receives at the start has that stream as its active
 // transport parameters: source 192.168.1.9, group 239.2.2.2 and port 5010 on its port
@@ -989,6 +989,229 @@ NMOS_TEST(ConnectionStartsWithTheTransport)
     DtNmosNode_Free(Node);
 }
 
+#define BLOCKING_ID "bbbbbbbb-0000-4000-8000-000000000007"
+
+// A receiver whose callback blocks until the test releases it, and what the threads of
+// a test of its removal share; the flags under Mutex.
+typedef struct NmosBlocking
+{
+    NmosMutex* Mutex;
+    DtNmosNode* Node;
+    const char* Remove; // the ID that the remover removes
+    bool RemoveItself;  // the callback removes its own receiver, and does not block
+    bool Entered;       // the callback runs
+    bool Released;      // the test lets it return
+    bool Returned;      // the callback has done, and returns
+    bool Removed;       // DtNmosNode_Remove() returned
+    bool ReturnedFirst; // the callback had returned when DtNmosNode_Remove() did
+    DtNmosResult RemoveResult;
+    int Status; // the answer to the PATCH that activates the receiver
+} NmosBlocking;
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SetFlag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+static void SetFlag(NmosBlocking* b, bool* Flag)
+{
+    NmosOs_MutexLock(b->Mutex);
+    *Flag = true;
+    NmosOs_MutexUnlock(b->Mutex);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GetFlag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+static bool GetFlag(NmosBlocking* b, const bool* Flag)
+{
+    NmosOs_MutexLock(b->Mutex);
+    const bool Value = *Flag;
+    NmosOs_MutexUnlock(b->Mutex);
+    return Value;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WaitFlag -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Waits for Flag to be set, two seconds at most. Returns whether it was.
+//
+static bool WaitFlag(NmosBlocking* b, const bool* Flag)
+{
+    const uint64_t Until = NmosOs_MonotonicMs() + 2000;
+    while (!GetFlag(b, Flag) && NmosOs_MonotonicMs() < Until)
+    {
+        NmosOs_SleepMs(1);
+    }
+    return GetFlag(b, Flag);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateBlocking -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The receiver's callback: blocks until the test releases it, or removes its own
+// receiver.
+//
+static DtNmosResult ActivateBlocking(void* User, const DtNmosId* Receiver,
+                                     const DtNmosReceiverActivation* Activation)
+{
+    (void)Activation;
+    NmosBlocking* b = User;
+    if (b->RemoveItself)
+    {
+        b->RemoveResult = DtNmosNode_Remove(b->Node, Receiver);
+        SetFlag(b, &b->Removed);
+        return DTNMOS_OK;
+    }
+    SetFlag(b, &b->Entered);
+    WaitFlag(b, &b->Released);
+    SetFlag(b, &b->Returned);
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateBlocked -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The thread of a controller: activates the blocking receiver.
+//
+static void ActivateBlocked(void* Argument)
+{
+    NmosBlocking* b = Argument;
+    b->Status = Ask(b->Node, "PATCH", CONNECTION "receivers/" BLOCKING_ID "/staged",
+                    "{\"master_enable\": true, "
+                    "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                    NULL);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Remover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The thread of the program: removes b->Remove, and notes whether the callback had
+// returned by then.
+//
+static void Remover(void* Argument)
+{
+    NmosBlocking* b = Argument;
+    DtNmosId Id;
+    snprintf(Id.Text, sizeof(Id.Text), "%s", b->Remove);
+    const DtNmosResult Result = DtNmosNode_Remove(b->Node, &Id);
+    NmosOs_MutexLock(b->Mutex);
+    b->RemoveResult = Result;
+    b->ReturnedFirst = b->Returned;
+    b->Removed = true;
+    NmosOs_MutexUnlock(b->Mutex);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- MakeBlockingNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Makes the node of MakeNode() with the blocking receiver on its device.
+//
+static DtNmosNode* MakeBlockingNode(NmosActivations* Seen, NmosBlocking* b)
+{
+    memset(b, 0, sizeof(*b));
+    b->Mutex = NmosOs_MutexCreate();
+    b->Node = MakeNode(Seen);
+    if (b->Mutex == NULL || b->Node == NULL)
+    {
+        return NULL;
+    }
+    DtNmosReceiverConfig Receiver;
+    memset(&Receiver, 0, sizeof(Receiver));
+    Receiver.Size = sizeof(Receiver);
+    Receiver.Id = (DtNmosId){BLOCKING_ID};
+    Receiver.DeviceId = (DtNmosId){DEVICE_ID};
+    Receiver.Label = "blocking";
+    Receiver.Media = DTNMOS_MEDIA_VIDEO;
+    Receiver.InterfaceIp = "192.168.1.5";
+    NMOS_EXPECT(DtNmosNode_AddReceiver(b->Node, &Receiver, ActivateBlocking, b) ==
+                DTNMOS_OK);
+    return b->Node;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RemoveWhileBlocked -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Removes Id on a thread of its own while a controller's thread activates the blocking
+// receiver, and checks that the removal waits for the callback: it has not returned
+// while the callback blocks, and a PATCH of Patched, which it removes, is answered with
+// 404 meanwhile. Releases the callback, and waits for both threads.
+//
+static void RemoveWhileBlocked(NmosBlocking* b, const char* Id, const char* Patched)
+{
+    b->Remove = Id;
+    NmosThread* Controller = NmosOs_ThreadStart(ActivateBlocked, b);
+    NMOS_ASSERT(Controller != NULL);
+    NMOS_ASSERT(WaitFlag(b, &b->Entered));
+    NmosThread* Program = NmosOs_ThreadStart(Remover, b);
+    NMOS_ASSERT(Program != NULL);
+    NmosOs_SleepMs(100);
+    NMOS_EXPECT(!GetFlag(b, &b->Removed));
+    NMOS_EXPECT(Ask(b->Node, "PATCH", Patched, "{\"master_enable\": false}", NULL) ==
+                404);
+    SetFlag(b, &b->Released);
+    NmosOs_ThreadJoin(Controller);
+    NmosOs_ThreadJoin(Program);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.- ConnectionRemoveWaitsForTheCallback -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// DtNmosNode_Remove() of a receiver whose callback applies an activation returns only
+// after the callback has, so that its User may be freed then; the activation it waited
+// for takes place, and the receiver is gone after.
+//
+NMOS_TEST(ConnectionRemoveWaitsForTheCallback)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    NmosBlocking b;
+    DtNmosNode* Node = MakeBlockingNode(&Seen, &b);
+    NMOS_ASSERT(Node != NULL);
+    RemoveWhileBlocked(&b, BLOCKING_ID, CONNECTION "receivers/" BLOCKING_ID "/staged");
+    NMOS_ASSERT(b.Removed);
+    NMOS_ASSERT(b.ReturnedFirst);
+    NMOS_ASSERT_EQ(b.RemoveResult, DTNMOS_OK);
+    NMOS_ASSERT_EQ(b.Status, 200);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "receivers/" BLOCKING_ID "/active", NULL, NULL), 404);
+    DtNmosNode_Free(Node);
+    NmosOs_MutexFree(b.Mutex);
+}
+
+// .-.-.-.-.-.-.-.-.-.- ConnectionRemoveOfADeviceWaitsForItsCallbacks -.-.-.-.-.-.-.-.-.-.
+//
+// Removing a device waits for the callback of each of its senders and receivers, and
+// holds them all meanwhile: a PATCH of its sender is answered with 404.
+//
+NMOS_TEST(ConnectionRemoveOfADeviceWaitsForItsCallbacks)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    NmosBlocking b;
+    DtNmosNode* Node = MakeBlockingNode(&Seen, &b);
+    NMOS_ASSERT(Node != NULL);
+    RemoveWhileBlocked(&b, DEVICE_ID, CONNECTION "senders/" SENDER_ID "/staged");
+    NMOS_ASSERT(b.Removed);
+    NMOS_ASSERT(b.ReturnedFirst);
+    NMOS_ASSERT_EQ(b.RemoveResult, DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 0);
+    NMOS_ASSERT_EQ(
+        Ask(Node, "GET", CONNECTION "senders/" SENDER_ID "/active", NULL, NULL), 404);
+    DtNmosNode_Free(Node);
+    NmosOs_MutexFree(b.Mutex);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionRemoveWithinTheCallback -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A callback that removes its own receiver does not wait for itself; the controller is
+// told that the receiver was removed during its activation.
+//
+NMOS_TEST(ConnectionRemoveWithinTheCallback)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    NmosBlocking b;
+    DtNmosNode* Node = MakeBlockingNode(&Seen, &b);
+    NMOS_ASSERT(Node != NULL);
+    b.RemoveItself = true;
+    ActivateBlocked(&b);
+    NMOS_ASSERT(b.Removed);
+    NMOS_ASSERT_EQ(b.RemoveResult, DTNMOS_OK);
+    NMOS_ASSERT_EQ(b.Status, 404);
+    DtNmosNode_Free(Node);
+    NmosOs_MutexFree(b.Mutex);
+}
+
 NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
                NMOS_RUN(ConnectionRefusesBadPatches),
@@ -998,4 +1221,7 @@ NMOS_TEST_MAIN("Connection", NMOS_RUN(ConnectionAnswersItsParameters),
                NMOS_RUN(ConnectionRefusesAPatchWhileApplying),
                NMOS_RUN(ConnectionCallsItsLeadEarly),
                NMOS_RUN(ConnectionGivesTheTransportWithoutAFile),
-               NMOS_RUN(ConnectionStartsWithTheTransport))
+               NMOS_RUN(ConnectionStartsWithTheTransport),
+               NMOS_RUN(ConnectionRemoveWaitsForTheCallback),
+               NMOS_RUN(ConnectionRemoveOfADeviceWaitsForItsCallbacks),
+               NMOS_RUN(ConnectionRemoveWithinTheCallback))

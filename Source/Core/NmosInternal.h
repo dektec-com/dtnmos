@@ -23,6 +23,13 @@
     #define DTNMOS_PRINTF(FormatIndex, FirstArgument)
 #endif
 
+// Gives a static variable one copy per thread.
+#if defined(_MSC_VER)
+    #define NMOS_THREAD_LOCAL __declspec(thread)
+#else
+    #define NMOS_THREAD_LOCAL _Thread_local
+#endif
+
 // Reports a failure: sets this thread's last error, which DtNmos_GetLastError() returns,
 // to the formatted message, and returns Code.
 DtNmosResult NmosError_Fail(DtNmosResult Code, const char* Format, ...)
