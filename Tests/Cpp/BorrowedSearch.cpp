@@ -4,38 +4,42 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The test dtnmos.CppBorrowedSearch expects this program to fail: a RegistrySearch
-// destroyed while a node borrows it calls std::terminate(). It returns 0 only when the
-// search was destroyed without that.
+// The test dtnmos.CppBorrowedSearch: a RegistrySearch destroyed while a node borrows it
+// calls std::terminate(). The program's terminate handler ends it with 0; it returns 1
+// when the search was destroyed without that, or when it could not set up the node.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <optional>
 #include <utility>
 
 #include "dtnmos_node.hpp"
 
-#if defined(_MSC_VER)
-    #include <crtdbg.h>
-#endif
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Terminated -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The terminate handler: what the test expects, so the program ends with 0, without the
+// abort() of the default handler, which CTest would count as a failure.
+//
+[[noreturn]] static void Terminated()
+{
+    std::puts("terminated, as expected");
+    std::fflush(stdout);
+    std::_Exit(0);
+}
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- main -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 int main()
 {
-#if defined(_MSC_VER)
-    // abort() reports to stderr, without a dialog that nobody would answer.
-    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
-#endif
+    std::set_terminate(Terminated);
     auto Opened = DtNmos::RegistrySearch::Open(
         {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = true});
     if (!Opened)
     {
-        return 0;
+        return 1;
     }
     std::optional<DtNmos::RegistrySearch> Search;
     Search.emplace(std::move(*Opened));
@@ -48,10 +52,11 @@ int main()
     auto Node = DtNmos::Node::Open(Config);
     if (!Node)
     {
-        return 0;
+        return 1;
     }
     std::puts("destroying the search the node borrows");
     std::fflush(stdout);
     Search.reset();
-    return 0;
+    std::puts("the search was destroyed while borrowed, and nothing stopped it");
+    return 1;
 }
