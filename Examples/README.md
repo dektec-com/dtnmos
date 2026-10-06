@@ -1,7 +1,9 @@
 # Examples
 
 Small command-line programs that show how an application uses dtnmos. Each is one C
-file, built with the library unless `DTNMOS_BUILD_EXAMPLES` is off.
+file, built with the library unless `DTNMOS_BUILD_EXAMPLES` is off. `DtNmosRegisterNode`
+is also written with the C++ API, as `DtNmosRegisterNodeCpp`, built with
+`DTNMOS_WITH_CPP`.
 
 | Program | Does |
 |---|---|
@@ -9,6 +11,7 @@ file, built with the library unless `DTNMOS_BUILD_EXAMPLES` is off.
 | `DtNmosListSenders` | Lists the senders a registry holds, with `--receivers` its receivers too, and with `--sdp` the SDP of each sender |
 | `DtNmosConnect` | Connects a receiver of a registry to a sender, each by its ID or label, as a controller of IS-05 does; `--disconnect` disconnects it |
 | `DtNmosRegisterNode` | Registers a node with a sender and a receiver, serves its Node API and Connection API, and prints what a controller activates on them; with `--ptp` the node has a PTP clock |
+| `DtNmosRegisterNodeCpp` | `DtNmosRegisterNode` with the C++ API, `DtNmosRegisterNode.cpp`: the same options, output and IDs |
 
 Every program lists its options with `--help`. A program that talks to a registry takes
 its base URL with `--registry`, or without it finds one with DNS-SD, through multicast

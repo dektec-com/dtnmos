@@ -12,6 +12,9 @@ It is the NMOS support of DekTec's GStreamer plugins, and is meant to be used by
 projects as well, such as CDTAPI and FFmpeg.
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
+- A C++23 API over it, header only, in `dtnmos.hpp` and `dtnmos_*.hpp`: value types
+  that own what they hold, `std::expected` for results and `std::function` for
+  callbacks. See [In C++](#in-c).
 - No dependencies. HTTP goes through a function the caller passes in; with
   `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `DtNmos_CurlHttp()`, and with
   `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `DtNmosNode_Serve()`.
@@ -35,8 +38,11 @@ cmake --install build --prefix /usr/local
 ```
 
 It installs a static library by default, or a shared one with `-DBUILD_SHARED_LIBS=ON`,
-its headers `dtnmos.h` and `dtnmos_*.h`, a CMake package (`find_package(dtnmos)`, target
-`dtnmos::dtnmos`) and a pkg-config file (`pkg-config --cflags --libs dtnmos`).
+its headers `dtnmos.h` and `dtnmos_*.h`, with those of the C++ API, a CMake package
+(`find_package(dtnmos)`, targets `dtnmos::dtnmos`, and `dtnmos::cpp` for C++) and a
+pkg-config file (`pkg-config --cflags --libs dtnmos`). The tests and the example of the
+C++ API need a C++23 compiler, and are built where CMake finds a C++ compiler;
+`-DDTNMOS_WITH_CPP=OFF` builds without them, e.g. with GCC 11.
 
 ## Using it
 
@@ -394,3 +400,97 @@ controller connects it, a receiver's active parameters are the `SourceIp`,
 The AMWA NMOS Testing Tool passes the node in IS-04-01, IS-05-01 and IS-05-02 without a
 failure; the interop tests (`DTNMOS_INTEROP_TESTS`, run with `ctest -L interop`) run
 them against it.
+
+## In C++
+
+The C++ API is headers over the C library, one beside each C header: `dtnmos.hpp`,
+`dtnmos_sdp.hpp`, `dtnmos_http.hpp`, `dtnmos_query.hpp` and `dtnmos_node.hpp`. A program
+compiles them with its own compiler, C++23 or newer, and links `dtnmos::cpp`; the C
+library stays the one implementation. Its names are those of the C API with its prefix
+as the namespace: `DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
+
+- **No C type in the API.** Every struct is a value with `std::string`, `std::vector`
+  and `std::optional`, copied with `=` and compared with `==`; every enum an `enum class`
+  with the C values. A flow's format is a `std::variant`, and its media the kind it
+  holds.
+- **Results.** A call that can fail returns a `DtNmos::Expected<T>`, which is
+  `std::expected<T, DtNmos::Error>`, or a `DtNmos::Status` without a value, and the
+  compiler warns when one is ignored. `Error` has the `Result` and the message. The API
+  throws nothing of its own, and builds without exceptions.
+- **One owner.** `Open()` returns an object that is open, and destroying it closes it; a
+  node, a search, a query and a subscription are moved, not copied. A node borrows the
+  `RegistrySearch` of its config, and a subscription its `Query`: the program destroys
+  them after their borrowers, and one destroyed while borrowed ends the program with
+  `std::terminate()`, as a `std::thread` that is not joined does.
+- **Callbacks** are `std::function`s, and may capture what they need. The node keeps the
+  function of a sender or receiver until it is removed, and `Remove()` returns when no
+  call of it runs. An activation that fails returns an `Error`, or throws, and the
+  controller gets its message.
+
+A node that finds its registry with DNS-SD, with a receiver:
+
+```cpp
+#include <dtnmos_node.hpp>
+#include <iostream>
+
+int main()
+{
+  // The program owns the search, and the node borrows it: declared before the node, it
+  // goes after it.
+  auto Search = DtNmos::RegistrySearch::Open(
+      {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = false});
+  if (!Search)
+  {
+    std::cerr << Search.error().Message << '\n';
+    return 1;
+  }
+  const DtNmos::Id NodeId =
+      DtNmos::Id::FromText("6aac9516-fc8a-5fa0-9ee3-31c7a5219c14").value();
+  DtNmos::NodeConfig Config;
+  Config.Id = NodeId;
+  Config.Label = "my node";
+  Config.Http = DtNmos::CurlHttp;
+  Config.Search = &*Search;
+  auto Node = DtNmos::Node::Open(Config);
+  if (!Node)
+  {
+    std::cerr << Node.error().Message << '\n';
+    return 1;
+  }
+  const DtNmos::Id DeviceId = DtNmos::Id::FromName(NodeId, "card 1").value();
+  DtNmos::Status Done =
+      Node->AddDevice({.Id = DeviceId, .Label = "card 1", .Description = ""});
+  if (Done)
+  {
+    DtNmos::ReceiverConfig Receiver;
+    Receiver.Id = DtNmos::Id::FromName(NodeId, "receiver").value();
+    Receiver.DeviceId = DeviceId;
+    Receiver.Media = DtNmos::Media::Video;
+    Receiver.InterfaceIp = "192.168.1.5"; // the network port it receives on
+    Done = Node->AddReceiver(
+        Receiver,
+        [](const DtNmos::Id&, const DtNmos::ReceiverActivation& Activation) -> DtNmos::Status
+        {
+          if (Activation.MasterEnable && Activation.HasFlow)
+          {
+            // Receive Activation.Flow, e.g. Activation.Flow.DestinationIp.
+          }
+          return {}; // or std::unexpected(DtNmos::Error{DtNmos::Result::State, "why"})
+        });
+  }
+  if (Done)
+  {
+    Done = Node->Serve();
+  }
+  if (!Done)
+  {
+    std::cerr << Done.error().Message << '\n';
+    return 1;
+  }
+  // ... until the program ends; destroying the node deletes what it registered.
+  return 0;
+}
+```
+
+`Examples/DtNmosRegisterNode.cpp` is the whole program. What is in `DtNmos::Detail` is
+the wrapper's own, and not for programs.
