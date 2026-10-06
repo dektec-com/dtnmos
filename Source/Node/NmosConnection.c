@@ -743,11 +743,15 @@ static void ClearActivation(NmosActivation* a)
 //
 // Calls the callback that applies the activation a, without the lock, noting on this
 // thread whose callback runs. A callback that fails leaves its message with
-// DtNmos_SetLastError(), on this thread.
+// DtNmos_SetLastError(), on this thread. A callback that has a request of its own handled
+// on this thread runs another callback within it; the note of the outer one is restored
+// after.
 //
 static DtNmosResult CallActivation(const DtNmosNode* Node, const NmosActivation* a)
 {
     NmosError_Clear();
+    const DtNmosNode* OuterNode = CallingNode;
+    const DtNmosId OuterId = CallingId;
     CallingNode = Node;
     CallingId = a->Resource;
     DtNmosResult Result = DTNMOS_OK;
@@ -759,7 +763,8 @@ static DtNmosResult CallActivation(const DtNmosNode* Node, const NmosActivation*
     {
         Result = a->ReceiverCallback(a->User, &a->Resource, &a->Receiver);
     }
-    CallingNode = NULL;
+    CallingNode = OuterNode;
+    CallingId = OuterId;
     return Result;
 }
 
