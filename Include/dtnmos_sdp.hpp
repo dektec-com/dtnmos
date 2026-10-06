@@ -376,17 +376,6 @@ struct Sdp
 namespace detail
 {
 
-// Returns the text of a char array of a C struct, up to its null or its end.
-template <std::size_t N> std::string FromArray(const char (&Field)[N])
-{
-    std::size_t Length = 0;
-    while (Length < N && Field[Length] != '\0')
-    {
-        ++Length;
-    }
-    return std::string(Field, Length);
-}
-
 // Returns the C text of an optional text: NULL for "".
 inline const char* ToNativeOrNull(const std::string& Text)
 {

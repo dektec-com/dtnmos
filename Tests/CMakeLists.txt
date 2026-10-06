@@ -48,7 +48,9 @@ dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 # is built a second time without exceptions, as <suite>NoExceptions, except by MSVC,
 # whose standard library does not support that.
 if(DTNMOS_WITH_CPP)
-  set(_dtnmos_cpp_suites "Cpp TestCpp OnlyDtNmos" "CppSdp TestCppSdp OnlyDtNmosSdp")
+  set(_dtnmos_cpp_suites
+      "Cpp TestCpp OnlyDtNmos" "CppSdp TestCppSdp OnlyDtNmosSdp"
+      "CppHttp TestCppHttp OnlyDtNmosHttp" "CppQuery TestCppQuery OnlyDtNmosQuery")
   foreach(entry IN LISTS _dtnmos_cpp_suites)
     separate_arguments(entry)
     list(POP_FRONT entry suite)

@@ -240,6 +240,17 @@ inline LogLevel FromNative(DtNmosLogLevel Native)
     return static_cast<LogLevel>(Native);
 }
 
+// Returns the text of a char array of a C struct, up to its null or its end.
+template <std::size_t N> std::string FromArray(const char (&Field)[N])
+{
+    std::size_t Length = 0;
+    while (Length < N && Field[Length] != '\0')
+    {
+        ++Length;
+    }
+    return std::string(Field, Length);
+}
+
 // Returns a text of the C API as a std::string, "" for NULL.
 inline std::string FromNative(const char* Native)
 {
