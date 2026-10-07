@@ -130,6 +130,7 @@ if(DTNMOS_WITH_CPP)
     target_link_libraries(test_CppMixedStandards PRIVATE dtnmos::cpp)
     dtnmos_set_warnings(test_CppMixedStandards)
     add_test(NAME dtnmos.CppMixedStandards COMMAND test_CppMixedStandards)
+    set_tests_properties(dtnmos.CppMixedStandards PROPERTIES SKIP_RETURN_CODE 77)
   endif()
 endif()
 

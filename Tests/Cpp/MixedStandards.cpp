@@ -10,7 +10,8 @@
 // have its own copy of the function, which the tag of dtnmos_expected.hpp gives it. The
 // program returns 0 when the two copies have different addresses, and 1 when the linker
 // kept one for both. Where this compiler has no std::expected under C++23 either, both
-// sources have the same Expected, and there is nothing to check.
+// sources have the same Expected, and there is nothing to check: it returns 77, which
+// CTest reports as skipped.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
@@ -30,7 +31,7 @@ int main()
     if (StdExpectedUnderCpp20())
     {
         std::puts("std::expected under C++20 as well: nothing to check");
-        return 0;
+        return 77;
     }
     const auto Here = reinterpret_cast<std::uintptr_t>(&DtNmos::Detail::Check);
     if (Here == CheckUnderCpp20())
@@ -43,6 +44,6 @@ int main()
     return 0;
 #else
     std::puts("no std::expected under C++23: nothing to check");
-    return 0;
+    return 77;
 #endif
 }
