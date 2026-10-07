@@ -37,7 +37,7 @@ option(
   "Build the server of the node on civetweb, dtnmos_node_serve()"
   OFF)
 # The C++ API is headers over the C library, which a C++ program compiles itself. The
-# library itself is C. The tests and the example of the C++ API need a C++23 compiler.
+# library itself is C. The tests and the example of the C++ API need a C++20 compiler.
 # They are built by default when CMake finds a C++ compiler.
 include(CheckLanguage)
 check_language(CXX)
@@ -46,6 +46,14 @@ if(CMAKE_CXX_COMPILER AND (DTNMOS_BUILD_TESTS OR DTNMOS_BUILD_EXAMPLES))
   set(_dtnmos_cpp_default ON)
 endif()
 option(DTNMOS_WITH_CPP "Build the tests and the example of the C++ API" ${_dtnmos_cpp_default})
+# The standard the tests and the example of the C++ API are built with. With 23, where
+# the headers take std::expected, each suite is built as C++20 as well, with the
+# Expected of dtnmos_expected.hpp. 20 builds them as C++20 alone, for a compiler that
+# does not know C++23.
+set(DTNMOS_CXX_STANDARD
+    23
+    CACHE STRING "The C++ standard of the tests and the example of the C++ API: 20 or 23")
+set_property(CACHE DTNMOS_CXX_STANDARD PROPERTY STRINGS 20 23)
 # The flags of the sanitizers the library is built with, which the package test builds its
 # consumer with as well; a project that builds dtnmos with sanitizers sets them.
 set(DTNMOS_SANITIZER_FLAGS
@@ -150,32 +158,25 @@ if(MSVC)
 endif()
 dtnmos_set_warnings(dtnmos)
 
-# The target of the C++ API, dtnmos::cpp. It links the C library and asks for C++23,
-# which the headers need. It sets C++23 as a property, because target_compile_features
-# would need C++ enabled in this project. CMake checks the property where a program
-# links the target.
+# The target of the C++ API, dtnmos::cpp. It links the C library and asks for C++20,
+# which the headers need; a program that asks for C++23 itself gets the headers with
+# std::expected. It sets C++20 as a property, because target_compile_features would need
+# C++ enabled in this project. CMake checks the property where a program links the
+# target.
 add_library(dtnmos_cpp INTERFACE)
 add_library(dtnmos::cpp ALIAS dtnmos_cpp)
 target_link_libraries(dtnmos_cpp INTERFACE dtnmos)
 set_target_properties(dtnmos_cpp PROPERTIES EXPORT_NAME cpp INTERFACE_COMPILE_FEATURES
-                                                           cxx_std_23)
+                                                           cxx_std_20)
 
 if(DTNMOS_WITH_CPP)
   enable_language(CXX)
-  set(CMAKE_CXX_STANDARD 23)
+  if(NOT DTNMOS_CXX_STANDARD MATCHES "^(20|23)$")
+    message(FATAL_ERROR "DTNMOS_CXX_STANDARD is 20 or 23, not ${DTNMOS_CXX_STANDARD}.")
+  endif()
+  set(CMAKE_CXX_STANDARD ${DTNMOS_CXX_STANDARD})
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
   set(CMAKE_CXX_EXTENSIONS OFF)
-  include(CheckCXXSourceCompiles)
-  check_cxx_source_compiles(
-    "#include <expected>\nint main() { std::expected<int, int> e = 1; return *e - 1; }"
-    DTNMOS_HAS_EXPECTED)
-  if(NOT DTNMOS_HAS_EXPECTED)
-    message(
-      FATAL_ERROR
-        "The C++ API needs C++23 with std::expected: GCC 12, Clang 16 or Visual Studio "
-        "2022 17.3 or newer. Configure with -DDTNMOS_WITH_CPP=OFF to build the C library "
-        "without its C++ tests and example.")
-  endif()
 endif()
 
 if(DTNMOS_INSTALL)

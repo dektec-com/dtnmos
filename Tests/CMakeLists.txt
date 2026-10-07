@@ -49,6 +49,9 @@ dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 #   MSVC gives that warning, C4062, only when asked, so it is turned on as an error.
 # - Each suite is built a second time without exceptions, as <suite>NoExceptions. MSVC
 #   does not build that, as its standard library does not support it.
+# - With DTNMOS_CXX_STANDARD 23, each of those is built as C++20 too, as <variant>20,
+#   so that the suites run on the Expected of dtnmos_expected.hpp as well as on
+#   std::expected.
 if(DTNMOS_WITH_CPP)
   set(_dtnmos_cpp_suites
       "Cpp TestCpp OnlyDtNmos" "CppExpected TestCppExpected OnlyDtNmosExpected"
@@ -64,16 +67,32 @@ if(DTNMOS_WITH_CPP)
     if(NOT MSVC)
       list(APPEND variants ${suite}NoExceptions)
     endif()
+    if(DTNMOS_CXX_STANDARD GREATER 20)
+      set(cpp20 ${variants})
+      list(TRANSFORM cpp20 APPEND "20")
+      list(APPEND variants ${cpp20})
+    endif()
     foreach(variant IN LISTS variants)
       dtnmos_add_test(${variant} ${entry})
       target_link_libraries(test_${variant} PRIVATE dtnmos::cpp)
       if(MSVC)
         target_compile_options(test_${variant} PRIVATE /we4062)
       endif()
+      if(variant MATCHES "NoExceptions")
+        target_compile_options(test_${variant} PRIVATE -fno-exceptions)
+      endif()
+      if(variant MATCHES "20$")
+        set_target_properties(test_${variant} PROPERTIES CXX_STANDARD 20)
+      endif()
+      # GCC's optimizer loses track of which member of an Expected's union is alive in
+      # the assignments of CppExpected, and warns of a delete or a read of the other one,
+      # at -O2 and -O3, of std::expected as of the own Expected. ASan finds nothing
+      # there, so the two warnings are off for that suite.
+      if(suite STREQUAL "CppExpected" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(test_${variant} PRIVATE -Wno-free-nonheap-object
+                                                       -Wno-maybe-uninitialized)
+      endif()
     endforeach()
-    if(NOT MSVC)
-      target_compile_options(test_${suite}NoExceptions PRIVATE -fno-exceptions)
-    endif()
   endforeach()
   # The program of two tests. It destroys a search while a node borrows it, or a query
   # while a subscription borrows it, which must call std::terminate(). The program's own
@@ -98,8 +117,8 @@ if(DTNMOS_WITH_CPP)
   # The program of a test whose sources include dtnmos.hpp under C++20 and under C++23.
   # Each standard must have its own copy of a function that returns a Status, rather
   # than one for both. MSVC's linker refuses such a program instead, by the pragma in
-  # dtnmos.hpp, so the test is not built there.
-  if(NOT MSVC)
+  # dtnmos.hpp, so the test is not built there, nor where the tests are C++20 alone.
+  if(NOT MSVC AND DTNMOS_CXX_STANDARD GREATER 20)
     add_library(test_CppMixedStandards20 OBJECT Cpp/MixedStandards20.cpp)
     set_target_properties(test_CppMixedStandards20 PROPERTIES CXX_STANDARD 20 FOLDER
                                                                          "Tests")

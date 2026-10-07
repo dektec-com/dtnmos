@@ -16,7 +16,8 @@
 // The headers need C++20. Where the standard library has std::expected, as in C++23,
 // Expected is a std::expected; elsewhere it is the C++ API's own, from
 // dtnmos_expected.hpp, which behaves the same. So a program compiles every source that
-// includes these headers with the same standard. Link the CMake target dtnmos::cpp.
+// includes these headers with the same standard. Link the CMake target dtnmos::cpp,
+// which asks for C++20.
 
 #pragma once
 
