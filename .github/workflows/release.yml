@@ -94,7 +94,7 @@ jobs:
 
       - name: Restore the vcpkg binary cache
         if: matrix.vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/.vcpkg-binary-cache
           key: vcpkg-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
