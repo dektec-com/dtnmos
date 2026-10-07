@@ -342,6 +342,48 @@ NMOS_TEST(CppNodeRemoves)
     NMOS_ASSERT_EQ(Token.use_count(), 1);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeRemovesWhileActivated -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Removing the sender while a controller's thread activates it returns at once, and
+// keeps what its function captured until the activation returns, which frees it.
+//
+NMOS_TEST(CppNodeRemovesWhileActivated)
+{
+    FakeRegistry Registry;
+    auto Node = OpenNode(Registry);
+    NMOS_ASSERT(Node.has_value());
+    const auto Token = std::make_shared<int>(1);
+    std::atomic<bool> Entered = false;
+    std::atomic<bool> Go = false;
+    NMOS_ASSERT(
+        Node->AddSender(
+                SenderOf(),
+                [Token, &Entered, &Go](const DtNmos::Id&, const DtNmos::SenderActivation&)
+                {
+                    Entered = true;
+                    for (int Wait = 0; Wait < 2000 && !Go; ++Wait)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    }
+                    return DtNmos::Status();
+                })
+            .has_value());
+    int Answered = 0;
+    std::thread Controller(
+        [&] { Answered = Patch(*Node, "senders/" SENDER_ID, Enable).Status; });
+    for (int Wait = 0; Wait < 2000 && !Entered; ++Wait)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    NMOS_EXPECT(Entered);
+    NMOS_EXPECT(Node->Remove(IdOf(SENDER_ID)).has_value());
+    NMOS_EXPECT(Token.use_count() == 2);
+    Go = true;
+    Controller.join();
+    NMOS_ASSERT_EQ(Answered, 404);
+    NMOS_ASSERT_EQ(Token.use_count(), 1);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeMoves -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A node that is moved keeps its sender and its function; a node moved onto another
@@ -532,7 +574,7 @@ NMOS_TEST(CppNodeIsDestroyedWhileActivated)
 
 NMOS_TEST_MAIN("CppNode", NMOS_RUN(CppNodeOpens), NMOS_RUN(CppNodeActivates),
                NMOS_RUN(CppNodeFailsAnActivation), NMOS_RUN(CppNodeRemoves),
-               NMOS_RUN(CppNodeMoves), NMOS_RUN(CppNodeUsesASearch),
-               NMOS_RUN(CppNodeMovesToAnotherRegistry),
+               NMOS_RUN(CppNodeRemovesWhileActivated), NMOS_RUN(CppNodeMoves),
+               NMOS_RUN(CppNodeUsesASearch), NMOS_RUN(CppNodeMovesToAnotherRegistry),
                NMOS_RUN(CppNodeChangesItsClockAndFlow),
                NMOS_RUN(CppNodeIsDestroyedWhileActivated))

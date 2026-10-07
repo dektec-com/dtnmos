@@ -15,6 +15,28 @@
 #include "NmosOs.h"
 #include "dtnmos_node.h"
 
+// The callback of a sender or receiver, with its User and the release of it, which the
+// node and each running call of the callback share. Uses counts the node's registration
+// of the sender or receiver and each call that runs; the one that brings it to 0 releases
+// the User and frees this. Uses is counted under the node's lock.
+typedef struct NmosCallback
+{
+    DtNmosSenderActivateFunc Sender;     // a sender's callback, or null
+    DtNmosReceiverActivateFunc Receiver; // a receiver's callback, or null
+    void* User;                          // the program's argument to the callback
+    DtNmosReleaseFunc Release;           // frees User, or null
+    int Uses;
+    struct NmosCallback* Next; // in a list of callbacks to release
+} NmosCallback;
+
+// Gives back a use of Callback, which the caller took, under the node's lock. When it was
+// the last, Callback goes onto the list *Released, which the caller gives to
+// NmosCallback_ReleaseAll() after it has released the lock.
+void NmosCallback_Drop(NmosCallback* Callback, NmosCallback** Released);
+// Calls the release of each callback of the list Released, and frees them. The caller
+// does not hold the node's lock.
+void NmosCallback_ReleaseAll(NmosCallback* Released);
+
 // A device of the node.
 typedef struct NmosNodeDevice
 {
@@ -40,12 +62,11 @@ typedef struct NmosNodeSender
     char* SourceIp; // the address it sends from, which source_ip "auto" means
     // The source_ip now active. Its SDP gives it as origin and in the source filter.
     char ActiveSourceIp[DTNMOS_MAX_ADDRESS_SIZE];
-    DtNmosFlow Flow;                   // the stream it sends
-    NmosStore FlowStore;               // owns the strings and arrays of Flow
-    DtNmosSenderActivateFunc Activate; // the program's callback on an activation
-    void* User;                        // the program's argument to Activate
-    char Version[32];                  // its IS-04 version stamp, renewed on each change
-    bool Registered;    // the registry has this version, with its source and flow
+    DtNmosFlow Flow;        // the stream it sends
+    NmosStore FlowStore;    // owns the strings and arrays of Flow
+    NmosCallback* Callback; // the program's callback on an activation
+    char Version[32];       // its IS-04 version stamp, renewed on each change
+    bool Registered;        // the registry has this version, with its source and flow
     bool WasRegistered; // the registry has some version, which removing it must delete
     bool MasterEnable;  // a controller has enabled it
     uint64_t SessionId; // the session ID in its SDP
@@ -62,12 +83,11 @@ typedef struct NmosNodeReceiver
     DtNmosId SenderId; // the sender a controller connected it to, or empty
     char* Label;
     char* Description;
-    DtNmosMedia Media; // the kind of stream it receives
-    char* InterfaceIp; // the address it receives on, which interface_ip "auto" means
-    DtNmosReceiverActivateFunc Activate; // the program's callback on an activation
-    void* User;                          // the program's argument to Activate
-    char Version[32];   // its IS-04 version stamp, renewed on each change
-    bool Registered;    // the registry has this version
+    DtNmosMedia Media;      // the kind of stream it receives
+    char* InterfaceIp;      // the address it receives on, which interface_ip "auto" means
+    NmosCallback* Callback; // the program's callback on an activation
+    char Version[32];       // its IS-04 version stamp, renewed on each change
+    bool Registered;        // the registry has this version
     bool WasRegistered; // the registry has some version, which removing it must delete
     bool MasterEnable;  // a controller has enabled it
     uint64_t LeadNs;    // how long before a scheduled activation its callback is called
@@ -89,9 +109,6 @@ struct DtNmosNode
 {
     bool Open;
     NmosMutex* Mutex;
-    // Signalled, with Mutex, when the callback of an activation returns, for which
-    // DtNmosNode_Remove() may wait.
-    NmosCondition* CallbackReturned;
     DtNmosId Id;
     char* Label;
     char* Description;
@@ -203,11 +220,6 @@ void NmosConnection_ClearSender(NmosNodeSender* Sender);
 DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver,
                                          const DtNmosReceiverConfig* Config);
 void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver);
-// Marks the connection of the sender or receiver Id as being removed, so that no new
-// activation of it starts, and returns whether its callback runs on another thread,
-// which DtNmosNode_Remove() then waits for. The caller holds the lock.
-bool NmosConnection_HoldForRemoval(const DtNmosNode* Node, void* Connection,
-                                   const DtNmosId* Id);
 DtNmosResult NmosConnection_Handle(DtNmosNode* Node, const DtNmosHttpRequest* Request,
                                    char** Segments, size_t Count,
                                    DtNmosHttpResponse* Response);

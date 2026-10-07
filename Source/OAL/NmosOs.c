@@ -88,44 +88,6 @@ void NmosOs_MutexUnlock(NmosMutex* Mutex)
     ReleaseSRWLockExclusive(&Mutex->Lock);
 }
 
-struct NmosCondition
-{
-    CONDITION_VARIABLE Variable;
-};
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-NmosCondition* NmosOs_ConditionCreate(void)
-{
-    NmosCondition* Condition = malloc(sizeof(*Condition));
-    if (Condition != NULL)
-    {
-        InitializeConditionVariable(&Condition->Variable);
-    }
-    return Condition;
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void NmosOs_ConditionFree(NmosCondition* Condition)
-{
-    free(Condition);
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionWait -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void NmosOs_ConditionWait(NmosCondition* Condition, NmosMutex* Mutex)
-{
-    SleepConditionVariableSRW(&Condition->Variable, &Mutex->Lock, INFINITE, 0);
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionWakeAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-void NmosOs_ConditionWakeAll(NmosCondition* Condition)
-{
-    WakeAllConditionVariable(&Condition->Variable);
-}
-
 struct NmosThread
 {
     HANDLE Handle;
@@ -257,49 +219,6 @@ void NmosOs_MutexLock(NmosMutex* Mutex)
 void NmosOs_MutexUnlock(NmosMutex* Mutex)
 {
     pthread_mutex_unlock(&Mutex->Lock);
-}
-
-struct NmosCondition
-{
-    pthread_cond_t Variable;
-};
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionCreate -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-NmosCondition* NmosOs_ConditionCreate(void)
-{
-    NmosCondition* Condition = malloc(sizeof(*Condition));
-    if (Condition != NULL && pthread_cond_init(&Condition->Variable, NULL) != 0)
-    {
-        free(Condition);
-        return NULL;
-    }
-    return Condition;
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionFree -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void NmosOs_ConditionFree(NmosCondition* Condition)
-{
-    if (Condition != NULL)
-    {
-        pthread_cond_destroy(&Condition->Variable);
-        free(Condition);
-    }
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionWait -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-void NmosOs_ConditionWait(NmosCondition* Condition, NmosMutex* Mutex)
-{
-    pthread_cond_wait(&Condition->Variable, &Mutex->Lock);
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_ConditionWakeAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-void NmosOs_ConditionWakeAll(NmosCondition* Condition)
-{
-    pthread_cond_broadcast(&Condition->Variable);
 }
 
 struct NmosThread

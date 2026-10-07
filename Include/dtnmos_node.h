@@ -117,6 +117,19 @@ typedef struct DtNmosDeviceConfig
     const char* Description;
 } DtNmosDeviceConfig;
 
+// The program's function that frees what User, the argument of a sender's or receiver's
+// callback, holds, once the node calls the callback with it no more.
+//
+// The node calls it once, after the sender or receiver is removed, by DtNmosNode_Remove()
+// of it or of its device, or by DtNmosNode_Close(), and when no call of its callback
+// runs: inside the call that removes it when none runs, and otherwise on the thread of
+// the last call that ran, after it returns. It is called without the node's lock; it must
+// not take a lock that the program holds around DtNmosNode_Remove() or
+// DtNmosNode_Close(), and it may call the node's functions but DtNmosNode_Close(). It is
+// not called when DtNmosNode_AddSender() or DtNmosNode_AddReceiver() fails; the program
+// still owns User then.
+typedef void (*DtNmosReleaseFunc)(void* User);
+
 // How a sender is added. Strings and the flow are copied.
 typedef struct DtNmosSenderConfig
 {
@@ -134,6 +147,10 @@ typedef struct DtNmosSenderConfig
     // How long the program needs to apply an activation, in milliseconds. The callback
     // of a scheduled activation is called this much early. 0: at the time itself.
     uint32_t ActivationLeadMs;
+    // Frees the User of the callback once the callback is called with it no more; NULL:
+    // the program frees it itself, after DtNmosNode_Remove() and when no call of the
+    // callback can still run.
+    DtNmosReleaseFunc ReleaseUser;
 } DtNmosSenderConfig;
 
 // How a receiver is added. Strings are copied.
@@ -152,9 +169,10 @@ typedef struct DtNmosReceiverConfig
     // The stream the receiver receives from the start, until a controller connects it,
     // which the node gives as its active transport parameters. NULL or empty: any
     // source, or no group, which is unicast to InterfaceIp.
-    const char* SourceIp;     // The one source it takes
-    const char* MulticastIp;  // The group it has joined
-    uint16_t DestinationPort; // The UDP port it receives on; 0 for 5004
+    const char* SourceIp;          // The one source it takes
+    const char* MulticastIp;       // The group it has joined
+    uint16_t DestinationPort;      // The UDP port it receives on; 0 for 5004
+    DtNmosReleaseFunc ReleaseUser; // As in DtNmosSenderConfig
 } DtNmosReceiverConfig;
 
 // What a controller asks of a receiver: whether to receive, and which stream.
@@ -256,7 +274,8 @@ DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* Node, char* Buffer,
                                           size_t* Size);
 
 // Closes Node: stops serving, unregisters everything from the registry, and forgets all
-// devices, senders and receivers. The node may be opened again.
+// devices, senders and receivers, calling the ReleaseUser of each that has one. The node
+// may be opened again.
 DTNMOS_API DtNmosResult DtNmosNode_Close(DtNmosNode* Node);
 
 // Closes Node if it is open, and frees it. NULL does nothing.
@@ -307,11 +326,10 @@ DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 // Removes a device, sender or receiver from Node; removing a device also removes its
 // senders and receivers. The next poll unregisters them.
 //
-// Returns when no callback of what it removes runs: an activation being applied is
-// waited for, and none starts meanwhile. The User of its callbacks may then be freed.
-// The wait lasts as long as the callback takes, so a program must not call this while
-// it holds a lock that the callback takes. Called from the callback of what it removes,
-// it does not wait for that callback.
+// It returns at once. A call of the callback of what it removes that runs meanwhile may
+// still end after it, and is then answered with 404; no call starts after it. The
+// ReleaseUser of the config is called when no call runs (see DtNmosReleaseFunc), which
+// may be inside this call.
 //
 // Returns DTNMOS_OK, or DTNMOS_E_NOT_FOUND when the node has no such ID.
 DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);

@@ -26,9 +26,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 
@@ -198,8 +196,9 @@ struct SenderActivation
 // the same sender or receiver is answered with 423 (locked), and the function is never
 // called twice at once for one sender or receiver. The new parameters become active at
 // AtNs, or when the function returns if that is later. A failed scheduled activation is
-// logged. The node keeps the function, and what it captured, until the sender or
-// receiver is removed or the node closes.
+// logged. The node frees the function, and what it captured, once the sender or receiver
+// is removed or the node closes and no call of it runs: when Remove() or Close() returns
+// if none runs, and when the call that runs returns otherwise.
 using ReceiverActivate =
     std::function<Status(const Id& Receiver, const ReceiverActivation& Activation)>;
 
@@ -213,54 +212,29 @@ bool HasServer();
 namespace Detail
 {
 
-// What the node keeps of the function of a sender or receiver: the function, and the
-// device the sender or receiver belongs to, so that removing the device frees it too.
-// The node owns it; the C library is given its address.
+// The function of a sender or receiver, as the C node holds it: its User, which the C
+// node owns from the moment it has the sender or receiver, and frees through
+// ReleaseEntry() when no call of it runs.
 struct ActivateEntry
 {
-    DtNmos::Id DeviceId;
     SenderActivate Sender;
     ReceiverActivate Receiver;
 };
 
-// An entry whose function runs on this thread, and where Node::Remove() puts it when it
-// removes the entry's sender or receiver from within that function, so that the call
-// frees it when the function has returned. Outer is the one whose function runs around
-// this one, as when a function has a request handled on its thread.
-struct RunningEntry
+// The release of an ActivateEntry, which User points to.
+inline void ReleaseEntry(void* User) noexcept
 {
-    const ActivateEntry* Entry;
-    std::unique_ptr<ActivateEntry>* Taken;
-    RunningEntry* Outer;
-};
-
-// The innermost entry whose function runs on this thread, or null.
-inline thread_local RunningEntry* Running = nullptr;
-
-// Frees Entry, unless its function runs on this thread: it then goes to that call.
-inline void FreeEntry(std::unique_ptr<ActivateEntry> Entry)
-{
-    for (RunningEntry* r = Running; r != nullptr; r = r->Outer)
-    {
-        if (r->Entry == Entry.get())
-        {
-            *r->Taken = std::move(Entry);
-            return;
-        }
-    }
+    const std::unique_ptr<ActivateEntry> Released(static_cast<ActivateEntry*>(User));
 }
 
-// What a Node keeps beside the C node: the functions the C node calls, the search it
-// borrows, and the entries of its senders and receivers by ID, which Mutex guards. It
-// returns the search when it is freed, which is after the C node.
+// What a Node keeps beside the C node: the functions the C node calls, and the search
+// it borrows, which it returns when it is freed, after the C node.
 struct NodeState
 {
     HttpFunction Http;
     LogFunction Log;
     RegistryFailedFunction RegistryFailed;
     RegistrySearchState* Search = nullptr;
-    std::mutex Mutex;
-    std::map<DtNmos::Id, std::unique_ptr<ActivateEntry>> Entries;
 
     NodeState() = default;
     NodeState(const NodeState&) = delete;
@@ -355,12 +329,11 @@ class Node
     [[nodiscard]] Expected<std::chrono::milliseconds> Poll();
 
     // Removes a device, sender or receiver; removing a device also removes its senders
-    // and receivers. The next poll unregisters them. Returns when no function of what it
-    // removes runs: an activation being applied is waited for, and none starts
-    // meanwhile; the functions are then freed. So do not call it while holding a lock
-    // that such a function takes. Called from the function of what it removes, it does
-    // not wait for that function. Fails with Result::NotFound when the node has no such
-    // ID.
+    // and receivers. The next poll unregisters them. It returns at once: an activation
+    // being applied meanwhile may still end after it, and none starts after it. The
+    // functions of what it removes are freed when no call of them runs, which is inside
+    // this call when none does; it may also be called from such a function. Fails with
+    // Result::NotFound when the node has no such ID.
     [[nodiscard]] Status Remove(const Id& Resource);
 
     // Serves the Node API and the Connection API at ApiHost and ApiPort, and polls the
@@ -478,15 +451,11 @@ ReceiverTrampoline(void* User, const DtNmosId* Receiver,
                    const DtNmosReceiverActivation* Activation) noexcept
 {
     const ActivateEntry* Entry = static_cast<const ActivateEntry*>(User);
-    std::unique_ptr<ActivateEntry> Taken;
-    RunningEntry Here{Entry, &Taken, Running};
-    Running = &Here;
     const Status Done = Guard(Result::Internal,
                               [&] {
                                   return Entry->Receiver(Access::FromNative(*Receiver),
                                                          FromNative(*Activation));
                               });
-    Running = Here.Outer;
     return Fail(Done, Result::Internal);
 }
 
@@ -495,13 +464,9 @@ inline DtNmosResult SenderTrampoline(void* User, const DtNmosId* Sender,
                                      const DtNmosSenderActivation* Activation) noexcept
 {
     const ActivateEntry* Entry = static_cast<const ActivateEntry*>(User);
-    std::unique_ptr<ActivateEntry> Taken;
-    RunningEntry Here{Entry, &Taken, Running};
-    Running = &Here;
     const Status Done = Guard(
         Result::Internal, [&]
         { return Entry->Sender(Access::FromNative(*Sender), FromNative(*Activation)); });
-    Running = Here.Outer;
     return Fail(Done, Result::Internal);
 }
 
@@ -638,12 +603,12 @@ inline Status Node::AddDevice(const DeviceConfig& Device)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::AddReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The entry of the function goes into the node's entries once the C node has the
-// receiver; until then this function keeps it.
+// The entry of the function goes to the C node once it has the receiver, which releases
+// it; until then this function keeps it, and frees it when the receiver is refused.
 //
 inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate Activate)
 {
-    DTNMOS_DETAIL_LAST_FIELD(DtNmosReceiverConfig, DestinationPort);
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosReceiverConfig, ReleaseUser);
     const Status Open = CheckOpen();
     if (!Open)
     {
@@ -662,15 +627,15 @@ inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate
     Config.MulticastIp = Detail::NullIfEmpty(Receiver.MulticastIp);
     Config.DestinationPort = Receiver.DestinationPort;
     auto Entry = std::make_unique<Detail::ActivateEntry>();
-    Entry->DeviceId = Receiver.DeviceId;
     Entry->Receiver = std::move(Activate);
+    Config.ReleaseUser = Detail::ReleaseEntry;
     const Status Added = Detail::Check(DtNmosNode_AddReceiver(
         Native.get(), &Config, Entry->Receiver ? Detail::ReceiverTrampoline : nullptr,
         Entry.get()));
     if (Added)
     {
-        const std::lock_guard<std::mutex> Lock(State->Mutex);
-        State->Entries[Receiver.Id] = std::move(Entry);
+        // The C node owns the entry now, and releases it.
+        (void)Entry.release();
     }
     return Added;
 }
@@ -681,7 +646,7 @@ inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate
 //
 inline Status Node::AddSender(const SenderConfig& Sender, SenderActivate Activate)
 {
-    DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderConfig, ActivationLeadMs);
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderConfig, ReleaseUser);
     const Status Open = CheckOpen();
     if (!Open)
     {
@@ -703,15 +668,15 @@ inline Status Node::AddSender(const SenderConfig& Sender, SenderActivate Activat
     Config.SourceIp = Sender.SourceIp.c_str();
     Config.ActivationLeadMs = Sender.ActivationLeadMs;
     auto Entry = std::make_unique<Detail::ActivateEntry>();
-    Entry->DeviceId = Sender.DeviceId;
     Entry->Sender = std::move(Activate);
+    Config.ReleaseUser = Detail::ReleaseEntry;
     const Status Added = Detail::Check(DtNmosNode_AddSender(
         Native.get(), &Config, Entry->Sender ? Detail::SenderTrampoline : nullptr,
         Entry.get()));
     if (Added)
     {
-        const std::lock_guard<std::mutex> Lock(State->Mutex);
-        State->Entries[Sender.Id] = std::move(Entry);
+        // The C node owns the entry now, and releases it.
+        (void)Entry.release();
     }
     return Added;
 }
@@ -770,7 +735,8 @@ inline Status Node::CheckOpen() const
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Once the C node is closed, no function of it runs, and the entries go.
+// The C node releases the entries of the functions as it closes, and stops using the
+// search, which the node then returns.
 //
 inline Status Node::Close()
 {
@@ -780,12 +746,6 @@ inline Status Node::Close()
         return Open;
     }
     const Status Closed = Detail::Check(DtNmosNode_Close(Native.get()));
-    const std::lock_guard<std::mutex> Lock(State->Mutex);
-    for (auto& Item : State->Entries)
-    {
-        Detail::FreeEntry(std::move(Item.second));
-    }
-    State->Entries.clear();
     State->ReturnSearch();
     return Closed;
 }
@@ -854,9 +814,8 @@ inline Expected<std::chrono::milliseconds> Node::Poll()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C node waits for the functions of what it removes, without the lock of the
-// entries, which such a function may need; the entries of the resource, or of the
-// senders and receivers of the device, go after it.
+// The C node releases the entries of the functions of what it removes, when no call of
+// them runs.
 //
 inline Status Node::Remove(const Id& Resource)
 {
@@ -866,22 +825,7 @@ inline Status Node::Remove(const Id& Resource)
         return Open;
     }
     const DtNmosId NativeId = Detail::Access::ToNative(Resource);
-    const Status Removed = Detail::Check(DtNmosNode_Remove(Native.get(), &NativeId));
-    if (Removed)
-    {
-        const std::lock_guard<std::mutex> Lock(State->Mutex);
-        for (auto Item = State->Entries.begin(); Item != State->Entries.end();)
-        {
-            const bool Goes =
-                Item->first == Resource || Item->second->DeviceId == Resource;
-            if (Goes)
-            {
-                Detail::FreeEntry(std::move(Item->second));
-            }
-            Item = Goes ? State->Entries.erase(Item) : std::next(Item);
-        }
-    }
-    return Removed;
+    return Detail::Check(DtNmosNode_Remove(Native.get(), &NativeId));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Serve -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

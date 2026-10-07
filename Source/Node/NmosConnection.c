@@ -49,14 +49,7 @@ typedef struct NmosConnection
     NmosParameters Staged;
     NmosParameters Active;
     bool Applying; // A callback applies an activation; a PATCH meanwhile is refused
-    bool Calling;  // The callback runs; DtNmosNode_Remove() waits for it to return
-    bool Removing; // DtNmosNode_Remove() waits to remove it; no activation starts
 } NmosConnection;
-
-// The node and the sender or receiver whose callback runs on this thread, if any, so
-// that DtNmosNode_Remove() from within that callback does not wait for itself.
-static NMOS_THREAD_LOCAL const DtNmosNode* CallingNode;
-static NMOS_THREAD_LOCAL DtNmosId CallingId;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
@@ -189,17 +182,6 @@ void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver)
 {
     FreeConnection(Receiver->Connection);
     Receiver->Connection = NULL;
-}
-
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_HoldForRemoval -.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-bool NmosConnection_HoldForRemoval(const DtNmosNode* Node, void* Connection,
-                                   const DtNmosId* Id)
-{
-    NmosConnection* c = Connection;
-    c->Removing = true;
-    const bool Own = CallingNode == Node && strcmp(CallingId.Text, Id->Text) == 0;
-    return c->Calling && !Own;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- WriteTextOrNull -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -723,9 +705,7 @@ static bool ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged,
 // lock of the node and applied without it.
 typedef struct NmosActivation
 {
-    DtNmosSenderActivateFunc SenderCallback;
-    DtNmosReceiverActivateFunc ReceiverCallback;
-    void* User;
+    NmosCallback* Callback; // of the sender or receiver; a call takes a use of it
     DtNmosId Resource;
     DtNmosSenderActivation Sender;
     DtNmosReceiverActivation Receiver;
@@ -739,48 +719,31 @@ static void ClearActivation(NmosActivation* a)
     NmosStore_Free(&a->Store);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CallActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CallsActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Calls the callback that applies the activation a, without the lock, noting on this
-// thread whose callback runs. A callback that fails leaves its message with
-// DtNmos_SetLastError(), on this thread. A callback that has a request of its own handled
-// on this thread runs another callback within it; the note of the outer one is restored
-// after.
+// Returns whether the activation a has a callback to call.
 //
-static DtNmosResult CallActivation(const DtNmosNode* Node, const NmosActivation* a)
+static bool CallsActivation(const NmosActivation* a)
 {
-    NmosError_Clear();
-    const DtNmosNode* OuterNode = CallingNode;
-    const DtNmosId OuterId = CallingId;
-    CallingNode = Node;
-    CallingId = a->Resource;
-    DtNmosResult Result = DTNMOS_OK;
-    if (a->SenderCallback != NULL)
-    {
-        Result = a->SenderCallback(a->User, &a->Resource, &a->Sender);
-    }
-    else if (a->ReceiverCallback != NULL)
-    {
-        Result = a->ReceiverCallback(a->User, &a->Resource, &a->Receiver);
-    }
-    CallingNode = OuterNode;
-    CallingId = OuterId;
-    return Result;
+    return a->Callback != NULL &&
+           (a->Callback->Sender != NULL || a->Callback->Receiver != NULL);
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- EndCall -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CallActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Notes that the callback of the connection c returned, and wakes a DtNmosNode_Remove()
-// that waits for it. c is null when the callback removed what it activated. The caller
-// holds the lock.
+// Calls the callback that applies the activation a, without the lock, with a use of it
+// that the caller took. A callback that fails leaves its message with
+// DtNmos_SetLastError(), on this thread.
 //
-static void EndCall(DtNmosNode* Node, NmosConnection* c)
+static DtNmosResult CallActivation(const NmosActivation* a)
 {
-    if (c != NULL)
+    NmosError_Clear();
+    const NmosCallback* Callback = a->Callback;
+    if (Callback->Sender != NULL)
     {
-        c->Calling = false;
+        return Callback->Sender(Callback->User, &a->Resource, &a->Sender);
     }
-    NmosOs_ConditionWakeAll(Node->CallbackReturned);
+    return Callback->Receiver(Callback->User, &a->Resource, &a->Receiver);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- GatherActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -795,8 +758,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
     const bool Enabled = Staged->MasterEnable && t->RtpEnabled;
     if (s != NULL)
     {
-        a->SenderCallback = s->Activate;
-        a->User = s->User;
+        a->Callback = s->Callback;
         a->Resource = s->Id;
         a->Sender.MasterEnable = Enabled;
         a->Sender.AtNs = Staged->DueNs != 0 ? Staged->DueNs : NmosOs_TaiNowNs();
@@ -810,8 +772,7 @@ static const char* GatherActivation(const NmosNodeSender* s, const NmosNodeRecei
                                                             : s->Flow.DestinationPort;
         return NULL;
     }
-    a->ReceiverCallback = r->Activate;
-    a->User = r->User;
+    a->Callback = r->Callback;
     a->Resource = r->Id;
     a->Receiver.MasterEnable = Enabled;
     a->Receiver.AtNs = Staged->DueNs != 0 ? Staged->DueNs : NmosOs_TaiNowNs();
@@ -954,12 +915,7 @@ static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJ
     NmosNodeSender* s = NULL;
     NmosNodeReceiver* r = NULL;
     NmosConnection* c = FindConnection(Node, Id, Sender, &s, &r);
-    if (c != NULL && c->Removing)
-    {
-        // The program removes it, waiting for a callback; it is gone in a moment.
-        Failure = "The sender or receiver is being removed.";
-    }
-    else if (c != NULL && c->Applying)
+    if (c != NULL && c->Applying)
     {
         // The callback is applying an activation, which cannot be taken back; the PATCH
         // waits for it to end, a cancel included.
@@ -999,17 +955,16 @@ static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJ
         Status = 500;
         Failure = "Out of memory.";
     }
-    const bool Calls =
-        Failure == NULL && (a.SenderCallback != NULL || a.ReceiverCallback != NULL);
+    const bool Calls = Failure == NULL && CallsActivation(&a);
     if (Calls)
     {
         c->Applying = true;
-        c->Calling = true;
+        ++a.Callback->Uses;
     }
     NmosNode_Unlock(Node);
 
     // The callback applies the activation without the lock, for as long as that takes.
-    const DtNmosResult Result = Calls ? CallActivation(Node, &a) : DTNMOS_OK;
+    const DtNmosResult Result = Calls ? CallActivation(&a) : DTNMOS_OK;
     ClearActivation(&a);
     if (Result != DTNMOS_OK)
     {
@@ -1020,17 +975,18 @@ static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJ
 
     NmosBuffer b;
     memset(&b, 0, sizeof(b));
+    NmosCallback* Released = NULL;
     if (Calls || Failure == NULL)
     {
         NmosNode_Lock(Node);
+        if (Calls)
+        {
+            NmosCallback_Drop(a.Callback, &Released);
+        }
         c = FindConnection(Node, Id, Sender, &s, &r);
         if (c != NULL)
         {
             c->Applying = false;
-        }
-        if (Calls)
-        {
-            EndCall(Node, c);
         }
         if (Failure == NULL && c == NULL)
         {
@@ -1062,6 +1018,9 @@ static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJ
         }
     }
     NmosBuffer_Free(&b);
+    // A sender or receiver removed during its activation is released now, its last call
+    // done, and after the answer, whose reason may be the message of this thread.
+    NmosCallback_ReleaseAll(Released);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- PatchStaged -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -1179,7 +1138,7 @@ static NmosConnection* FindDue(DtNmosNode* Node, uint64_t NowNs, NmosNodeSender*
                                        : Node->Receivers[i - Node->SenderCount].LeadNs;
         const uint64_t Time = c->Staged.DueNs;
         const uint64_t At = Time == 0 ? 0 : Time > Lead ? Time - Lead : 1;
-        if (At != 0 && At <= NowNs && Due == NULL && !c->Removing)
+        if (At != 0 && At <= NowNs && Due == NULL)
         {
             Due = c;
             *s = IsSender ? &Node->Senders[i] : NULL;
@@ -1257,25 +1216,38 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
                                   ? GatherActivation(s, r, &Staged, &a)
                                   : "Out of memory.";
         c->Staged.DueNs = 0;
-        const bool Calls = Failure == NULL;
-        c->Applying = Calls;
-        c->Calling = Calls;
+        c->Applying = Failure == NULL;
+        const bool Calls = Failure == NULL && CallsActivation(&a);
+        if (Calls)
+        {
+            ++a.Callback->Uses;
+        }
         NmosNode_Unlock(Node);
 
-        const DtNmosResult Result = Calls ? CallActivation(Node, &a) : DTNMOS_OK;
+        const DtNmosResult Result = Calls ? CallActivation(&a) : DTNMOS_OK;
         ClearActivation(&a);
         if (Failure == NULL && Result != DTNMOS_OK)
         {
             Failure = DtNmos_GetLastError()[0] != '\0' ? DtNmos_GetLastError()
                                                        : "The activation failed.";
         }
+        // The reason is kept, as a release may fail on this thread too.
+        char Reason[512];
+        if (Failure != NULL)
+        {
+            snprintf(Reason, sizeof(Reason), "%s", Failure);
+            Failure = Reason;
+        }
         if (Calls)
         {
-            // A removal waits for the callback, which has returned, and not for the time
-            // the activation may still wait for below.
+            // The use of the call ends when the callback returns, not at the time the
+            // activation may still wait for below: a sender removed meanwhile is released
+            // now.
+            NmosCallback* Released = NULL;
             NmosNode_Lock(Node);
-            EndCall(Node, FindConnection(Node, Id.Text, Sender, &s, &r));
+            NmosCallback_Drop(a.Callback, &Released);
             NmosNode_Unlock(Node);
+            NmosCallback_ReleaseAll(Released);
         }
 
         // A callback called its lead early that returns before the time asked for: the

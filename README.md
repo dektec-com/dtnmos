@@ -383,6 +383,11 @@ static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
 }
 ```
 
+`DtNmosNode_Remove()` returns at once, and a call of the function that runs then may
+still end after it. A `ReleaseUser` in the config of the sender or receiver frees the
+function's `user` once no call of it runs: inside `Remove()` or `Close()` when none
+does, and after the last call otherwise.
+
 An immediate activation calls the function while the controller waits for the answer. A
 scheduled one, absolute or relative, is answered with 202 and called from
 `DtNmosNode_Poll()` when its time comes; until then the staged parameters take only a
@@ -422,10 +427,10 @@ as the namespace: `DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
   `RegistrySearch` of its config, and a subscription its `Query`: the program destroys
   them after their borrowers, and one destroyed while borrowed ends the program with
   `std::terminate()`, as a `std::thread` that is not joined does.
-- **Callbacks** are `std::function`s, and may capture what they need. The node keeps the
-  function of a sender or receiver until it is removed, and `Remove()` returns when no
-  call of it runs. An activation that fails returns an `Error`, or throws, and the
-  controller gets its message.
+- **Callbacks** are `std::function`s, and may capture what they need. The node frees the
+  function of a sender or receiver when it is removed and no call of it runs. An
+  activation that fails returns an `Error`, or throws, and the controller gets its
+  message.
 
 A node that finds its registry with DNS-SD, with a receiver:
 

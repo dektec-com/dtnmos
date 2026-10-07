@@ -129,8 +129,8 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
     Flow.Format.Video.Depth = 10;
     Flow.Format.Video.Sampling = DTNMOS_SAMPLING_YCBCR_422;
     // The sender and the receiver are on the address of the APIs.
-    DtNmosSenderConfig Sender = {
-        sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "", &Flow, Host, 0};
+    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "",
+                                 &Flow,          Host,        0,           NULL};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {sizeof(Receiver),
                                      {RECEIVER_ID},
@@ -142,7 +142,8 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
                                      0,
                                      NULL,
                                      NULL,
-                                     0};
+                                     0,
+                                     NULL};
     NMOS_EXPECT(DtNmosNode_AddReceiver(Node, &Receiver, NULL, NULL) == DTNMOS_OK);
     return Node;
 }
@@ -182,7 +183,8 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                    0,
                                    NULL,
                                    NULL,
-                                   0};
+                                   0,
+                                   NULL};
     NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Orphan, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
     // So does a receiver without the address of its port, or with a name for it.
@@ -196,7 +198,8 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                      0,
                                      NULL,
                                      NULL,
-                                     0};
+                                     0,
+                                     NULL};
     NMOS_ASSERT(DtNmosNode_AddReceiver(Node, &Portless, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
     Portless.InterfaceIp = "card.local";
@@ -216,7 +219,8 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                      "",
                                      &Bare,
                                      NULL,
-                                     0};
+                                     0,
+                                     NULL};
     NMOS_ASSERT(DtNmosNode_AddSender(Node, &Sourceless, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
     DtNmosNode_Free(Node);

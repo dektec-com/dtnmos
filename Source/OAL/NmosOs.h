@@ -24,20 +24,6 @@ void NmosOs_MutexLock(NmosMutex* Mutex);
 // Releases the lock.
 void NmosOs_MutexUnlock(NmosMutex* Mutex);
 
-// A condition that threads wait for while they hold a mutex.
-typedef struct NmosCondition NmosCondition;
-
-// Creates a condition. Returns null when out of memory.
-NmosCondition* NmosOs_ConditionCreate(void);
-// Frees a condition. Nobody may wait for it.
-void NmosOs_ConditionFree(NmosCondition* Condition);
-// Releases Mutex, which the caller holds, waits until the condition is signalled, and
-// takes Mutex again. It may also return without a signal, so the caller checks again
-// what it waits for.
-void NmosOs_ConditionWait(NmosCondition* Condition, NmosMutex* Mutex);
-// Wakes every thread that waits for the condition.
-void NmosOs_ConditionWakeAll(NmosCondition* Condition);
-
 typedef struct NmosThread NmosThread;
 
 // Starts a thread that runs Function(Argument). Returns null when it cannot.

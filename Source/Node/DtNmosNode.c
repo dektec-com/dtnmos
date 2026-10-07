@@ -31,6 +31,33 @@ void NmosNode_Unlock(DtNmosNode* Node)
     NmosOs_MutexUnlock(Node->Mutex);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosCallback_Drop -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void NmosCallback_Drop(NmosCallback* Callback, NmosCallback** Released)
+{
+    if (--Callback->Uses == 0)
+    {
+        Callback->Next = *Released;
+        *Released = Callback;
+    }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosCallback_ReleaseAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+void NmosCallback_ReleaseAll(NmosCallback* Released)
+{
+    while (Released != NULL)
+    {
+        NmosCallback* Next = Released->Next;
+        if (Released->Release != NULL)
+        {
+            Released->Release(Released->User);
+        }
+        free(Released);
+        Released = Next;
+    }
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 static char* CopyText(const char* Text)
@@ -267,7 +294,6 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     Result->Searches = Searches;
     Result->Search = Searches ? Search : NULL;
     Result->Mutex = NmosOs_MutexCreate();
-    Result->CallbackReturned = NmosOs_ConditionCreate();
     Result->Id = Config->Id;
     Result->Label = CopyText(Config->Label);
     Result->Description = CopyText(Config->Description);
@@ -314,8 +340,7 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
         Result->FailuresBeforeSwitch = Searches ? 1 : 3;
     }
     Result->FirstRegistration = true;
-    if (Result->Mutex == NULL || Result->CallbackReturned == NULL ||
-        Result->Label == NULL || Result->Description == NULL ||
+    if (Result->Mutex == NULL || Result->Label == NULL || Result->Description == NULL ||
         Result->Hostname == NULL || Result->ApiHost == NULL ||
         (!Searches && Result->Registration == NULL))
     {
@@ -350,8 +375,12 @@ static void FreeReceiver(NmosNodeReceiver* Receiver)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_Release -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
+// The releases of the callbacks are called once the node is empty and closed, so that one
+// that calls the node finds it closed.
+//
 void NmosNode_Release(DtNmosNode* Node)
 {
+    NmosCallback* Released = NULL;
     for (size_t i = 0; i < Node->DeviceCount; ++i)
     {
         free(Node->Devices[i].Label);
@@ -359,10 +388,12 @@ void NmosNode_Release(DtNmosNode* Node)
     }
     for (size_t i = 0; i < Node->SenderCount; ++i)
     {
+        NmosCallback_Drop(Node->Senders[i].Callback, &Released);
         FreeSender(&Node->Senders[i]);
     }
     for (size_t i = 0; i < Node->ReceiverCount; ++i)
     {
+        NmosCallback_Drop(Node->Receivers[i].Callback, &Released);
         FreeReceiver(&Node->Receivers[i]);
     }
     free(Node->Devices);
@@ -375,9 +406,9 @@ void NmosNode_Release(DtNmosNode* Node)
     free(Node->ApiHost);
     free(Node->Registration);
     ForgetFailed(Node);
-    NmosOs_ConditionFree(Node->CallbackReturned);
     NmosOs_MutexFree(Node->Mutex);
     memset(Node, 0, sizeof(*Node));
+    NmosCallback_ReleaseAll(Released);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistryRequest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -1114,6 +1145,20 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
                               "A sender of the node sends video or audio, not %s.",
                               DtNmosMedia_Name(Sender->Flow->Media));
     }
+    // The callback, freed without its release when the sender is not added.
+    NmosCallback* Callback = calloc(1, sizeof(*Callback));
+    if (Callback == NULL)
+    {
+        return NmosError_FailMemory();
+    }
+    Callback->Sender = Activate;
+    Callback->User = User;
+    Callback->Uses = 1;
+    if (Sender->Size >=
+        offsetof(DtNmosSenderConfig, ReleaseUser) + sizeof(Sender->ReleaseUser))
+    {
+        Callback->Release = Sender->ReleaseUser;
+    }
     NmosNode_Lock(Node);
     DtNmosResult Result = DTNMOS_OK;
     if (IdTaken(Node, &Sender->Id))
@@ -1142,8 +1187,7 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         Added->Label = CopyText(Sender->Label);
         Added->Description = CopyText(Sender->Description);
         Added->SourceIp = CopyText(Sender->SourceIp);
-        Added->Activate = Activate;
-        Added->User = User;
+        Added->Callback = Callback;
         Added->MasterEnable = true;
         Added->SessionId = Node->LastVersion / 1000000000u;
         Added->SessionVersion = 1;
@@ -1168,6 +1212,10 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         }
     }
     NmosNode_Unlock(Node);
+    if (Result != DTNMOS_OK)
+    {
+        free(Callback);
+    }
     return Result;
 }
 
@@ -1218,6 +1266,20 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
                               "A receiver of the node receives video or audio, not %s.",
                               DtNmosMedia_Name(Receiver->Media));
     }
+    // The callback, freed without its release when the receiver is not added.
+    NmosCallback* Callback = calloc(1, sizeof(*Callback));
+    if (Callback == NULL)
+    {
+        return NmosError_FailMemory();
+    }
+    Callback->Receiver = Activate;
+    Callback->User = User;
+    Callback->Uses = 1;
+    if (Receiver->Size >=
+        offsetof(DtNmosReceiverConfig, ReleaseUser) + sizeof(Receiver->ReleaseUser))
+    {
+        Callback->Release = Receiver->ReleaseUser;
+    }
     NmosNode_Lock(Node);
     DtNmosResult Result = DTNMOS_OK;
     if (IdTaken(Node, &Receiver->Id))
@@ -1245,8 +1307,7 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
         Added->Label = CopyText(Receiver->Label);
         Added->Description = CopyText(Receiver->Description);
         Added->InterfaceIp = CopyText(Receiver->InterfaceIp);
-        Added->Activate = Activate;
-        Added->User = User;
+        Added->Callback = Callback;
         if (Receiver->Size >= offsetof(DtNmosReceiverConfig, ActivationLeadMs) +
                                   sizeof(Receiver->ActivationLeadMs))
         {
@@ -1267,6 +1328,10 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
         }
     }
     NmosNode_Unlock(Node);
+    if (Result != DTNMOS_OK)
+    {
+        free(Callback);
+    }
     return Result;
 }
 
@@ -1289,9 +1354,10 @@ static bool ScheduleRemoval(DtNmosNode* Node, const char* Type, const DtNmosId* 
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RemoveSenderAt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void RemoveSenderAt(DtNmosNode* Node, size_t Index)
+static void RemoveSenderAt(DtNmosNode* Node, size_t Index, NmosCallback** Released)
 {
     NmosNodeSender* Sender = &Node->Senders[Index];
+    NmosCallback_Drop(Sender->Callback, Released);
     if (Sender->WasRegistered)
     {
         ScheduleRemoval(Node, "senders", &Sender->Id);
@@ -1306,9 +1372,10 @@ static void RemoveSenderAt(DtNmosNode* Node, size_t Index)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RemoveReceiverAt -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-static void RemoveReceiverAt(DtNmosNode* Node, size_t Index)
+static void RemoveReceiverAt(DtNmosNode* Node, size_t Index, NmosCallback** Released)
 {
     NmosNodeReceiver* Receiver = &Node->Receivers[Index];
+    NmosCallback_Drop(Receiver->Callback, Released);
     if (Receiver->WasRegistered)
     {
         ScheduleRemoval(Node, "receivers", &Receiver->Id);
@@ -1320,43 +1387,7 @@ static void RemoveReceiverAt(DtNmosNode* Node, size_t Index)
     --Node->ReceiverCount;
 }
 
-// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- HoldForRemoval -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
-//
-// Marks what removing Id removes, the sender or receiver Id or the senders and receivers
-// of the device Id, as being removed, so that no activation of it starts. Returns
-// whether the callback of one of them runs on another thread, which the removal waits
-// for. The caller holds the lock.
-//
-static bool HoldForRemoval(DtNmosNode* Node, const DtNmosId* Id)
-{
-    const bool Device = NmosNode_FindDevice(Node, Id) != NULL;
-    bool Waits = false;
-    for (size_t i = 0; i < Node->SenderCount; ++i)
-    {
-        const NmosNodeSender* s = &Node->Senders[i];
-        const DtNmosId* Of = Device ? &s->DeviceId : &s->Id;
-        if (strcmp(Of->Text, Id->Text) == 0)
-        {
-            Waits = NmosConnection_HoldForRemoval(Node, s->Connection, &s->Id) || Waits;
-        }
-    }
-    for (size_t i = 0; i < Node->ReceiverCount; ++i)
-    {
-        const NmosNodeReceiver* r = &Node->Receivers[i];
-        const DtNmosId* Of = Device ? &r->DeviceId : &r->Id;
-        if (strcmp(Of->Text, Id->Text) == 0)
-        {
-            Waits = NmosConnection_HoldForRemoval(Node, r->Connection, &r->Id) || Waits;
-        }
-    }
-    return Waits;
-}
-
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-//
-// What is removed is first held, so that no activation of it starts, and removed once no
-// callback of it runs on another thread; the lock is released while it waits, and what
-// it removes is found again after.
 //
 DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
 {
@@ -1370,11 +1401,8 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmosNode_Remove() needs an ID.");
     }
+    NmosCallback* Released = NULL;
     NmosNode_Lock(Node);
-    while (HoldForRemoval(Node, Id))
-    {
-        NmosOs_ConditionWait(Node->CallbackReturned, Node->Mutex);
-    }
     DtNmosResult Result = DTNMOS_OK;
     NmosNodeDevice* Device = NmosNode_FindDevice(Node, Id);
     if (Device != NULL)
@@ -1383,14 +1411,14 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
         {
             if (strcmp(Node->Senders[i - 1].DeviceId.Text, Id->Text) == 0)
             {
-                RemoveSenderAt(Node, i - 1);
+                RemoveSenderAt(Node, i - 1, &Released);
             }
         }
         for (size_t i = Node->ReceiverCount; i > 0; --i)
         {
             if (strcmp(Node->Receivers[i - 1].DeviceId.Text, Id->Text) == 0)
             {
-                RemoveReceiverAt(Node, i - 1);
+                RemoveReceiverAt(Node, i - 1, &Released);
             }
         }
         Device = NmosNode_FindDevice(Node, Id);
@@ -1406,18 +1434,20 @@ DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id)
     }
     else if (NmosNode_FindSender(Node, Id) != NULL)
     {
-        RemoveSenderAt(Node, (size_t)(NmosNode_FindSender(Node, Id) - Node->Senders));
+        RemoveSenderAt(Node, (size_t)(NmosNode_FindSender(Node, Id) - Node->Senders),
+                       &Released);
     }
     else if (NmosNode_FindReceiver(Node, Id) != NULL)
     {
-        RemoveReceiverAt(Node,
-                         (size_t)(NmosNode_FindReceiver(Node, Id) - Node->Receivers));
+        RemoveReceiverAt(
+            Node, (size_t)(NmosNode_FindReceiver(Node, Id) - Node->Receivers), &Released);
     }
     else
     {
         Result = NmosError_Fail(DTNMOS_E_NOT_FOUND, "The node has no %s.", Id->Text);
     }
     NmosNode_Unlock(Node);
+    NmosCallback_ReleaseAll(Released);
     return Result;
 }
 
@@ -2052,17 +2082,18 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- UnregisterAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Deletes from the registry everything the node registered, children before parents.
+// The callbacks of the senders and receivers it removes go onto *Released.
 //
-static void UnregisterAll(DtNmosNode* Node)
+static void UnregisterAll(DtNmosNode* Node, NmosCallback** Released)
 {
     NmosNode_Lock(Node);
     for (size_t i = Node->SenderCount; i > 0; --i)
     {
-        RemoveSenderAt(Node, i - 1);
+        RemoveSenderAt(Node, i - 1, Released);
     }
     for (size_t i = Node->ReceiverCount; i > 0; --i)
     {
-        RemoveReceiverAt(Node, i - 1);
+        RemoveReceiverAt(Node, i - 1, Released);
     }
     for (size_t i = 0; i < Node->DeviceCount; ++i)
     {
@@ -2083,6 +2114,9 @@ static void UnregisterAll(DtNmosNode* Node)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
+// The releases of the callbacks are called once the node is empty and closed, as those
+// of NmosNode_Release() are, so that one that calls the node finds it closed.
+//
 DtNmosResult DtNmosNode_Close(DtNmosNode* Node)
 {
     const DtNmosResult Result = NmosNode_CheckOpen(Node, "DtNmosNode_Close");
@@ -2091,8 +2125,10 @@ DtNmosResult DtNmosNode_Close(DtNmosNode* Node)
         return Result;
     }
     NmosServer_Stop(Node);
-    UnregisterAll(Node);
+    NmosCallback* Released = NULL;
+    UnregisterAll(Node, &Released);
     NmosNode_Release(Node);
+    NmosCallback_ReleaseAll(Released);
     return DTNMOS_OK;
 }
 
