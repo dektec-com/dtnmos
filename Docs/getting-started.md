@@ -77,7 +77,7 @@ A C++ program links `dtnmos::cpp` instead, which brings C++23 with it.
     include(FetchContent)
     FetchContent_Declare(dtnmos
         GIT_REPOSITORY https://github.com/dektec-com/dtnmos.git
-        GIT_TAG v0.5.2)
+        GIT_TAG v0.5.3)
     set(DTNMOS_WITH_CURL ON)
     FetchContent_MakeAvailable(dtnmos)
     target_link_libraries(myapp PRIVATE dtnmos::dtnmos)
