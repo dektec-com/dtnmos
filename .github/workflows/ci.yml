@@ -98,7 +98,7 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   # The C++ API on the least compilers it names for C++20, GCC 11 and Clang 14, and on
-  # the Clang of ubuntu-latest with libc++, which has std::expected under C++23 where
+  # Clang 18 of Ubuntu 24.04 with libc++, which has std::expected under C++23 where
   # that Clang's libstdc++ does not, so that the suites run on Clang with both Expecteds
   # and CppMixedStandards checks the tag of dtnmos_expected.hpp there.
   cpp20:
@@ -119,7 +119,7 @@ jobs:
             cxx: clang++-14
             standard: 20
           - name: Clang 18 and libc++
-            os: ubuntu-latest
+            os: ubuntu-24.04
             cc: clang-18
             cxx: clang++-18
             standard: 23
