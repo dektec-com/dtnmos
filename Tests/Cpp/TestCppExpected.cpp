@@ -258,7 +258,8 @@ template <typename F> static void ExpectedConstructs()
     const IntOr Copied = Kept;
     NMOS_ASSERT(!Copied && Copied.error().Text == "four");
 
-    const typename F::template Expected<std::string, Fault> Text(std::in_place, 3, 'a');
+    const typename F::template Expected<std::string, Fault> Text(std::in_place,
+                                                                 std::size_t{3}, 'a');
     NMOS_ASSERT(*Text == "aaa");
     const typename F::template Expected<std::vector<int>, Fault> List(std::in_place,
                                                                       {1, 2, 3});
