@@ -36,12 +36,13 @@ jobs:
         run: Scripts/check_style.sh
 
   build:
-    name: Build ${{ matrix.preset }}
+    name: Build ${{ matrix.preset }}${{ matrix.vs && format(' on Visual Studio {0}', matrix.vs) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       # The full presets build with libcurl and civetweb from vcpkg, which the runners
-      # carry; the binary cache keeps them from being built again on every run.
+      # carry; the binary cache keeps them from being built again on every run. Visual
+      # Studio 2022, the least that the C++ API names, builds windows-debug as well.
       matrix:
         include:
           - os: ubuntu-latest
@@ -55,6 +56,9 @@ jobs:
             vcpkg: true
           - os: windows-latest
             preset: windows-debug
+          - os: windows-2022
+            preset: windows-debug
+            vs: 2022
           - os: windows-latest
             preset: windows-release
           - os: windows-latest
