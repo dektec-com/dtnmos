@@ -12,9 +12,9 @@ It is the NMOS support of DekTec's GStreamer plugins, and is meant to be used by
 projects as well, such as CDTAPI and FFmpeg.
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
-- A C++23 API over it, header only, in `dtnmos.hpp` and `dtnmos_*.hpp`: value types
-  that own what they hold, `std::expected` for results and `std::function` for
-  callbacks. See [In C++](#in-c).
+- A C++ API over it, header only, in `dtnmos.hpp` and `dtnmos_*.hpp`, for C++20 and
+  C++23: value types that own what they hold, `std::expected` for results, or the same
+  of its own under C++20, and `std::function` for callbacks. See [In C++](#in-c).
 - No dependencies. HTTP goes through a function the caller passes in; with
   `-DDTNMOS_WITH_CURL=ON` the library brings one on libcurl, `DtNmos_CurlHttp()`, and with
   `-DDTNMOS_WITH_SERVER=ON` a server of the node on civetweb, `DtNmosNode_Serve()`.
@@ -41,8 +41,9 @@ It installs a static library by default, or a shared one with `-DBUILD_SHARED_LI
 its headers `dtnmos.h` and `dtnmos_*.h`, with those of the C++ API, a CMake package
 (`find_package(dtnmos)`, targets `dtnmos::dtnmos`, and `dtnmos::cpp` for C++) and a
 pkg-config file (`pkg-config --cflags --libs dtnmos`). The tests and the example of the
-C++ API need a C++23 compiler, and are built where CMake finds a C++ compiler;
-`-DDTNMOS_WITH_CPP=OFF` builds without them, e.g. with GCC 11.
+C++ API need a C++20 compiler, and are built where CMake finds a C++ compiler;
+`-DDTNMOS_WITH_CPP=OFF` builds without them. They are built as C++23 and as C++20;
+`-DDTNMOS_CXX_STANDARD=20` builds them as C++20 alone, for a compiler without C++23.
 
 ## Using it
 
@@ -428,20 +429,28 @@ them against it.
 
 The C++ API is a set of headers on top of the C library. There is one beside each C
 header: `dtnmos.hpp`, `dtnmos_sdp.hpp`, `dtnmos_http.hpp`, `dtnmos_query.hpp` and
-`dtnmos_node.hpp`. A program compiles them with its own compiler, which must support
-C++23, and links the CMake target `dtnmos::cpp`. All the work is still done by the C
-library. The names are those of the C API, with the prefix as the namespace:
-`DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
+`dtnmos_node.hpp`. A program compiles them with its own compiler, as C++20 or C++23,
+and links the CMake target `dtnmos::cpp`, which asks for C++20. All the work is still
+done by the C library. The names are those of the C API, with the prefix as the
+namespace: `DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
 
 - **C++ types only.** Each C struct has a C++ struct that owns its strings and lists.
   You copy it with `=` and compare it with `==`. Each C enum has an `enum class` with the
   same values. A flow's format is a `std::variant`, and the kind of format it holds is
   the flow's media.
-- **Results.** A function that can fail returns a `DtNmos::Expected<T>`, which is a
-  `std::expected<T, DtNmos::Error>`. A function without a value returns a
+- **Results.** A function that can fail returns a `DtNmos::Expected<T>`, which holds
+  the value or a `DtNmos::Error`. A function without a value returns a
   `DtNmos::Status`. The compiler warns when a program ignores one. An `Error` holds the
-  `Result` code and a message. The API never throws an exception itself, and it builds
+  `Result` code and a message. A function of the program fails by returning
+  `DtNmos::Unexpected(Error)`. The API never throws an exception itself, and it builds
   with exceptions turned off.
+- **C++20 and C++23.** Where the standard library has `std::expected`, as in C++23,
+  `Expected<T>` is a `std::expected<T, DtNmos::Error>`; under C++20 it is one of the
+  API's own, with the same members, the monadic ones too. `DtNmos::Unexpected`,
+  `Unexpect` and `BadExpectedAccess` are `std::unexpected<Error>`, `std::unexpect` and
+  `std::bad_expected_access<Error>`, or theirs. A program that writes these names
+  compiles the same under either standard. It compiles all its sources that include the
+  headers with one standard: MSVC refuses to link a mix.
 - **One owner.** `Open()` returns an object that is open, and destroying the object
   closes it. You move a node, a search, a query or a subscription; you cannot copy them.
   A node borrows the `RegistrySearch` in its config, and a subscription borrows its

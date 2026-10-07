@@ -76,7 +76,7 @@ copy-pasted header naming the wrong file otherwise survives for years.
 
 ## The C++ API
 
-The `.hpp` headers in `Include/` are the C++ API: a C++23 wrapper around the C API, with
+The `.hpp` headers in `Include/` are the C++ API: a C++20 wrapper around the C API, with
 no compiled code of its own. Each `.hpp` file sits beside the C header it wraps. The
 rules above apply to these headers too, except rule 10, which is about C function names.
 These rules apply as well:
@@ -107,13 +107,19 @@ These rules apply as well:
 - **A function that can fail returns an `Expected` or a `Status`**, marked
   `[[nodiscard]]`. The wrapper never throws an exception itself, and it builds with
   exceptions turned off.
+- **The headers compile as C++20 and as C++23.** They write `DtNmos::Unexpected`,
+  never `std::unexpected`, and nothing of C++23 but what `dtnmos_expected.hpp` gives
+  under C++20. `Detail::OwnExpected` has names of its own, so that `Expected<T>` in
+  `Detail` is that of `DtNmos`.
 - **Rule 11 applies to the public members of a class**: they are in alphabetical order,
   after the static functions that create an object, such as `Open`. Review checks
   this, because `Scripts/check_style.sh` only checks the `DTNMOS_API` lines of a `.h`.
 
 The tests of the C++ API are in `Tests/Cpp`. They are built when `DTNMOS_WITH_CPP` is on,
 which it is when CMake finds a C++ compiler. Each suite is built a second time with
-`-fno-exceptions`, except with MSVC.
+`-fno-exceptions`, except with MSVC. With `DTNMOS_CXX_STANDARD` 23, the default, each of
+those is built as C++20 too, as `<suite>20`; CI builds them as C++20 alone on GCC 11 and
+Clang 14 as well.
 
 ## Tools
 
@@ -125,8 +131,8 @@ what is missing:
 | clang-format | exactly 18.1.8 | Rules 4 and 6. Another build formats differently and would reformat files that are right. `pip install clang-format==18.1.8` is the surest way to the same one the CI uses |
 | CMake | 3.25 or newer | Everything |
 | Python | 3.8 or newer | `Scripts/fix_banners.py` |
-| Visual Studio | 2022 or newer; 2022 17.3 for the C++ API | The Windows presets |
-| GCC | 11 or newer; 12 for the C++ API | The Linux presets. With GCC 11, configure with `-DDTNMOS_WITH_CPP=OFF` |
+| Visual Studio | 2022 or newer | The Windows presets |
+| GCC | 11 or newer | The Linux presets |
 | Ninja | any | What the Linux presets build with |
 | vcpkg | any | The presets `windows-full` and `linux-full`, which build with libcurl and civetweb; set `VCPKG_ROOT` |
 | Git | any | |

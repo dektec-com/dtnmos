@@ -7,7 +7,7 @@ NMOS but what the README of the repository tells.
 ## What you need
 
 - **A C11 compiler** and **CMake 3.25** or newer. MSVC, GCC and Clang all build it.
-- **For the C++ API**, a C++23 compiler: GCC 12, Clang 16 or Visual Studio 2022 17.3 or
+- **For the C++ API**, a C++20 compiler: GCC 11, Clang 14 or Visual Studio 2022 or
   newer. The library itself is C. The C++ API is a set of headers on top of it, which
   the program compiles with its own compiler.
 - **For HTTP and WebSockets**, libcurl with WebSockets, or HTTP functions of the program
@@ -70,7 +70,8 @@ Building the sources as part of a project needs no install step:
     add_subdirectory(dtnmos)
     target_link_libraries(myapp PRIVATE dtnmos::dtnmos)
 
-A C++ program links `dtnmos::cpp` instead, which brings C++23 with it.
+A C++ program links `dtnmos::cpp` instead, which brings C++20 with it. A program that
+asks for C++23 itself gets the C++ API on `std::expected`.
 
 `FetchContent` fetches them instead:
 
@@ -183,10 +184,12 @@ throughout:
 
 The C++ API follows the same ideas, in C++ form:
 
-- **Results.** A function that can fail returns an `Expected<T>`. That is a
-  `std::expected` that holds either the value or a `DtNmos::Error`, which has the
-  `Result` code and the message. A function without a value returns a `Status`. The
-  compiler warns when a program ignores a result.
+- **Results.** A function that can fail returns an `Expected<T>`, which holds either
+  the value or a `DtNmos::Error`, which has the `Result` code and the message. Under
+  C++23 it is a `std::expected`; under C++20 it is the API's own, with the same members.
+  A function without a value returns a `Status`. The compiler warns when a program
+  ignores a result. A function of the program fails by returning
+  `DtNmos::Unexpected(Error)`, which works under either standard.
 - **Objects.** `Open()` returns an object that is open, and destroying the object closes
   it. You move a node, a search, a query or a subscription; you cannot copy them. A node
   borrows the `RegistrySearch` in its config, and a subscription borrows its `Query`.
