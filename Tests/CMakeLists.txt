@@ -51,7 +51,8 @@ dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 #   does not build that, as its standard library does not support it.
 if(DTNMOS_WITH_CPP)
   set(_dtnmos_cpp_suites
-      "Cpp TestCpp OnlyDtNmos" "CppSdp TestCppSdp OnlyDtNmosSdp"
+      "Cpp TestCpp OnlyDtNmos" "CppExpected TestCppExpected OnlyDtNmosExpected"
+      "CppSdp TestCppSdp OnlyDtNmosSdp"
       "CppHttp TestCppHttp OnlyDtNmosHttp" "CppQuery TestCppQuery OnlyDtNmosQuery"
       "CppNode TestCppNode OnlyDtNmosNode")
   foreach(entry IN LISTS _dtnmos_cpp_suites)
@@ -83,6 +84,17 @@ if(DTNMOS_WITH_CPP)
   dtnmos_set_warnings(test_CppBorrowed)
   add_test(NAME dtnmos.CppBorrowedSearch COMMAND test_CppBorrowed search)
   add_test(NAME dtnmos.CppBorrowedQuery COMMAND test_CppBorrowed query)
+  # The program of a test that reads the value of a Detail::Expected that holds an
+  # error, which must call std::terminate(), and so end the program with 0. It is built
+  # without exceptions, which is what it checks, except with MSVC.
+  add_executable(test_CppValueOfError Cpp/ValueOfError.cpp)
+  set_target_properties(test_CppValueOfError PROPERTIES FOLDER "Tests")
+  target_link_libraries(test_CppValueOfError PRIVATE dtnmos::cpp)
+  dtnmos_set_warnings(test_CppValueOfError)
+  if(NOT MSVC)
+    target_compile_options(test_CppValueOfError PRIVATE -fno-exceptions)
+  endif()
+  add_test(NAME dtnmos.CppValueOfError COMMAND test_CppValueOfError)
 endif()
 
 # The interop tests run the suites of the AMWA NMOS Testing Tool against a node of
