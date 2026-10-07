@@ -394,7 +394,7 @@ int main(int Argc, char** Argv)
     }
     // Destroying the node closes it, which deletes from the registry what it registered.
     // The search that the node borrowed is destroyed after it.
-    Node = std::unexpected(DtNmos::Error{});
+    Node = DtNmos::Unexpected(DtNmos::Error{});
     std::printf("unregistered\n");
     return Exit;
 }

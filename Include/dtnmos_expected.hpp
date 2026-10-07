@@ -5,15 +5,17 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 // C++20 has no std::expected. This header gives the C++ API one of its own,
-// Detail::Expected, with the whole interface of std::expected of C++23: the same
+// Detail::OwnExpected, with the whole interface of std::expected of C++23: the same
 // constructors, assignments, observers, monadic functions and comparisons, with the
 // same names. dtnmos.hpp makes DtNmos::Expected and DtNmos::Status of it where the
 // standard library has no std::expected, so that a program that uses them compiles and
 // works the same under C++20 and C++23. A program does not include this header itself.
 //
-// Unexpected, Unexpect and BadExpectedAccess are std::unexpected, std::unexpect and
-// std::bad_expected_access. Without exceptions, value() of an Expected that holds an
-// error calls std::terminate().
+// OwnUnexpected, OwnUnexpect and OwnBadExpectedAccess are std::unexpected,
+// std::unexpect and std::bad_expected_access. The names are not those of DtNmos, so
+// that code in Detail that writes Expected or Unexpected finds those of DtNmos.
+// Without exceptions, value() of an Expected that holds an error calls
+// std::terminate().
 
 #pragma once
 
@@ -26,77 +28,91 @@
 #include <type_traits>
 #include <utility>
 
+// The tag that GCC and Clang put into the name, for the linker, of each function that
+// returns a Detail::OwnExpected, so that it differs from that of the same function where
+// Expected is a std::expected. A program whose sources include the headers under C++20
+// and under C++23 then links a copy of each function per standard, rather than one of
+// them for both. MSVC puts the type that a function returns into its name anyway.
+#if defined(__GNUC__)
+    #define DTNMOS_DETAIL_OWN_EXPECTED [[gnu::abi_tag("dtnmos_own_expected")]]
+#else
+    #define DTNMOS_DETAIL_OWN_EXPECTED
+#endif
+
 namespace DtNmos::Detail
 {
 
-template <typename E> class Unexpected;
-template <typename T, typename E> class Expected;
+template <typename E> class OwnUnexpected;
+template <typename T, typename E> class DTNMOS_DETAIL_OWN_EXPECTED OwnExpected;
 
 // True when T is a specialization of Unexpected.
-template <typename T> struct IsUnexpectedType : std::false_type
+template <typename T> struct IsOwnUnexpectedType : std::false_type
 {
 };
-template <typename E> struct IsUnexpectedType<Unexpected<E>> : std::true_type
+template <typename E> struct IsOwnUnexpectedType<OwnUnexpected<E>> : std::true_type
 {
 };
-template <typename T> inline constexpr bool IsUnexpected = IsUnexpectedType<T>::value;
+template <typename T>
+inline constexpr bool IsOwnUnexpected = IsOwnUnexpectedType<T>::value;
 
 // True when T is a specialization of Expected.
-template <typename T> struct IsExpectedType : std::false_type
+template <typename T> struct IsOwnExpectedType : std::false_type
 {
 };
-template <typename T, typename E> struct IsExpectedType<Expected<T, E>> : std::true_type
+template <typename T, typename E>
+struct IsOwnExpectedType<OwnExpected<T, E>> : std::true_type
 {
 };
-template <typename T> inline constexpr bool IsExpected = IsExpectedType<T>::value;
+template <typename T> inline constexpr bool IsOwnExpected = IsOwnExpectedType<T>::value;
 
 // True when E can be the error of an Expected: an object type that is not an array, not
 // const or volatile, and not an Unexpected.
 template <typename E>
 inline constexpr bool IsErrorType =
     std::is_object_v<E> && !std::is_array_v<E> && !std::is_const_v<E> &&
-    !std::is_volatile_v<E> && !IsUnexpected<E>;
+    !std::is_volatile_v<E> && !IsOwnUnexpected<E>;
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Unexpect +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= OwnUnexpect +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-// The type of Unexpect.
-struct UnexpectTag
+// The type of OwnUnexpect.
+struct OwnUnexpectTag
 {
-    explicit UnexpectTag() = default;
+    explicit OwnUnexpectTag() = default;
 };
 
 // Asks a constructor of an Expected to make the error in place, from the arguments that
 // follow it, as std::unexpect does.
-inline constexpr UnexpectTag Unexpect{};
+inline constexpr OwnUnexpectTag OwnUnexpect{};
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Unexpected +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= OwnUnexpected +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
 // An error of type E, as std::unexpected. An Expected is made from it, or assigned it,
 // to hold the error.
-template <typename E> class Unexpected
+template <typename E> class OwnUnexpected
 {
-    static_assert(IsErrorType<E>, "Unexpected<E> needs an object type E that is not an "
-                                  "array, const, volatile or an Unexpected");
+    static_assert(IsErrorType<E>,
+                  "OwnUnexpected<E> needs an object type E that is not an "
+                  "array, const, volatile or an OwnUnexpected");
 
   public:
-    constexpr Unexpected(const Unexpected&) = default;
-    constexpr Unexpected(Unexpected&&) = default;
+    constexpr OwnUnexpected(const OwnUnexpected&) = default;
+    constexpr OwnUnexpected(OwnUnexpected&&) = default;
 
     // Holds the error made from Failed.
     template <typename G = E>
-        requires(!std::is_same_v<std::remove_cvref_t<G>, Unexpected> &&
+        requires(!std::is_same_v<std::remove_cvref_t<G>, OwnUnexpected> &&
                  !std::is_same_v<std::remove_cvref_t<G>, std::in_place_t> &&
                  std::is_constructible_v<E, G>)
-    constexpr explicit Unexpected(G&& Failed) : Failure(std::forward<G>(Failed))
+    constexpr explicit OwnUnexpected(G&& Failed) : Failure(std::forward<G>(Failed))
     {
     }
 
     // Holds the error made in place from Arguments.
     template <typename... Args>
         requires std::is_constructible_v<E, Args...>
-    constexpr explicit Unexpected(std::in_place_t, Args&&... Arguments)
+    constexpr explicit OwnUnexpected(std::in_place_t, Args&&... Arguments)
         : Failure(std::forward<Args>(Arguments)...)
     {
     }
@@ -104,14 +120,14 @@ template <typename E> class Unexpected
     // Holds the error made in place from List and Arguments.
     template <typename U, typename... Args>
         requires std::is_constructible_v<E, std::initializer_list<U>&, Args...>
-    constexpr explicit Unexpected(std::in_place_t, std::initializer_list<U> List,
-                                  Args&&... Arguments)
+    constexpr explicit OwnUnexpected(std::in_place_t, std::initializer_list<U> List,
+                                     Args&&... Arguments)
         : Failure(List, std::forward<Args>(Arguments)...)
     {
     }
 
-    constexpr Unexpected& operator=(const Unexpected&) = default;
-    constexpr Unexpected& operator=(Unexpected&&) = default;
+    constexpr OwnUnexpected& operator=(const OwnUnexpected&) = default;
+    constexpr OwnUnexpected& operator=(OwnUnexpected&&) = default;
 
     // Returns the error.
     constexpr const E& error() const& noexcept { return Failure; }
@@ -120,7 +136,7 @@ template <typename E> class Unexpected
     constexpr E&& error() && noexcept { return std::move(Failure); }
 
     // Swaps the errors of this and Other.
-    constexpr void swap(Unexpected& Other) noexcept(std::is_nothrow_swappable_v<E>)
+    constexpr void swap(OwnUnexpected& Other) noexcept(std::is_nothrow_swappable_v<E>)
     {
         static_assert(std::is_swappable_v<E>, "swap() needs an E that can be swapped");
         using std::swap;
@@ -129,13 +145,14 @@ template <typename E> class Unexpected
 
     // True when the errors of X and Y compare equal.
     template <typename E2>
-    friend constexpr bool operator==(const Unexpected& X, const Unexpected<E2>& Y)
+    friend constexpr bool operator==(const OwnUnexpected& X, const OwnUnexpected<E2>& Y)
     {
         return X.error() == Y.error();
     }
 
     // Swaps the errors of X and Y.
-    friend constexpr void swap(Unexpected& X, Unexpected& Y) noexcept(noexcept(X.swap(Y)))
+    friend constexpr void swap(OwnUnexpected& X,
+                               OwnUnexpected& Y) noexcept(noexcept(X.swap(Y)))
         requires std::is_swappable_v<E>
     {
         X.swap(Y);
@@ -145,16 +162,16 @@ template <typename E> class Unexpected
     E Failure; // The error
 };
 
-template <typename E> Unexpected(E) -> Unexpected<E>;
+template <typename E> OwnUnexpected(E) -> OwnUnexpected<E>;
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= BadExpectedAccess +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= OwnBadExpectedAccess +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
 
-template <typename E> class BadExpectedAccess;
+template <typename E> class OwnBadExpectedAccess;
 
 // The base of every BadExpectedAccess, as std::bad_expected_access<void>, so that a
 // program catches them all with one handler.
-template <> class BadExpectedAccess<void> : public std::exception
+template <> class OwnBadExpectedAccess<void> : public std::exception
 {
   public:
     // Says what went wrong, in English.
@@ -164,21 +181,21 @@ template <> class BadExpectedAccess<void> : public std::exception
     }
 
   protected:
-    BadExpectedAccess() noexcept = default;
-    BadExpectedAccess(const BadExpectedAccess&) noexcept = default;
-    BadExpectedAccess(BadExpectedAccess&&) noexcept = default;
-    BadExpectedAccess& operator=(const BadExpectedAccess&) noexcept = default;
-    BadExpectedAccess& operator=(BadExpectedAccess&&) noexcept = default;
-    ~BadExpectedAccess() override = default;
+    OwnBadExpectedAccess() noexcept = default;
+    OwnBadExpectedAccess(const OwnBadExpectedAccess&) noexcept = default;
+    OwnBadExpectedAccess(OwnBadExpectedAccess&&) noexcept = default;
+    OwnBadExpectedAccess& operator=(const OwnBadExpectedAccess&) noexcept = default;
+    OwnBadExpectedAccess& operator=(OwnBadExpectedAccess&&) noexcept = default;
+    ~OwnBadExpectedAccess() override = default;
 };
 
 // What value() of an Expected that holds an error throws, as std::bad_expected_access:
 // it holds that error.
-template <typename E> class BadExpectedAccess : public BadExpectedAccess<void>
+template <typename E> class OwnBadExpectedAccess : public OwnBadExpectedAccess<void>
 {
   public:
     // Holds the error Failed.
-    explicit BadExpectedAccess(E Failed) : Failure(std::move(Failed)) {}
+    explicit OwnBadExpectedAccess(E Failed) : Failure(std::move(Failed)) {}
 
     // Returns the error.
     const E& error() const& noexcept { return Failure; }
@@ -187,13 +204,16 @@ template <typename E> class BadExpectedAccess : public BadExpectedAccess<void>
     E&& error() && noexcept { return std::move(Failure); }
 
     // Says what went wrong, in English.
-    const char* what() const noexcept override { return BadExpectedAccess<void>::what(); }
+    const char* what() const noexcept override
+    {
+        return OwnBadExpectedAccess<void>::what();
+    }
 
   private:
     E Failure; // The error of the Expected
 };
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What Expected shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What OwnExpected shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
 // Ends value() of an Expected that holds the error Failed: it throws a
@@ -202,7 +222,7 @@ template <typename E> class BadExpectedAccess : public BadExpectedAccess<void>
 template <typename E> [[noreturn]] void ThrowBadExpectedAccess(E&& Failed)
 {
 #if defined(__cpp_exceptions)
-    throw BadExpectedAccess<std::decay_t<E>>(std::forward<E>(Failed));
+    throw OwnBadExpectedAccess<std::decay_t<E>>(std::forward<E>(Failed));
 #else
     (void)Failed;
     std::terminate();
@@ -257,21 +277,22 @@ struct InvokeErrorTag
 {
 };
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Expected +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= OwnExpected +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
 // A value of type T, or an error of type E, as std::expected<T, E>.
-template <typename T, typename E> class Expected
+template <typename T, typename E> class DTNMOS_DETAIL_OWN_EXPECTED OwnExpected
 {
     static_assert(!std::is_reference_v<T> && !std::is_function_v<T> &&
                       !std::is_array_v<T> &&
                       !std::is_same_v<std::remove_cv_t<T>, std::in_place_t> &&
-                      !std::is_same_v<std::remove_cv_t<T>, UnexpectTag> &&
-                      !IsUnexpected<std::remove_cv_t<T>>,
-                  "Expected<T, E> needs a T that is an object type, not an array, "
-                  "in_place_t, UnexpectTag or Unexpected");
-    static_assert(IsErrorType<E>, "Expected<T, E> needs an object type E that is not an "
-                                  "array, const, volatile or an Unexpected");
+                      !std::is_same_v<std::remove_cv_t<T>, OwnUnexpectTag> &&
+                      !IsOwnUnexpected<std::remove_cv_t<T>>,
+                  "OwnExpected<T, E> needs a T that is an object type, not an array, "
+                  "in_place_t, OwnUnexpectTag or OwnUnexpected");
+    static_assert(IsErrorType<E>,
+                  "OwnExpected<T, E> needs an object type E that is not an "
+                  "array, const, volatile or an OwnUnexpected");
 
     // True when an Expected<U, G>, whose value and error are given as UF and GF, may
     // convert to this Expected: T is made from UF, E from GF, and neither T nor
@@ -280,35 +301,35 @@ template <typename T, typename E> class Expected
     static constexpr bool CanConvertFrom =
         std::is_constructible_v<T, UF> && std::is_constructible_v<E, GF> &&
         (std::is_same_v<std::remove_cv_t<T>, bool> ||
-         (!std::is_constructible_v<T, Expected<U, G>&> &&
-          !std::is_constructible_v<T, Expected<U, G>> &&
-          !std::is_constructible_v<T, const Expected<U, G>&> &&
-          !std::is_constructible_v<T, const Expected<U, G>> &&
-          !std::is_convertible_v<Expected<U, G>&, T> &&
-          !std::is_convertible_v<Expected<U, G>&&, T> &&
-          !std::is_convertible_v<const Expected<U, G>&, T> &&
-          !std::is_convertible_v<const Expected<U, G>&&, T>)) &&
-        !std::is_constructible_v<Unexpected<E>, Expected<U, G>&> &&
-        !std::is_constructible_v<Unexpected<E>, Expected<U, G>> &&
-        !std::is_constructible_v<Unexpected<E>, const Expected<U, G>&> &&
-        !std::is_constructible_v<Unexpected<E>, const Expected<U, G>>;
+         (!std::is_constructible_v<T, OwnExpected<U, G>&> &&
+          !std::is_constructible_v<T, OwnExpected<U, G>> &&
+          !std::is_constructible_v<T, const OwnExpected<U, G>&> &&
+          !std::is_constructible_v<T, const OwnExpected<U, G>> &&
+          !std::is_convertible_v<OwnExpected<U, G>&, T> &&
+          !std::is_convertible_v<OwnExpected<U, G>&&, T> &&
+          !std::is_convertible_v<const OwnExpected<U, G>&, T> &&
+          !std::is_convertible_v<const OwnExpected<U, G>&&, T>)) &&
+        !std::is_constructible_v<OwnUnexpected<E>, OwnExpected<U, G>&> &&
+        !std::is_constructible_v<OwnUnexpected<E>, OwnExpected<U, G>> &&
+        !std::is_constructible_v<OwnUnexpected<E>, const OwnExpected<U, G>&> &&
+        !std::is_constructible_v<OwnUnexpected<E>, const OwnExpected<U, G>>;
 
   public:
     using value_type = T;
     using error_type = E;
-    using unexpected_type = Unexpected<E>;
+    using unexpected_type = OwnUnexpected<E>;
 
-    template <typename U> using rebind = Expected<U, error_type>;
+    template <typename U> using rebind = OwnExpected<U, error_type>;
 
     // Holds a value made with no arguments.
-    constexpr Expected()
+    constexpr OwnExpected()
         requires std::is_default_constructible_v<T>
         : Held(), HoldsValue(true)
     {
     }
 
     // Holds a copy of what Other holds.
-    constexpr Expected(const Expected& Other)
+    constexpr OwnExpected(const OwnExpected& Other)
         requires(std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>)
         : HoldsValue(Other.HoldsValue)
     {
@@ -323,7 +344,7 @@ template <typename T, typename E> class Expected
     }
 
     // Holds what Other holds, moved out of it.
-    constexpr Expected(Expected&& Other) noexcept(
+    constexpr OwnExpected(OwnExpected&& Other) noexcept(
         std::is_nothrow_move_constructible_v<T> &&
         std::is_nothrow_move_constructible_v<E>)
         requires(std::is_move_constructible_v<T> && std::is_move_constructible_v<E>)
@@ -344,7 +365,7 @@ template <typename T, typename E> class Expected
         requires CanConvertFrom<U, G, const U&, const G&>
     constexpr explicit(!std::is_convertible_v<const U&, T> ||
                        !std::is_convertible_v<const G&, E>)
-        Expected(const Expected<U, G>& Other)
+        OwnExpected(const OwnExpected<U, G>& Other)
         : HoldsValue(Other.has_value())
     {
         if (HoldsValue)
@@ -361,7 +382,7 @@ template <typename T, typename E> class Expected
     template <typename U, typename G>
         requires CanConvertFrom<U, G, U, G>
     constexpr explicit(!std::is_convertible_v<U, T> || !std::is_convertible_v<G, E>)
-        Expected(Expected<U, G>&& Other)
+        OwnExpected(OwnExpected<U, G>&& Other)
         : HoldsValue(Other.has_value())
     {
         if (HoldsValue)
@@ -377,11 +398,12 @@ template <typename T, typename E> class Expected
     // Holds the value made from Value, e.g. a struct a function returns.
     template <typename U = T>
         requires(!std::is_same_v<std::remove_cvref_t<U>, std::in_place_t> &&
-                 !std::is_same_v<std::remove_cvref_t<U>, Expected> &&
-                 !IsUnexpected<std::remove_cvref_t<U>> && std::is_constructible_v<T, U> &&
+                 !std::is_same_v<std::remove_cvref_t<U>, OwnExpected> &&
+                 !IsOwnUnexpected<std::remove_cvref_t<U>> &&
+                 std::is_constructible_v<T, U> &&
                  (!std::is_same_v<std::remove_cv_t<T>, bool> ||
-                  !IsExpected<std::remove_cvref_t<U>>))
-    constexpr explicit(!std::is_convertible_v<U, T>) Expected(U&& Value)
+                  !IsOwnExpected<std::remove_cvref_t<U>>))
+    constexpr explicit(!std::is_convertible_v<U, T>) OwnExpected(U&& Value)
         : Held(std::forward<U>(Value)), HoldsValue(true)
     {
     }
@@ -390,7 +412,7 @@ template <typename T, typename E> class Expected
     template <typename G>
         requires std::is_constructible_v<E, const G&>
     constexpr explicit(!std::is_convertible_v<const G&, E>)
-        Expected(const Unexpected<G>& Failed)
+        OwnExpected(const OwnUnexpected<G>& Failed)
         : Failure(Failed.error()), HoldsValue(false)
     {
     }
@@ -398,7 +420,8 @@ template <typename T, typename E> class Expected
     // Holds the error of Failed, moved out of it.
     template <typename G>
         requires std::is_constructible_v<E, G>
-    constexpr explicit(!std::is_convertible_v<G, E>) Expected(Unexpected<G>&& Failed)
+    constexpr explicit(!std::is_convertible_v<G, E>)
+        OwnExpected(OwnUnexpected<G>&& Failed)
         : Failure(std::move(Failed.error())), HoldsValue(false)
     {
     }
@@ -406,7 +429,7 @@ template <typename T, typename E> class Expected
     // Holds the value made in place from Arguments.
     template <typename... Args>
         requires std::is_constructible_v<T, Args...>
-    constexpr explicit Expected(std::in_place_t, Args&&... Arguments)
+    constexpr explicit OwnExpected(std::in_place_t, Args&&... Arguments)
         : Held(std::forward<Args>(Arguments)...), HoldsValue(true)
     {
     }
@@ -414,8 +437,8 @@ template <typename T, typename E> class Expected
     // Holds the value made in place from List and Arguments.
     template <typename U, typename... Args>
         requires std::is_constructible_v<T, std::initializer_list<U>&, Args...>
-    constexpr explicit Expected(std::in_place_t, std::initializer_list<U> List,
-                                Args&&... Arguments)
+    constexpr explicit OwnExpected(std::in_place_t, std::initializer_list<U> List,
+                                   Args&&... Arguments)
         : Held(List, std::forward<Args>(Arguments)...), HoldsValue(true)
     {
     }
@@ -423,7 +446,7 @@ template <typename T, typename E> class Expected
     // Holds the error made in place from Arguments.
     template <typename... Args>
         requires std::is_constructible_v<E, Args...>
-    constexpr explicit Expected(UnexpectTag, Args&&... Arguments)
+    constexpr explicit OwnExpected(OwnUnexpectTag, Args&&... Arguments)
         : Failure(std::forward<Args>(Arguments)...), HoldsValue(false)
     {
     }
@@ -431,13 +454,13 @@ template <typename T, typename E> class Expected
     // Holds the error made in place from List and Arguments.
     template <typename U, typename... Args>
         requires std::is_constructible_v<E, std::initializer_list<U>&, Args...>
-    constexpr explicit Expected(UnexpectTag, std::initializer_list<U> List,
-                                Args&&... Arguments)
+    constexpr explicit OwnExpected(OwnUnexpectTag, std::initializer_list<U> List,
+                                   Args&&... Arguments)
         : Failure(List, std::forward<Args>(Arguments)...), HoldsValue(false)
     {
     }
 
-    constexpr ~Expected()
+    constexpr ~OwnExpected()
     {
         if (HoldsValue)
         {
@@ -450,7 +473,7 @@ template <typename T, typename E> class Expected
     }
 
     // Holds a copy of what Other holds.
-    constexpr Expected& operator=(const Expected& Other)
+    constexpr OwnExpected& operator=(const OwnExpected& Other)
         requires(std::is_copy_assignable_v<T> && std::is_copy_constructible_v<T> &&
                  std::is_copy_assignable_v<E> && std::is_copy_constructible_v<E> &&
                  (std::is_nothrow_move_constructible_v<T> ||
@@ -477,7 +500,7 @@ template <typename T, typename E> class Expected
     }
 
     // Holds what Other holds, moved out of it.
-    constexpr Expected& operator=(Expected&& Other) noexcept(
+    constexpr OwnExpected& operator=(OwnExpected&& Other) noexcept(
         std::is_nothrow_move_assignable_v<T> && std::is_nothrow_move_constructible_v<T> &&
         std::is_nothrow_move_assignable_v<E> && std::is_nothrow_move_constructible_v<E>)
         requires(std::is_move_constructible_v<T> && std::is_move_assignable_v<T> &&
@@ -507,13 +530,13 @@ template <typename T, typename E> class Expected
 
     // Holds the value made from Value.
     template <typename U = T>
-        requires(!std::is_same_v<std::remove_cvref_t<U>, Expected> &&
-                 !IsUnexpected<std::remove_cvref_t<U>> && std::is_constructible_v<T, U> &&
-                 std::is_assignable_v<T&, U> &&
+        requires(!std::is_same_v<std::remove_cvref_t<U>, OwnExpected> &&
+                 !IsOwnUnexpected<std::remove_cvref_t<U>> &&
+                 std::is_constructible_v<T, U> && std::is_assignable_v<T&, U> &&
                  (std::is_nothrow_constructible_v<T, U> ||
                   std::is_nothrow_move_constructible_v<T> ||
                   std::is_nothrow_move_constructible_v<E>))
-    constexpr Expected& operator=(U&& Value)
+    constexpr OwnExpected& operator=(U&& Value)
     {
         if (HoldsValue)
         {
@@ -534,7 +557,7 @@ template <typename T, typename E> class Expected
                  (std::is_nothrow_constructible_v<E, const G&> ||
                   std::is_nothrow_move_constructible_v<T> ||
                   std::is_nothrow_move_constructible_v<E>))
-    constexpr Expected& operator=(const Unexpected<G>& Failed)
+    constexpr OwnExpected& operator=(const OwnUnexpected<G>& Failed)
     {
         if (HoldsValue)
         {
@@ -554,7 +577,7 @@ template <typename T, typename E> class Expected
                  (std::is_nothrow_constructible_v<E, G> ||
                   std::is_nothrow_move_constructible_v<T> ||
                   std::is_nothrow_move_constructible_v<E>))
-    constexpr Expected& operator=(Unexpected<G>&& Failed)
+    constexpr OwnExpected& operator=(OwnUnexpected<G>&& Failed)
     {
         if (HoldsValue)
         {
@@ -575,52 +598,52 @@ template <typename T, typename E> class Expected
     constexpr auto and_then(F&& Function) &
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F, T&>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function), Held);
         }
-        return U(Unexpect, Failure);
+        return U(OwnUnexpect, Failure);
     }
     template <typename F>
         requires std::is_constructible_v<E, const E&>
     constexpr auto and_then(F&& Function) const&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function), Held);
         }
-        return U(Unexpect, Failure);
+        return U(OwnUnexpect, Failure);
     }
     template <typename F>
         requires std::is_constructible_v<E, E&&>
     constexpr auto and_then(F&& Function) &&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F, T&&>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function), std::move(Held));
         }
-        return U(Unexpect, std::move(Failure));
+        return U(OwnUnexpect, std::move(Failure));
     }
     template <typename F>
         requires std::is_constructible_v<E, const E&&>
     constexpr auto and_then(F&& Function) const&&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F, const T&&>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function), std::move(Held));
         }
-        return U(Unexpect, std::move(Failure));
+        return U(OwnUnexpect, std::move(Failure));
     }
 
     // Holds the value made in place from Arguments, in place of what this held.
@@ -674,8 +697,8 @@ template <typename T, typename E> class Expected
     constexpr auto or_else(F&& Function) &
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, E&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G(std::in_place, Held);
@@ -687,8 +710,8 @@ template <typename T, typename E> class Expected
     constexpr auto or_else(F&& Function) const&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, const E&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G(std::in_place, Held);
@@ -700,8 +723,8 @@ template <typename T, typename E> class Expected
     constexpr auto or_else(F&& Function) &&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, E&&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G(std::in_place, std::move(Held));
@@ -713,8 +736,8 @@ template <typename T, typename E> class Expected
     constexpr auto or_else(F&& Function) const&&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, const E&&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G(std::in_place, std::move(Held));
@@ -723,7 +746,7 @@ template <typename T, typename E> class Expected
     }
 
     // Swaps what this and Other hold.
-    constexpr void swap(Expected& Other) noexcept(
+    constexpr void swap(OwnExpected& Other) noexcept(
         std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T> &&
         std::is_nothrow_move_constructible_v<E> && std::is_nothrow_swappable_v<E>)
         requires(std::is_swappable_v<T> && std::is_swappable_v<E> &&
@@ -759,16 +782,16 @@ template <typename T, typename E> class Expected
         using U = std::remove_cv_t<std::invoke_result_t<F, T&>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, Failure);
+            return OwnExpected<U, E>(OwnUnexpect, Failure);
         }
         if constexpr (std::is_void_v<U>)
         {
             std::invoke(std::forward<F>(Function), Held);
-            return Expected<U, E>();
+            return OwnExpected<U, E>();
         }
         else
         {
-            return Expected<U, E>(InvokeValueTag{}, std::forward<F>(Function), Held);
+            return OwnExpected<U, E>(InvokeValueTag{}, std::forward<F>(Function), Held);
         }
     }
     template <typename F>
@@ -778,16 +801,16 @@ template <typename T, typename E> class Expected
         using U = std::remove_cv_t<std::invoke_result_t<F, const T&>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, Failure);
+            return OwnExpected<U, E>(OwnUnexpect, Failure);
         }
         if constexpr (std::is_void_v<U>)
         {
             std::invoke(std::forward<F>(Function), Held);
-            return Expected<U, E>();
+            return OwnExpected<U, E>();
         }
         else
         {
-            return Expected<U, E>(InvokeValueTag{}, std::forward<F>(Function), Held);
+            return OwnExpected<U, E>(InvokeValueTag{}, std::forward<F>(Function), Held);
         }
     }
     template <typename F>
@@ -797,17 +820,17 @@ template <typename T, typename E> class Expected
         using U = std::remove_cv_t<std::invoke_result_t<F, T&&>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, std::move(Failure));
+            return OwnExpected<U, E>(OwnUnexpect, std::move(Failure));
         }
         if constexpr (std::is_void_v<U>)
         {
             std::invoke(std::forward<F>(Function), std::move(Held));
-            return Expected<U, E>();
+            return OwnExpected<U, E>();
         }
         else
         {
-            return Expected<U, E>(InvokeValueTag{}, std::forward<F>(Function),
-                                  std::move(Held));
+            return OwnExpected<U, E>(InvokeValueTag{}, std::forward<F>(Function),
+                                     std::move(Held));
         }
     }
     template <typename F>
@@ -817,17 +840,17 @@ template <typename T, typename E> class Expected
         using U = std::remove_cv_t<std::invoke_result_t<F, const T&&>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, std::move(Failure));
+            return OwnExpected<U, E>(OwnUnexpect, std::move(Failure));
         }
         if constexpr (std::is_void_v<U>)
         {
             std::invoke(std::forward<F>(Function), std::move(Held));
-            return Expected<U, E>();
+            return OwnExpected<U, E>();
         }
         else
         {
-            return Expected<U, E>(InvokeValueTag{}, std::forward<F>(Function),
-                                  std::move(Held));
+            return OwnExpected<U, E>(InvokeValueTag{}, std::forward<F>(Function),
+                                     std::move(Held));
         }
     }
 
@@ -840,9 +863,9 @@ template <typename T, typename E> class Expected
         using G = std::remove_cv_t<std::invoke_result_t<F, E&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>(std::in_place, Held);
+            return OwnExpected<T, G>(std::in_place, Held);
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
     }
     template <typename F>
         requires std::is_constructible_v<T, const T&>
@@ -851,9 +874,9 @@ template <typename T, typename E> class Expected
         using G = std::remove_cv_t<std::invoke_result_t<F, const E&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>(std::in_place, Held);
+            return OwnExpected<T, G>(std::in_place, Held);
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
     }
     template <typename F>
         requires std::is_constructible_v<T, T&&>
@@ -862,10 +885,10 @@ template <typename T, typename E> class Expected
         using G = std::remove_cv_t<std::invoke_result_t<F, E&&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>(std::in_place, std::move(Held));
+            return OwnExpected<T, G>(std::in_place, std::move(Held));
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
-                              std::move(Failure));
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
+                                 std::move(Failure));
     }
     template <typename F>
         requires std::is_constructible_v<T, const T&&>
@@ -874,10 +897,10 @@ template <typename T, typename E> class Expected
         using G = std::remove_cv_t<std::invoke_result_t<F, const E&&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>(std::in_place, std::move(Held));
+            return OwnExpected<T, G>(std::in_place, std::move(Held));
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
-                              std::move(Failure));
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
+                                 std::move(Failure));
     }
 
     // Returns the value. When this holds an error, it throws a BadExpectedAccess with
@@ -952,7 +975,7 @@ template <typename T, typename E> class Expected
     // True when X and Y both hold values that compare equal, or both errors that do.
     template <typename T2, typename E2>
         requires(!std::is_void_v<T2>)
-    friend constexpr bool operator==(const Expected& X, const Expected<T2, E2>& Y)
+    friend constexpr bool operator==(const OwnExpected& X, const OwnExpected<T2, E2>& Y)
     {
         if (X.has_value() != Y.has_value())
         {
@@ -964,21 +987,22 @@ template <typename T, typename E> class Expected
 
     // True when X holds a value that compares equal to Value.
     template <typename T2>
-        requires(!IsExpected<T2> && !IsUnexpected<T2>)
-    friend constexpr bool operator==(const Expected& X, const T2& Value)
+        requires(!IsOwnExpected<T2> && !IsOwnUnexpected<T2>)
+    friend constexpr bool operator==(const OwnExpected& X, const T2& Value)
     {
         return X.has_value() && static_cast<bool>(*X == Value);
     }
 
     // True when X holds an error that compares equal to that of Y.
     template <typename E2>
-    friend constexpr bool operator==(const Expected& X, const Unexpected<E2>& Y)
+    friend constexpr bool operator==(const OwnExpected& X, const OwnUnexpected<E2>& Y)
     {
         return !X.has_value() && static_cast<bool>(X.error() == Y.error());
     }
 
     // Swaps what X and Y hold.
-    friend constexpr void swap(Expected& X, Expected& Y) noexcept(noexcept(X.swap(Y)))
+    friend constexpr void swap(OwnExpected& X,
+                               OwnExpected& Y) noexcept(noexcept(X.swap(Y)))
         requires(std::is_swappable_v<T> && std::is_swappable_v<E> &&
                  std::is_move_constructible_v<T> && std::is_move_constructible_v<E> &&
                  (std::is_nothrow_move_constructible_v<T> ||
@@ -988,11 +1012,11 @@ template <typename T, typename E> class Expected
     }
 
   private:
-    template <typename, typename> friend class Expected;
+    template <typename, typename> friend class OwnExpected;
 
     // Holds what Function returns for Arguments, as the value.
     template <typename F, typename... Args>
-    constexpr Expected(InvokeValueTag, F&& Function, Args&&... Arguments)
+    constexpr OwnExpected(InvokeValueTag, F&& Function, Args&&... Arguments)
         : Held(std::invoke(std::forward<F>(Function), std::forward<Args>(Arguments)...)),
           HoldsValue(true)
     {
@@ -1000,7 +1024,7 @@ template <typename T, typename E> class Expected
 
     // Holds what Function returns for Arguments, as the error.
     template <typename F, typename... Args>
-    constexpr Expected(InvokeErrorTag, F&& Function, Args&&... Arguments)
+    constexpr OwnExpected(InvokeErrorTag, F&& Function, Args&&... Arguments)
         : Failure(
               std::invoke(std::forward<F>(Function), std::forward<Args>(Arguments)...)),
           HoldsValue(false)
@@ -1009,7 +1033,7 @@ template <typename T, typename E> class Expected
 
     // Swaps the value of this with the error of Other, for swap(). When moving one of the
     // two throws, both are put back as they were.
-    constexpr void SwapValueWithError(Expected& Other)
+    constexpr void SwapValueWithError(OwnExpected& Other)
     {
         if constexpr (std::is_nothrow_move_constructible_v<E>)
         {
@@ -1067,17 +1091,18 @@ template <typename T, typename E> class Expected
     bool HoldsValue; // True when the Expected holds a value, false for an error
 };
 
-// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Expected<void> +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= OwnExpected<void> +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
 // Nothing, or an error of type E, as std::expected<void, E>: the result of a call that
 // gives no value.
 template <typename T, typename E>
     requires std::is_void_v<T>
-class Expected<T, E>
+class OwnExpected<T, E>
 {
-    static_assert(IsErrorType<E>, "Expected<void, E> needs an object type E that is not "
-                                  "an array, const, volatile or an Unexpected");
+    static_assert(IsErrorType<E>,
+                  "OwnExpected<void, E> needs an object type E that is not "
+                  "an array, const, volatile or an OwnUnexpected");
 
     // True when an Expected<U, G>, whose error is given as GF, may convert to this
     // Expected: U is void, E is made from GF, and Unexpected<E> cannot be made from the
@@ -1085,23 +1110,23 @@ class Expected<T, E>
     template <typename U, typename G, typename GF>
     static constexpr bool CanConvertFrom =
         std::is_void_v<U> && std::is_constructible_v<E, GF> &&
-        !std::is_constructible_v<Unexpected<E>, Expected<U, G>&> &&
-        !std::is_constructible_v<Unexpected<E>, Expected<U, G>> &&
-        !std::is_constructible_v<Unexpected<E>, const Expected<U, G>&> &&
-        !std::is_constructible_v<Unexpected<E>, const Expected<U, G>>;
+        !std::is_constructible_v<OwnUnexpected<E>, OwnExpected<U, G>&> &&
+        !std::is_constructible_v<OwnUnexpected<E>, OwnExpected<U, G>> &&
+        !std::is_constructible_v<OwnUnexpected<E>, const OwnExpected<U, G>&> &&
+        !std::is_constructible_v<OwnUnexpected<E>, const OwnExpected<U, G>>;
 
   public:
     using value_type = T;
     using error_type = E;
-    using unexpected_type = Unexpected<E>;
+    using unexpected_type = OwnUnexpected<E>;
 
-    template <typename U> using rebind = Expected<U, error_type>;
+    template <typename U> using rebind = OwnExpected<U, error_type>;
 
     // Holds nothing, which is success.
-    constexpr Expected() noexcept : HoldsValue(true) {}
+    constexpr OwnExpected() noexcept : HoldsValue(true) {}
 
     // Holds a copy of what Other holds.
-    constexpr Expected(const Expected& Other)
+    constexpr OwnExpected(const OwnExpected& Other)
         requires std::is_copy_constructible_v<E>
         : HoldsValue(Other.HoldsValue)
     {
@@ -1112,7 +1137,8 @@ class Expected<T, E>
     }
 
     // Holds what Other holds, moved out of it.
-    constexpr Expected(Expected&& Other) noexcept(std::is_nothrow_move_constructible_v<E>)
+    constexpr OwnExpected(OwnExpected&& Other) noexcept(
+        std::is_nothrow_move_constructible_v<E>)
         requires std::is_move_constructible_v<E>
         : HoldsValue(Other.HoldsValue)
     {
@@ -1126,7 +1152,7 @@ class Expected<T, E>
     template <typename U, typename G>
         requires CanConvertFrom<U, G, const G&>
     constexpr explicit(!std::is_convertible_v<const G&, E>)
-        Expected(const Expected<U, G>& Other)
+        OwnExpected(const OwnExpected<U, G>& Other)
         : HoldsValue(Other.has_value())
     {
         if (!HoldsValue)
@@ -1138,7 +1164,8 @@ class Expected<T, E>
     // Holds nothing, or the error of Other, moved out of it and converted to E.
     template <typename U, typename G>
         requires CanConvertFrom<U, G, G>
-    constexpr explicit(!std::is_convertible_v<G, E>) Expected(Expected<U, G>&& Other)
+    constexpr explicit(!std::is_convertible_v<G, E>)
+        OwnExpected(OwnExpected<U, G>&& Other)
         : HoldsValue(Other.has_value())
     {
         if (!HoldsValue)
@@ -1151,7 +1178,7 @@ class Expected<T, E>
     template <typename G>
         requires std::is_constructible_v<E, const G&>
     constexpr explicit(!std::is_convertible_v<const G&, E>)
-        Expected(const Unexpected<G>& Failed)
+        OwnExpected(const OwnUnexpected<G>& Failed)
         : Failure(Failed.error()), HoldsValue(false)
     {
     }
@@ -1159,18 +1186,19 @@ class Expected<T, E>
     // Holds the error of Failed, moved out of it.
     template <typename G>
         requires std::is_constructible_v<E, G>
-    constexpr explicit(!std::is_convertible_v<G, E>) Expected(Unexpected<G>&& Failed)
+    constexpr explicit(!std::is_convertible_v<G, E>)
+        OwnExpected(OwnUnexpected<G>&& Failed)
         : Failure(std::move(Failed.error())), HoldsValue(false)
     {
     }
 
     // Holds nothing, which is success.
-    constexpr explicit Expected(std::in_place_t) noexcept : HoldsValue(true) {}
+    constexpr explicit OwnExpected(std::in_place_t) noexcept : HoldsValue(true) {}
 
     // Holds the error made in place from Arguments.
     template <typename... Args>
         requires std::is_constructible_v<E, Args...>
-    constexpr explicit Expected(UnexpectTag, Args&&... Arguments)
+    constexpr explicit OwnExpected(OwnUnexpectTag, Args&&... Arguments)
         : Failure(std::forward<Args>(Arguments)...), HoldsValue(false)
     {
     }
@@ -1178,13 +1206,13 @@ class Expected<T, E>
     // Holds the error made in place from List and Arguments.
     template <typename U, typename... Args>
         requires std::is_constructible_v<E, std::initializer_list<U>&, Args...>
-    constexpr explicit Expected(UnexpectTag, std::initializer_list<U> List,
-                                Args&&... Arguments)
+    constexpr explicit OwnExpected(OwnUnexpectTag, std::initializer_list<U> List,
+                                   Args&&... Arguments)
         : Failure(List, std::forward<Args>(Arguments)...), HoldsValue(false)
     {
     }
 
-    constexpr ~Expected()
+    constexpr ~OwnExpected()
     {
         if (!HoldsValue)
         {
@@ -1193,7 +1221,7 @@ class Expected<T, E>
     }
 
     // Holds a copy of what Other holds.
-    constexpr Expected& operator=(const Expected& Other)
+    constexpr OwnExpected& operator=(const OwnExpected& Other)
         requires(std::is_copy_assignable_v<E> && std::is_copy_constructible_v<E>)
     {
         if (HoldsValue && !Other.HoldsValue)
@@ -1213,9 +1241,9 @@ class Expected<T, E>
     }
 
     // Holds what Other holds, moved out of it.
-    constexpr Expected&
-    operator=(Expected&& Other) noexcept(std::is_nothrow_move_constructible_v<E> &&
-                                         std::is_nothrow_move_assignable_v<E>)
+    constexpr OwnExpected&
+    operator=(OwnExpected&& Other) noexcept(std::is_nothrow_move_constructible_v<E> &&
+                                            std::is_nothrow_move_assignable_v<E>)
         requires(std::is_move_constructible_v<E> && std::is_move_assignable_v<E>)
     {
         if (HoldsValue && !Other.HoldsValue)
@@ -1238,7 +1266,7 @@ class Expected<T, E>
     template <typename G>
         requires(std::is_constructible_v<E, const G&> &&
                  std::is_assignable_v<E&, const G&>)
-    constexpr Expected& operator=(const Unexpected<G>& Failed)
+    constexpr OwnExpected& operator=(const OwnUnexpected<G>& Failed)
     {
         if (HoldsValue)
         {
@@ -1255,7 +1283,7 @@ class Expected<T, E>
     // Holds the error of Failed, moved out of it.
     template <typename G>
         requires(std::is_constructible_v<E, G> && std::is_assignable_v<E&, G>)
-    constexpr Expected& operator=(Unexpected<G>&& Failed)
+    constexpr OwnExpected& operator=(OwnUnexpected<G>&& Failed)
     {
         if (HoldsValue)
         {
@@ -1276,52 +1304,52 @@ class Expected<T, E>
     constexpr auto and_then(F&& Function) &
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function));
         }
-        return U(Unexpect, Failure);
+        return U(OwnUnexpect, Failure);
     }
     template <typename F>
         requires std::is_constructible_v<E, const E&>
     constexpr auto and_then(F&& Function) const&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function));
         }
-        return U(Unexpect, Failure);
+        return U(OwnUnexpect, Failure);
     }
     template <typename F>
         requires std::is_constructible_v<E, E&&>
     constexpr auto and_then(F&& Function) &&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function));
         }
-        return U(Unexpect, std::move(Failure));
+        return U(OwnUnexpect, std::move(Failure));
     }
     template <typename F>
         requires std::is_constructible_v<E, const E&&>
     constexpr auto and_then(F&& Function) const&&
     {
         using U = std::remove_cvref_t<std::invoke_result_t<F>>;
-        static_assert(IsExpected<U> && std::is_same_v<typename U::error_type, E>,
-                      "and_then() needs a function that returns an Expected with E");
+        static_assert(IsOwnExpected<U> && std::is_same_v<typename U::error_type, E>,
+                      "and_then() needs a function that returns an OwnExpected with E");
         if (HoldsValue)
         {
             return std::invoke(std::forward<F>(Function));
         }
-        return U(Unexpect, std::move(Failure));
+        return U(OwnUnexpect, std::move(Failure));
     }
 
     // Holds nothing, in place of what this held.
@@ -1348,8 +1376,8 @@ class Expected<T, E>
     template <typename F> constexpr auto or_else(F&& Function) &
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, E&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G();
@@ -1359,8 +1387,8 @@ class Expected<T, E>
     template <typename F> constexpr auto or_else(F&& Function) const&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, const E&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G();
@@ -1370,8 +1398,8 @@ class Expected<T, E>
     template <typename F> constexpr auto or_else(F&& Function) &&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, E&&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G();
@@ -1381,8 +1409,8 @@ class Expected<T, E>
     template <typename F> constexpr auto or_else(F&& Function) const&&
     {
         using G = std::remove_cvref_t<std::invoke_result_t<F, const E&&>>;
-        static_assert(IsExpected<G> && std::is_same_v<typename G::value_type, T>,
-                      "or_else() needs a function that returns an Expected with T");
+        static_assert(IsOwnExpected<G> && std::is_same_v<typename G::value_type, T>,
+                      "or_else() needs a function that returns an OwnExpected with T");
         if (HoldsValue)
         {
             return G();
@@ -1392,8 +1420,8 @@ class Expected<T, E>
 
     // Swaps what this and Other hold.
     constexpr void
-    swap(Expected& Other) noexcept(std::is_nothrow_move_constructible_v<E> &&
-                                   std::is_nothrow_swappable_v<E>)
+    swap(OwnExpected& Other) noexcept(std::is_nothrow_move_constructible_v<E> &&
+                                      std::is_nothrow_swappable_v<E>)
         requires(std::is_swappable_v<E> && std::is_move_constructible_v<E>)
     {
         if (HoldsValue && Other.HoldsValue)
@@ -1426,7 +1454,7 @@ class Expected<T, E>
         using U = std::remove_cv_t<std::invoke_result_t<F>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, Failure);
+            return OwnExpected<U, E>(OwnUnexpect, Failure);
         }
         return Transformed<U>(std::forward<F>(Function));
     }
@@ -1437,7 +1465,7 @@ class Expected<T, E>
         using U = std::remove_cv_t<std::invoke_result_t<F>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, Failure);
+            return OwnExpected<U, E>(OwnUnexpect, Failure);
         }
         return Transformed<U>(std::forward<F>(Function));
     }
@@ -1448,7 +1476,7 @@ class Expected<T, E>
         using U = std::remove_cv_t<std::invoke_result_t<F>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, std::move(Failure));
+            return OwnExpected<U, E>(OwnUnexpect, std::move(Failure));
         }
         return Transformed<U>(std::forward<F>(Function));
     }
@@ -1459,7 +1487,7 @@ class Expected<T, E>
         using U = std::remove_cv_t<std::invoke_result_t<F>>;
         if (!HoldsValue)
         {
-            return Expected<U, E>(Unexpect, std::move(Failure));
+            return OwnExpected<U, E>(OwnUnexpect, std::move(Failure));
         }
         return Transformed<U>(std::forward<F>(Function));
     }
@@ -1471,38 +1499,38 @@ class Expected<T, E>
         using G = std::remove_cv_t<std::invoke_result_t<F, E&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>();
+            return OwnExpected<T, G>();
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
     }
     template <typename F> constexpr auto transform_error(F&& Function) const&
     {
         using G = std::remove_cv_t<std::invoke_result_t<F, const E&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>();
+            return OwnExpected<T, G>();
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function), Failure);
     }
     template <typename F> constexpr auto transform_error(F&& Function) &&
     {
         using G = std::remove_cv_t<std::invoke_result_t<F, E&&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>();
+            return OwnExpected<T, G>();
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
-                              std::move(Failure));
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
+                                 std::move(Failure));
     }
     template <typename F> constexpr auto transform_error(F&& Function) const&&
     {
         using G = std::remove_cv_t<std::invoke_result_t<F, const E&&>>;
         if (HoldsValue)
         {
-            return Expected<T, G>();
+            return OwnExpected<T, G>();
         }
-        return Expected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
-                              std::move(Failure));
+        return OwnExpected<T, G>(InvokeErrorTag{}, std::forward<F>(Function),
+                                 std::move(Failure));
     }
 
     // Checks that this holds nothing. When it holds an error, it throws a
@@ -1534,7 +1562,7 @@ class Expected<T, E>
     // True when X and Y both hold nothing, or both errors that compare equal.
     template <typename T2, typename E2>
         requires std::is_void_v<T2>
-    friend constexpr bool operator==(const Expected& X, const Expected<T2, E2>& Y)
+    friend constexpr bool operator==(const OwnExpected& X, const OwnExpected<T2, E2>& Y)
     {
         if (X.has_value() != Y.has_value())
         {
@@ -1545,24 +1573,25 @@ class Expected<T, E>
 
     // True when X holds an error that compares equal to that of Y.
     template <typename E2>
-    friend constexpr bool operator==(const Expected& X, const Unexpected<E2>& Y)
+    friend constexpr bool operator==(const OwnExpected& X, const OwnUnexpected<E2>& Y)
     {
         return !X.has_value() && static_cast<bool>(X.error() == Y.error());
     }
 
     // Swaps what X and Y hold.
-    friend constexpr void swap(Expected& X, Expected& Y) noexcept(noexcept(X.swap(Y)))
+    friend constexpr void swap(OwnExpected& X,
+                               OwnExpected& Y) noexcept(noexcept(X.swap(Y)))
         requires(std::is_swappable_v<E> && std::is_move_constructible_v<E>)
     {
         X.swap(Y);
     }
 
   private:
-    template <typename, typename> friend class Expected;
+    template <typename, typename> friend class OwnExpected;
 
     // Holds what Function returns for Arguments, as the error.
     template <typename F, typename... Args>
-    constexpr Expected(InvokeErrorTag, F&& Function, Args&&... Arguments)
+    constexpr OwnExpected(InvokeErrorTag, F&& Function, Args&&... Arguments)
         : Failure(
               std::invoke(std::forward<F>(Function), std::forward<Args>(Arguments)...)),
           HoldsValue(false)
@@ -1572,16 +1601,16 @@ class Expected<T, E>
     // Returns Function's result in an Expected<U, E>, for transform() of an Expected
     // that holds nothing.
     template <typename U, typename F>
-    static constexpr Expected<U, E> Transformed(F&& Function)
+    static constexpr OwnExpected<U, E> Transformed(F&& Function)
     {
         if constexpr (std::is_void_v<U>)
         {
             std::invoke(std::forward<F>(Function));
-            return Expected<U, E>();
+            return OwnExpected<U, E>();
         }
         else
         {
-            return Expected<U, E>(InvokeValueTag{}, std::forward<F>(Function));
+            return OwnExpected<U, E>(InvokeValueTag{}, std::forward<F>(Function));
         }
     }
 

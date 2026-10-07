@@ -300,13 +300,14 @@ class FakeWebSocket : public DtNmos::WebSocketConnection
     {
         if (Next == Messages.size())
         {
-            return std::unexpected(DtNmos::Error{DtNmos::Result::Network,
-                                                 "The server closed the WebSocket."});
+            return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::Network,
+                                                    "The server closed the WebSocket."});
         }
         std::string Message = Messages[Next++];
         if (Message.empty())
         {
-            return std::unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no message"});
+            return DtNmos::Unexpected(
+                DtNmos::Error{DtNmos::Result::Timeout, "no message"});
         }
         return Message;
     }
@@ -366,7 +367,7 @@ NMOS_TEST(CppQuerySubscribes)
     NMOS_ASSERT(DtNmos::Name(DtNmos::ChangeKind::Removed) == "removed");
 
     NMOS_ASSERT(!Closed);
-    Subscription = std::unexpected(DtNmos::Error{});
+    Subscription = DtNmos::Unexpected(DtNmos::Error{});
     NMOS_ASSERT(Closed);
 }
 

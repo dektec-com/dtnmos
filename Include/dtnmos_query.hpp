@@ -672,11 +672,11 @@ inline Expected<SenderInfo> TakeOneSender(DtNmosResult Code, DtNmosSenderList* N
     std::vector<SenderInfo> Senders = TakeSenders(Native);
     if (!Found)
     {
-        return std::unexpected(Found.error());
+        return DtNmos::Unexpected(Found.error());
     }
     if (Senders.empty())
     {
-        return std::unexpected(Error{Result::Internal, "The library gave no sender."});
+        return DtNmos::Unexpected(Error{Result::Internal, "The library gave no sender."});
     }
     return std::move(Senders.front());
 }
@@ -689,11 +689,12 @@ inline Expected<ReceiverInfo> TakeOneReceiver(DtNmosResult Code,
     std::vector<ReceiverInfo> Receivers = TakeReceivers(Native);
     if (!Found)
     {
-        return std::unexpected(Found.error());
+        return DtNmos::Unexpected(Found.error());
     }
     if (Receivers.empty())
     {
-        return std::unexpected(Error{Result::Internal, "The library gave no receiver."});
+        return DtNmos::Unexpected(
+            Error{Result::Internal, "The library gave no receiver."});
     }
     return std::move(Receivers.front());
 }
@@ -813,7 +814,7 @@ inline Expected<std::vector<RegistryInfo>> Discover(const DiscoveryConfig& Confi
     const Status Found = Detail::Check(DtNmos_Discover(&Native, &List));
     if (!Found)
     {
-        return std::unexpected(Found.error());
+        return DtNmos::Unexpected(Found.error());
     }
     return Detail::TakeList(List);
 }
@@ -828,7 +829,7 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
     Made.State->Native.reset(DtNmosRegistrySearch_Alloc());
     if (Made.State->Native == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     DtNmosRegistrySearchConfig Native{};
     Native.Size = sizeof(Native);
@@ -845,7 +846,7 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
         Detail::Check(DtNmosRegistrySearch_Open(Made.State->Native.get(), &Native));
     if (!Opened)
     {
-        return std::unexpected(Opened.error());
+        return DtNmos::Unexpected(Opened.error());
     }
     return Made;
 }
@@ -912,7 +913,7 @@ RegistrySearch::List(DtNmos::Service Kind) const
         DtNmosRegistrySearch_List(GetNative(), Detail::ToNative(Kind), &Found));
     if (!Listed)
     {
-        return std::unexpected(Listed.error());
+        return DtNmos::Unexpected(Listed.error());
     }
     return Detail::TakeList(Found);
 }
@@ -950,13 +951,13 @@ inline Expected<Query> Query::Open(const QueryConfig& Config)
     Kept.Native.reset(DtNmosQuery_Alloc());
     if (Kept.Native == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     const Status Opened =
         Detail::Check(DtNmosQuery_Open(Kept.Native.get(), &NativeConfig));
     if (!Opened)
     {
-        return std::unexpected(Opened.error());
+        return DtNmos::Unexpected(Opened.error());
     }
     return Made;
 }
@@ -986,7 +987,7 @@ inline Status Query::CheckOpen() const
 {
     if (State == nullptr)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Error{Result::State, "The query was moved to another, and is not open."});
     }
     return {};
@@ -1012,7 +1013,7 @@ inline Expected<Connection> Query::Connect(std::string_view Receiver,
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::string ReceiverText(Receiver);
     const std::string SenderText(Sender);
@@ -1022,7 +1023,7 @@ inline Expected<Connection> Query::Connect(std::string_view Receiver,
     const std::unique_ptr<DtNmosConnection, Detail::ConnectionFree> Owned(Made);
     if (!Connected)
     {
-        return std::unexpected(Connected.error());
+        return DtNmos::Unexpected(Connected.error());
     }
     Connection Value;
     Value.Receiver = Detail::FromNative(*DtNmosConnection_Receiver(Made));
@@ -1038,7 +1039,7 @@ inline Expected<ReceiverInfo> Query::Disconnect(std::string_view Receiver)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::string Text(Receiver);
     DtNmosReceiverList* Disconnected = nullptr;
@@ -1054,7 +1055,7 @@ inline Expected<ReceiverInfo> Query::FindReceiver(std::string_view IdOrLabel)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::string Text(IdOrLabel);
     DtNmosReceiverList* Found = nullptr;
@@ -1070,7 +1071,7 @@ inline Expected<SenderInfo> Query::FindSender(std::string_view IdOrLabel)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::string Text(IdOrLabel);
     DtNmosSenderList* Found = nullptr;
@@ -1088,7 +1089,7 @@ inline Expected<SenderInfo> Query::MoveSender(std::string_view Sender,
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::string Text(Sender);
     const std::string Destination(DestinationIp);
@@ -1105,7 +1106,7 @@ inline Expected<std::vector<ReceiverInfo>> Query::Receivers()
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     DtNmosReceiverList* List = nullptr;
     const Status Listed =
@@ -1113,7 +1114,7 @@ inline Expected<std::vector<ReceiverInfo>> Query::Receivers()
     std::vector<ReceiverInfo> Value = Detail::TakeReceivers(List);
     if (!Listed)
     {
-        return std::unexpected(Listed.error());
+        return DtNmos::Unexpected(Listed.error());
     }
     return Value;
 }
@@ -1128,7 +1129,7 @@ inline Expected<std::string> Query::SenderManifest(const SenderInfo& Sender)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const DtNmosSenderInfo Native = Detail::ToNative(Sender);
     std::size_t Size = 0;
@@ -1136,7 +1137,7 @@ inline Expected<std::string> Query::SenderManifest(const SenderInfo& Sender)
         DtNmosQuery_SenderManifest(State->Native.get(), &Native, nullptr, &Size);
     if (Asked != DTNMOS_E_BUFFER_TOO_SMALL)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Detail::LastError(Asked == DTNMOS_OK ? DTNMOS_E_INTERNAL : Asked));
     }
     std::string Text(Size, '\0');
@@ -1145,7 +1146,7 @@ inline Expected<std::string> Query::SenderManifest(const SenderInfo& Sender)
         DtNmosQuery_SenderManifest(State->Native.get(), &Native, Text.data(), &Size));
     if (!Written)
     {
-        return std::unexpected(Written.error());
+        return DtNmos::Unexpected(Written.error());
     }
     Text.resize(Size);
     return Text;
@@ -1158,14 +1159,14 @@ inline Expected<std::vector<SenderInfo>> Query::Senders()
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     DtNmosSenderList* List = nullptr;
     const Status Listed = Detail::Check(DtNmosQuery_Senders(State->Native.get(), &List));
     std::vector<SenderInfo> Value = Detail::TakeSenders(List);
     if (!Listed)
     {
-        return std::unexpected(Listed.error());
+        return DtNmos::Unexpected(Listed.error());
     }
     return Value;
 }
@@ -1177,7 +1178,7 @@ inline Expected<DtNmos::Sdp> Query::SenderSdp(const SenderInfo& Sender)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const DtNmosSenderInfo Native = Detail::ToNative(Sender);
     DtNmosSdp* Parsed = nullptr;
@@ -1186,7 +1187,7 @@ inline Expected<DtNmos::Sdp> Query::SenderSdp(const SenderInfo& Sender)
     const std::unique_ptr<DtNmosSdp, Detail::SdpFree> Owned(Parsed);
     if (!Read)
     {
-        return std::unexpected(Read.error());
+        return DtNmos::Unexpected(Read.error());
     }
     return Detail::FromNative(Parsed);
 }
@@ -1212,7 +1213,7 @@ inline Expected<Subscription> Subscription::Open(Query& Registry,
     const Status RegistryOpen = Registry.CheckOpen();
     if (!RegistryOpen)
     {
-        return std::unexpected(RegistryOpen.error());
+        return DtNmos::Unexpected(RegistryOpen.error());
     }
     Subscription Made;
     Made.State = std::make_unique<Detail::SubscriptionState>();
@@ -1229,13 +1230,13 @@ inline Expected<Subscription> Subscription::Open(Query& Registry,
     Kept.Native.reset(DtNmosSubscription_Alloc());
     if (Kept.Native == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     const Status Opened = Detail::Check(DtNmosSubscription_Open(
         Kept.Native.get(), Registry.State->Native.get(), &NativeConfig));
     if (!Opened)
     {
-        return std::unexpected(Opened.error());
+        return DtNmos::Unexpected(Opened.error());
     }
     Kept.Borrowed = Registry.State.get();
     ++Kept.Borrowed->Borrowers;
@@ -1263,7 +1264,7 @@ inline Status Subscription::Poll(std::chrono::milliseconds Timeout)
 {
     if (State == nullptr)
     {
-        return std::unexpected(Error{
+        return DtNmos::Unexpected(Error{
             Result::State, "The subscription was moved to another, and is not open."});
     }
     return Detail::Check(DtNmosSubscription_Poll(State->Native.get(),

@@ -84,7 +84,7 @@ if(DTNMOS_WITH_CPP)
   dtnmos_set_warnings(test_CppBorrowed)
   add_test(NAME dtnmos.CppBorrowedSearch COMMAND test_CppBorrowed search)
   add_test(NAME dtnmos.CppBorrowedQuery COMMAND test_CppBorrowed query)
-  # The program of a test that reads the value of a Detail::Expected that holds an
+  # The program of a test that reads the value of a Detail::OwnExpected that holds an
   # error, which must call std::terminate(), and so end the program with 0. It is built
   # without exceptions, which is what it checks, except with MSVC.
   add_executable(test_CppValueOfError Cpp/ValueOfError.cpp)
@@ -95,6 +95,23 @@ if(DTNMOS_WITH_CPP)
     target_compile_options(test_CppValueOfError PRIVATE -fno-exceptions)
   endif()
   add_test(NAME dtnmos.CppValueOfError COMMAND test_CppValueOfError)
+  # The program of a test whose sources include dtnmos.hpp under C++20 and under C++23.
+  # Each standard must have its own copy of a function that returns a Status, rather
+  # than one for both. MSVC's linker refuses such a program instead, by the pragma in
+  # dtnmos.hpp, so the test is not built there.
+  if(NOT MSVC)
+    add_library(test_CppMixedStandards20 OBJECT Cpp/MixedStandards20.cpp)
+    set_target_properties(test_CppMixedStandards20 PROPERTIES CXX_STANDARD 20 FOLDER
+                                                                         "Tests")
+    target_link_libraries(test_CppMixedStandards20 PRIVATE dtnmos::dtnmos)
+    dtnmos_set_warnings(test_CppMixedStandards20)
+    add_executable(test_CppMixedStandards Cpp/MixedStandards.cpp
+                                          $<TARGET_OBJECTS:test_CppMixedStandards20>)
+    set_target_properties(test_CppMixedStandards PROPERTIES CXX_STANDARD 23 FOLDER "Tests")
+    target_link_libraries(test_CppMixedStandards PRIVATE dtnmos::cpp)
+    dtnmos_set_warnings(test_CppMixedStandards)
+    add_test(NAME dtnmos.CppMixedStandards COMMAND test_CppMixedStandards)
+  endif()
 endif()
 
 # The interop tests run the suites of the AMWA NMOS Testing Tool against a node of

@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*# TestCppExpected.cpp *#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - Tests of Detail::Expected, the C++ API's own std::expected
+// dtnmos - Tests of Detail::OwnExpected, the C++ API's own std::expected
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
@@ -39,11 +39,11 @@
 // The types of Detail.
 struct Own
 {
-    template <typename T, typename E> using Expected = DtNmos::Detail::Expected<T, E>;
-    template <typename E> using Unexpected = DtNmos::Detail::Unexpected<E>;
-    template <typename E> using BadAccess = DtNmos::Detail::BadExpectedAccess<E>;
-    static constexpr const DtNmos::Detail::UnexpectTag& Unexpect =
-        DtNmos::Detail::Unexpect;
+    template <typename T, typename E> using Expected = DtNmos::Detail::OwnExpected<T, E>;
+    template <typename E> using Unexpected = DtNmos::Detail::OwnUnexpected<E>;
+    template <typename E> using BadAccess = DtNmos::Detail::OwnBadExpectedAccess<E>;
+    static constexpr const DtNmos::Detail::OwnUnexpectTag& Unexpect =
+        DtNmos::Detail::OwnUnexpect;
 };
 
 #if defined(TEST_STD_EXPECTED)

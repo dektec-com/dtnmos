@@ -13,8 +13,10 @@
 // compiler warns when a program ignores it. The names are those of the C API, with the
 // prefix as the namespace: DtNmos::Node::AddSender() is DtNmosNode_AddSender().
 //
-// The headers need C++23, for std::expected: GCC 12, Clang 16, Visual Studio 2022 17.3
-// or newer. Link the CMake target dtnmos::cpp, which asks for C++23.
+// The headers need C++20. Where the standard library has std::expected, as in C++23,
+// Expected is a std::expected; elsewhere it is the C++ API's own, from
+// dtnmos_expected.hpp, which behaves the same. So a program compiles every source that
+// includes these headers with the same standard. Link the CMake target dtnmos::cpp.
 
 #pragma once
 
@@ -22,15 +24,17 @@
 
 #include <version>
 
-#if !defined(__cpp_lib_expected) || __cpp_lib_expected < 202202L
-    #error "dtnmos.hpp needs C++23 with std::expected: GCC 12, Clang 16 or VS 2022 17.3"
+#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
+    #include <expected>
+    #define DTNMOS_DETAIL_STD_EXPECTED 1
+#else
+    #include "dtnmos_expected.hpp"
 #endif
 
 #include <array>
 #include <compare>
 #include <cstddef>
 #include <exception>
-#include <expected>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -56,8 +60,14 @@ struct Access;
 // value returns a Status, which is an Expected<void>.
 //
 // A program checks a result with if (!Result), and then reads Result.error().Message.
-// A program that prefers exceptions calls Result.value() instead. That throws
-// std::bad_expected_access<Error> when the call failed.
+// A program that prefers exceptions calls Result.value() instead. That throws a
+// BadExpectedAccess when the call failed, and calls std::terminate() in a program built
+// without exceptions. A function of the program that fails returns an Unexpected, e.g.
+// return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::State, "not open"});
+//
+// These are the types of std::expected where the standard library has it, and those of
+// dtnmos_expected.hpp elsewhere, under the same names, so that a program uses them the
+// same way under C++20 and C++23.
 //
 
 // The result codes of the C API, with the same numbers as DtNmosResult. Ok is success;
@@ -86,11 +96,48 @@ struct Error
     std::string Message;            // What went wrong and why, in English
 };
 
+#if defined(DTNMOS_DETAIL_STD_EXPECTED)
+// What value() of an Expected throws when it holds an Error. Its error() is that Error.
+using BadExpectedAccess = std::bad_expected_access<Error>;
+
 // The result of a call that gives a value: the value, or an Error.
 template <typename T> using Expected = std::expected<T, Error>;
 
+// Asks a constructor of an Expected to make the Error in place from what follows it,
+// e.g. Status(DtNmos::Unexpect, Error{Result::State, "not open"}).
+inline constexpr std::unexpect_t Unexpect{};
+
+// An Error that a function returns as its failure, to make an Expected or a Status that
+// holds it.
+using Unexpected = std::unexpected<Error>;
+#else
+// What value() of an Expected throws when it holds an Error. Its error() is that Error.
+using BadExpectedAccess = Detail::OwnBadExpectedAccess<Error>;
+
+// The result of a call that gives a value: the value, or an Error.
+template <typename T> using Expected = Detail::OwnExpected<T, Error>;
+
+// Asks a constructor of an Expected to make the Error in place from what follows it,
+// e.g. Status(DtNmos::Unexpect, Error{Result::State, "not open"}).
+inline constexpr Detail::OwnUnexpectTag Unexpect{};
+
+// An Error that a function returns as its failure, to make an Expected or a Status that
+// holds it.
+using Unexpected = Detail::OwnUnexpected<Error>;
+#endif
+
 // The result of a call that gives no value: nothing, or an Error.
 using Status = Expected<void>;
+
+// Makes the linker of MSVC refuse a program whose sources include these headers under
+// two standards, one with std::expected and one without, as their Expecteds differ.
+#if defined(_MSC_VER)
+    #if defined(DTNMOS_DETAIL_STD_EXPECTED)
+        #pragma detect_mismatch("dtnmos_expected", "std")
+    #else
+        #pragma detect_mismatch("dtnmos_expected", "own")
+    #endif
+#endif
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= IDs +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
@@ -302,7 +349,7 @@ inline Error LastError(DtNmosResult Native)
     {
         return {};
     }
-    return std::unexpected(LastError(Native));
+    return DtNmos::Unexpected(LastError(Native));
 }
 
 // Copies Text into a char array of a C struct, Field, and ends it with a null. When Text
@@ -314,7 +361,7 @@ template <std::size_t N>
 {
     if (Text.size() >= N)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Error{Result::InvalidArgument, std::string(What) + " is longer than " +
                                                std::to_string(N - 1) +
                                                " characters: " + std::string(Text)});
@@ -349,11 +396,11 @@ template <typename F> [[nodiscard]] Status Guard(Result Code, F&& Function) noex
     }
     catch (const std::exception& Exception)
     {
-        return std::unexpected(Error{Code, Exception.what()});
+        return DtNmos::Unexpected(Error{Code, Exception.what()});
     }
     catch (...)
     {
-        return std::unexpected(Error{Code, UnknownException});
+        return DtNmos::Unexpected(Error{Code, UnknownException});
     }
 #else
     (void)Code;
@@ -430,7 +477,7 @@ inline Expected<Id> Id::FromName(const Id& Namespace, std::string_view Name)
         Detail::Check(DtNmosId_FromName(&NativeNamespace, NameText.c_str(), &Made));
     if (!Checked)
     {
-        return std::unexpected(Checked.error());
+        return DtNmos::Unexpected(Checked.error());
     }
     return Detail::Access::FromNative(Made);
 }
@@ -454,7 +501,7 @@ inline Expected<Id> Id::FromText(std::string_view Text)
     }
     if (!Valid)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Error{Result::InvalidArgument, "Not a UUID: \"" + std::string(Text) + "\"."});
     }
     return Value;

@@ -96,14 +96,14 @@ NMOS_TEST(CppHttpTrampoline)
 
     const DtNmos::HttpFunction TimesOut =
         [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
-    { return std::unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no answer"}); };
+    { return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no answer"}); };
     const ResponsePtr Empty(DtNmosHttpResponse_Alloc());
     NMOS_ASSERT_EQ(CallTrampoline(TimesOut, Empty.get()), DTNMOS_E_TIMEOUT);
     NMOS_ASSERT_STR(DtNmos_GetLastError(), "no answer");
 
     const DtNmos::HttpFunction FailsWithOk =
         [](const DtNmos::HttpRequest&) -> DtNmos::Expected<DtNmos::HttpResponse>
-    { return std::unexpected(DtNmos::Error{DtNmos::Result::Ok, "not a failure"}); };
+    { return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::Ok, "not a failure"}); };
     NMOS_ASSERT_EQ(CallTrampoline(FailsWithOk, Empty.get()), DTNMOS_E_HTTP);
 #if defined(__cpp_exceptions)
     const DtNmos::HttpFunction Throws =

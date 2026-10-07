@@ -243,7 +243,7 @@ inline DtNmosResult HttpTrampoline(void* User, const DtNmosHttpRequest* Request,
                                       Http(FromNative(*Request));
                                   if (!Answer)
                                   {
-                                      return std::unexpected(Answer.error());
+                                      return DtNmos::Unexpected(Answer.error());
                                   }
                                   return ToNative(*Answer, Response);
                               });
@@ -309,24 +309,25 @@ inline DtNmosResult WebSocketConnectTrampoline(void* User, const char* Url,
 {
     const NativeWebSocket& WebSocket = *static_cast<const NativeWebSocket*>(User);
     std::unique_ptr<OpenWebSocket> Opened;
-    const Status Done = Guard(
-        Result::Network,
-        [&]() -> Status
-        {
-            auto Made =
-                WebSocket.Connect(FromNative(Url), std::chrono::milliseconds(TimeoutMs));
-            if (!Made)
-            {
-                return std::unexpected(Made.error());
-            }
-            if (*Made == nullptr)
-            {
-                return std::unexpected(Error{Result::Network, "No connection was made."});
-            }
-            Opened = std::make_unique<OpenWebSocket>();
-            Opened->Connection = std::move(*Made);
-            return {};
-        });
+    const Status Done =
+        Guard(Result::Network,
+              [&]() -> Status
+              {
+                  auto Made = WebSocket.Connect(FromNative(Url),
+                                                std::chrono::milliseconds(TimeoutMs));
+                  if (!Made)
+                  {
+                      return DtNmos::Unexpected(Made.error());
+                  }
+                  if (*Made == nullptr)
+                  {
+                      return DtNmos::Unexpected(
+                          Error{Result::Network, "No connection was made."});
+                  }
+                  Opened = std::make_unique<OpenWebSocket>();
+                  Opened->Connection = std::move(*Made);
+                  return {};
+              });
     if (Done)
     {
         *Connection = Opened.release();
@@ -349,7 +350,7 @@ inline DtNmosResult WebSocketReceiveTrampoline(void* User, void* Connection,
                                       std::chrono::milliseconds(TimeoutMs));
                                   if (!Received)
                                   {
-                                      return std::unexpected(Received.error());
+                                      return DtNmos::Unexpected(Received.error());
                                   }
                                   Open.Message = std::move(*Received);
                                   return {};
@@ -383,13 +384,13 @@ CurlHttpFunction::operator()(const HttpRequest& Request) const
         DtNmosHttpResponse_Alloc());
     if (Response == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     const DtNmosHttpRequest Native = Detail::ToNative(Request);
     const Status Sent = Detail::Check(DtNmos_CurlHttp(nullptr, &Native, Response.get()));
     if (!Sent)
     {
-        return std::unexpected(Sent.error());
+        return DtNmos::Unexpected(Sent.error());
     }
     return Detail::FromNative(Response.get());
 }

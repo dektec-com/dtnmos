@@ -93,7 +93,7 @@ class SilentWebSocket : public DtNmos::WebSocketConnection
   public:
     DtNmos::Expected<std::string> Receive(std::chrono::milliseconds) override
     {
-        return std::unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no message"});
+        return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::Timeout, "no message"});
     }
 };
 

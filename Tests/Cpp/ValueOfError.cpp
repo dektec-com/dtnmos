@@ -33,7 +33,8 @@
 int main()
 {
     std::set_terminate(Terminated);
-    const DtNmos::Detail::Expected<int, int> Refused = DtNmos::Detail::Unexpected<int>(1);
+    const DtNmos::Detail::OwnExpected<int, int> Refused =
+        DtNmos::Detail::OwnUnexpected<int>(1);
     std::printf("reading the value of an Expected that holds an error\n");
     std::fflush(stdout);
     const int Value = Refused.value();

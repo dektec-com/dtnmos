@@ -434,7 +434,7 @@ inline Expected<DtNmosClock> ToNative(const Clock& Value)
         CopyText(Native.Grandmaster, Value.Grandmaster, "Clock.Grandmaster");
     if (!Copied)
     {
-        return std::unexpected(Copied.error());
+        return DtNmos::Unexpected(Copied.error());
     }
     return Native;
 }
@@ -571,7 +571,7 @@ inline Expected<Node> Node::Open(const NodeConfig& Config)
         const Expected<DtNmosClock> Converted = Detail::ToNative(*Config.Clock);
         if (!Converted)
         {
-            return std::unexpected(Converted.error());
+            return DtNmos::Unexpected(Converted.error());
         }
         NativeClock = *Converted;
         NativeConfig.Clock = &NativeClock;
@@ -579,13 +579,13 @@ inline Expected<Node> Node::Open(const NodeConfig& Config)
     Made.Native.reset(DtNmosNode_Alloc());
     if (Made.Native == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     const Status Opened =
         Detail::Check(DtNmosNode_Open(Made.Native.get(), &NativeConfig));
     if (!Opened)
     {
-        return std::unexpected(Opened.error());
+        return DtNmos::Unexpected(Opened.error());
     }
     return Made;
 }
@@ -722,13 +722,13 @@ inline Expected<std::string> Node::ApiUrl() const
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     std::size_t Size = 0;
     const DtNmosResult Asked = DtNmosNode_ApiUrl(Native.get(), nullptr, &Size);
     if (Asked != DTNMOS_E_BUFFER_TOO_SMALL)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Detail::LastError(Asked == DTNMOS_OK ? DTNMOS_E_INTERNAL : Asked));
     }
     std::string Url(Size, '\0');
@@ -737,7 +737,7 @@ inline Expected<std::string> Node::ApiUrl() const
         Detail::Check(DtNmosNode_ApiUrl(Native.get(), Url.data(), &Size));
     if (!Written)
     {
-        return std::unexpected(Written.error());
+        return DtNmos::Unexpected(Written.error());
     }
     Url.resize(Size);
     return Url;
@@ -752,7 +752,7 @@ inline Status Node::CheckOpen() const
 {
     if (Native == nullptr)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Error{Result::State, "The node was moved to another, and is not open."});
     }
     return {};
@@ -794,20 +794,20 @@ inline Expected<HttpResponse> Node::Handle(const HttpRequest& Request)
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     const std::unique_ptr<DtNmosHttpResponse, Detail::HttpResponseFree> Response(
         DtNmosHttpResponse_Alloc());
     if (Response == nullptr)
     {
-        return std::unexpected(Error{Result::NoMemory, "Out of memory."});
+        return DtNmos::Unexpected(Error{Result::NoMemory, "Out of memory."});
     }
     const DtNmosHttpRequest NativeRequest = Detail::ToNative(Request);
     const Status Answered =
         Detail::Check(DtNmosNode_Handle(Native.get(), &NativeRequest, Response.get()));
     if (!Answered)
     {
-        return std::unexpected(Answered.error());
+        return DtNmos::Unexpected(Answered.error());
     }
     return Detail::FromNative(Response.get());
 }
@@ -826,13 +826,13 @@ inline Expected<std::chrono::milliseconds> Node::Poll()
     const Status Open = CheckOpen();
     if (!Open)
     {
-        return std::unexpected(Open.error());
+        return DtNmos::Unexpected(Open.error());
     }
     uint32_t NextMs = 0;
     const Status Polled = Detail::Check(DtNmosNode_Poll(Native.get(), &NextMs));
     if (!Polled)
     {
-        return std::unexpected(Polled.error());
+        return DtNmos::Unexpected(Polled.error());
     }
     return std::chrono::milliseconds(NextMs);
 }
@@ -876,7 +876,7 @@ inline Status Node::SetClock(const Clock& NodeClock)
     const Expected<DtNmosClock> Converted = Detail::ToNative(NodeClock);
     if (!Converted)
     {
-        return std::unexpected(Converted.error());
+        return DtNmos::Unexpected(Converted.error());
     }
     return Detail::Check(DtNmosNode_SetClock(Native.get(), &*Converted));
 }

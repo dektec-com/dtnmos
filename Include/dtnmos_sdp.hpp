@@ -1175,7 +1175,7 @@ inline Expected<Sdp> Sdp::Parse(std::string_view Text)
     const std::unique_ptr<DtNmosSdp, Detail::SdpFree> Owned(Parsed);
     if (!Checked)
     {
-        return std::unexpected(Checked.error());
+        return DtNmos::Unexpected(Checked.error());
     }
     return Detail::FromNative(Parsed);
 }
@@ -1199,14 +1199,14 @@ inline Expected<std::string> Sdp::Write() const
     }
     if (!Made)
     {
-        return std::unexpected(Made.error());
+        return DtNmos::Unexpected(Made.error());
     }
     std::size_t Size = 0;
     const DtNmosResult Asked = DtNmosSdp_Write(&Head.Get(), NativeFlows.data(),
                                                NativeFlows.size(), nullptr, &Size);
     if (Asked != DTNMOS_E_BUFFER_TOO_SMALL)
     {
-        return std::unexpected(
+        return DtNmos::Unexpected(
             Detail::LastError(Asked == DTNMOS_OK ? DTNMOS_E_INTERNAL : Asked));
     }
     std::string Text(Size, '\0');
@@ -1215,7 +1215,7 @@ inline Expected<std::string> Sdp::Write() const
         &Head.Get(), NativeFlows.data(), NativeFlows.size(), Text.data(), &Size));
     if (!Written)
     {
-        return std::unexpected(Written.error());
+        return DtNmos::Unexpected(Written.error());
     }
     Text.resize(Size);
     return Text;

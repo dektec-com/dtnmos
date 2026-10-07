@@ -45,7 +45,7 @@ struct FakeRegistry
             if (!Unreachable.empty() &&
                 Request.Url.find(Unreachable) != std::string::npos)
             {
-                return std::unexpected(
+                return DtNmos::Unexpected(
                     DtNmos::Error{DtNmos::Result::Http, "unreachable"});
             }
             const bool Posts = Request.Method == "POST";
@@ -127,7 +127,7 @@ OpenNode(FakeRegistry& Registry, void (*Changes)(DtNmos::NodeConfig&) = nullptr)
             {.Id = IdOf(DEVICE_ID), .Label = "a card", .Description = ""});
         if (!Added)
         {
-            return std::unexpected(Added.error());
+            return DtNmos::Unexpected(Added.error());
         }
     }
     return Node;
@@ -278,8 +278,9 @@ NMOS_TEST(CppNodeFailsAnActivation)
     NMOS_ASSERT(Node.has_value());
     NMOS_ASSERT(Node->AddSender(SenderOf(),
                                 [](const DtNmos::Id&,
-                                   const DtNmos::SenderActivation&) -> DtNmos::Status {
-                                    return std::unexpected(DtNmos::Error{
+                                   const DtNmos::SenderActivation&) -> DtNmos::Status
+                                {
+                                    return DtNmos::Unexpected(DtNmos::Error{
                                         DtNmos::Result::State, "the card refused it"});
                                 })
                     .has_value());
@@ -573,7 +574,7 @@ NMOS_TEST(CppNodeIsDestroyedWhileActivated)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     NMOS_EXPECT(Entered);
-    Node = std::unexpected(DtNmos::Error{});
+    Node = DtNmos::Unexpected(DtNmos::Error{});
     NMOS_EXPECT(*Finished);
     Controller.join();
 }

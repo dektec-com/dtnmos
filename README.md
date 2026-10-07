@@ -501,7 +501,7 @@ int main()
           {
             // Receive Activation.Flow, e.g. Activation.Flow.DestinationIp.
           }
-          return {}; // or std::unexpected(DtNmos::Error{DtNmos::Result::State, "why"})
+          return {}; // or DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::State, "why"})
         });
   }
   if (Done)

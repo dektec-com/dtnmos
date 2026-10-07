@@ -197,6 +197,37 @@ NMOS_TEST(CppLog)
     NMOS_ASSERT_STR(Logged[1].second.c_str(), "");
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppFailures -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A program makes a failed Expected or Status with DtNmos::Unexpected or, in place,
+// with DtNmos::Unexpect, and catches what value() of a failure throws as a
+// DtNmos::BadExpectedAccess, whose error() is the Error; the same names under C++20 and
+// C++23.
+//
+NMOS_TEST(CppFailures)
+{
+    const DtNmos::Status Refused =
+        DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::State, "not open"});
+    NMOS_ASSERT(!Refused && Refused.error().Code == DtNmos::Result::State);
+    const DtNmos::Status InPlace(DtNmos::Unexpect,
+                                 DtNmos::Error{DtNmos::Result::Timeout, "no answer"});
+    NMOS_ASSERT(!InPlace && InPlace.error().Message == "no answer");
+    const DtNmos::Expected<DtNmos::Id> NoId(DtNmos::Unexpect, DtNmos::Error{});
+    NMOS_ASSERT(!NoId && NoId.error().Code == DtNmos::Result::Internal);
+#if defined(__cpp_exceptions)
+    bool Caught = false;
+    try
+    {
+        (void)NoId.value();
+    }
+    catch (const DtNmos::BadExpectedAccess& Access)
+    {
+        Caught = Access.error().Code == DtNmos::Result::Internal;
+    }
+    NMOS_ASSERT(Caught);
+#endif
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppGuard -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Guard() passes on the Status of the function it calls. With exceptions, it catches what
@@ -208,7 +239,7 @@ NMOS_TEST(CppGuard)
 {
     const DtNmos::Status Passed = DtNmos::Detail::Guard(
         DtNmos::Result::Internal, []() -> DtNmos::Status
-        { return std::unexpected(DtNmos::Error{DtNmos::Result::State, "not open"}); });
+        { return DtNmos::Unexpected(DtNmos::Error{DtNmos::Result::State, "not open"}); });
     NMOS_ASSERT(!Passed.has_value());
     NMOS_ASSERT(Passed.error().Code == DtNmos::Result::State);
     NMOS_ASSERT(DtNmos::Detail::Guard(DtNmos::Result::Internal, [] {}).has_value());
@@ -232,4 +263,5 @@ NMOS_TEST(CppGuard)
 
 NMOS_TEST_MAIN("Cpp", NMOS_RUN(CppIdFromName), NMOS_RUN(CppIdFromText),
                NMOS_RUN(CppIdIsAKey), NMOS_RUN(CppResultsConvert), NMOS_RUN(CppCheck),
-               NMOS_RUN(CppCopyText), NMOS_RUN(CppLog), NMOS_RUN(CppGuard))
+               NMOS_RUN(CppCopyText), NMOS_RUN(CppLog), NMOS_RUN(CppFailures),
+               NMOS_RUN(CppGuard))
