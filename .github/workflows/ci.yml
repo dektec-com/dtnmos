@@ -98,9 +98,9 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   # The C++ API on the least compilers it names for C++20, GCC 11 and Clang 14, and on
-  # the Clang of ubuntu-latest, whose standard library has std::expected under C++23, so
-  # that the suites run on Clang with both Expecteds and CppMixedStandards checks the tag
-  # of dtnmos_expected.hpp there.
+  # the Clang of ubuntu-latest with libc++, which has std::expected under C++23 where
+  # that Clang's libstdc++ does not, so that the suites run on Clang with both Expecteds
+  # and CppMixedStandards checks the tag of dtnmos_expected.hpp there.
   cpp20:
     name: C++${{ matrix.standard }} on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -118,16 +118,18 @@ jobs:
             cc: clang-14
             cxx: clang++-14
             standard: 20
-          - name: Clang
+          - name: Clang 18 and libc++
             os: ubuntu-latest
-            cc: clang
-            cxx: clang++
+            cc: clang-18
+            cxx: clang++-18
             standard: 23
+            packages: libc++-18-dev libc++abi-18-dev
+            cxxflags: -stdlib=libc++
     steps:
       - uses: actions/checkout@v7
 
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: sudo apt-get update && sudo apt-get install -y ninja-build ${{ matrix.packages }}
 
       - name: Show the tools
         run: cmake --version && ${{ matrix.cxx }} --version
@@ -137,6 +139,7 @@ jobs:
           cmake --preset linux-debug -DCMAKE_C_COMPILER=${{ matrix.cc }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
           -DDTNMOS_CXX_STANDARD=${{ matrix.standard }}
+          "-DCMAKE_CXX_FLAGS=${{ matrix.cxxflags }}"
 
       - name: Build
         run: cmake --build --preset linux-debug
