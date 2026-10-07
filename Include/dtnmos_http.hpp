@@ -1,13 +1,14 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*# dtnmos_http.hpp *#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - The C++ API of the HTTP client dtnmos works through
+// dtnmos - The C++ API of HTTP and WebSockets, through which dtnmos reaches the network
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The C++ API of dtnmos_http.h. dtnmos does not talk to the network itself: a program
-// gives it the function that sends its HTTP requests, an HttpFunction, or CurlHttp, the
-// one on libcurl. A program with an HTTP server of its own hands each request it receives
-// to Node::Handle(), as an HttpRequest, and sends back the HttpResponse.
+// The C++ API of dtnmos_http.h. dtnmos does not open network connections itself. The
+// program gives it a function that sends HTTP requests: an HttpFunction of its own, or
+// CurlHttp, which uses libcurl. A program that runs an HTTP server of its own passes each
+// request it receives to Node::Handle(), as an HttpRequest, and sends back the
+// HttpResponse that Node::Handle() returns.
 
 #pragma once
 
@@ -29,10 +30,11 @@ namespace DtNmos
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= HTTP +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
-// A body is a std::string of bytes; "" is no body.
+// A body is a std::string of bytes, which may hold nulls. An empty string means that
+// there is no body.
 //
 
-// One header of an HTTP response.
+// A header of an HTTP response: its name and its value.
 struct HttpHeader
 {
     std::string Name;
@@ -41,81 +43,86 @@ struct HttpHeader
     friend bool operator==(const HttpHeader&, const HttpHeader&) = default;
 };
 
-// An HTTP request: one the library sends to a server, e.g. a registry, through the
-// program's HttpFunction; or one a program's server received, for Node::Handle().
+// An HTTP request. The library gives one to the program's HttpFunction when it asks a
+// server, such as a registry. A program with an HTTP server of its own fills one in for
+// each request it receives, and passes it to Node::Handle().
 struct HttpRequest
 {
     std::string Method; // "GET", "POST", "PUT", "PATCH" or "DELETE"
-    // To a server: the whole URL. To Node::Handle(): the path and query only.
+    // The URL. A request to a server has the whole URL; a request to Node::Handle() has
+    // only the path and the query.
     std::string Url;
-    std::string ContentType; // Of the body; "" without one
+    std::string ContentType; // The type of the body; "" when there is no body
     std::string Body;
-    uint32_t TimeoutMs = 0; // To a server: how long the whole request may take
+    uint32_t TimeoutMs = 0; // For a request to a server: how long it may take in all
 
     friend bool operator==(const HttpRequest&, const HttpRequest&) = default;
 };
 
-// An HTTP response: its status, headers and body.
+// An HTTP response: its status, its headers and its body.
 struct HttpResponse
 {
-    int Status = 0; // e.g. 200
+    int Status = 0; // The HTTP status, e.g. 200
     std::vector<HttpHeader> Headers;
-    std::string ContentType; // Of the body; "" without one
+    std::string ContentType; // The type of the body; "" when there is no body
     std::string Body;
 
-    // Returns the value of the first header called Name, ignoring case, or nullptr when
-    // there is none.
+    // Returns the value of the first header whose name is Name, ignoring case. Returns
+    // nullptr when there is no such header.
     const std::string* FindHeader(std::string_view Name) const;
 
     friend bool operator==(const HttpResponse&, const HttpResponse&) = default;
 };
 
-// The program's function that sends Request to a server, and returns the answer,
-// whatever its status. It fails with Result::Timeout when no answer came in time, and
-// Result::Http when the server could not be reached or the exchange failed. The library
-// calls it on the thread that called the library; an exception it throws is a failure
-// with Result::Http.
+// The program's function that sends an HTTP request to a server. It returns the
+// response whenever the server answers, also with an error status. It fails with
+// Result::Timeout when no answer came in time, and with Result::Http when it could not
+// reach the server or the exchange broke off. The library calls it on the thread that
+// called the library. If it throws, the library takes that as a failure with
+// Result::Http.
 using HttpFunction = std::function<Expected<HttpResponse>(const HttpRequest& Request)>;
 
-// The HttpFunction on libcurl, for HTTP and HTTPS: CurlHttp. In a library built without
-// libcurl it fails with Result::State. A node given it calls libcurl directly.
+// The type of CurlHttp, the HttpFunction that sends requests with libcurl, over HTTP and
+// HTTPS. In a library built without libcurl, it fails with Result::State. A node or a
+// query that is given CurlHttp calls libcurl directly, without converting each request.
 struct CurlHttpFunction
 {
     Expected<HttpResponse> operator()(const HttpRequest& Request) const;
 };
 inline constexpr CurlHttpFunction CurlHttp{};
 
-// Returns whether the library was built with libcurl, so that CurlHttp works.
+// Returns true when the library was built with libcurl, so that CurlHttp works.
 bool HasCurl();
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The WebSocket of a client +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
-// A subscription to a registry (dtnmos_query.hpp) receives its changes over a WebSocket.
-// The program gives the function that opens one, a WebSocketConnect, or none for the one
-// on libcurl. The library calls it on the thread that called the library, for one
-// connection at a time.
+// A subscription to a registry (dtnmos_query.hpp) receives the changes over a WebSocket.
+// The program can give a WebSocketConnect, a function that opens the WebSocket. Without
+// one, the library uses libcurl. The library calls the function on the thread that
+// called the library, and opens one connection at a time.
 //
 
-// A WebSocket that the program's WebSocketConnect opened. The library owns it, and
-// destroying it closes it.
+// A WebSocket connection that the program's WebSocketConnect opened. The library owns
+// it, and destroying it closes the connection.
 class WebSocketConnection
 {
   public:
     virtual ~WebSocketConnection() = default;
 
     // Waits up to Timeout for a whole text message, and returns it. Fails with
-    // Result::Timeout when no whole message came, keeping a part that did for the next
-    // call, and with Result::Network when the connection closed or failed.
+    // Result::Timeout when no whole message came; a part that did come is kept for the
+    // next call. Fails with Result::Network when the connection closed or broke.
     virtual Expected<std::string> Receive(std::chrono::milliseconds Timeout) = 0;
 };
 
-// The program's function that connects to Url ("ws://" or "wss://") within Timeout, and
-// returns the connection. It fails with Result::Timeout or Result::Network.
+// The program's function that opens a WebSocket connection to Url, which starts with
+// "ws://" or "wss://". It must connect within Timeout, and returns the connection. It
+// fails with Result::Timeout or Result::Network.
 using WebSocketConnect = std::function<Expected<std::unique_ptr<WebSocketConnection>>(
     const std::string& Url, std::chrono::milliseconds Timeout)>;
 
-// Returns whether the WebSocket on libcurl works: the library was built with it, and the
-// libcurl it runs with supports WebSockets.
+// Returns true when the WebSocket on libcurl works: the library was built with it, and
+// the libcurl it runs with supports WebSockets.
 bool HasCurlWebSocket();
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
@@ -124,9 +131,10 @@ bool HasCurlWebSocket();
 namespace Detail
 {
 
-// Returns the result of a callback of the C library: DTNMOS_OK, or the code of Done's
-// Error with its message, left for the library with DtNmos_SetLastError(). An Error with
-// Result::Ok, which is no failure, fails with Fallback.
+// Turns the Status of a function of the program into the result code that a C callback
+// returns. When Done holds an Error, it sets the message with DtNmos_SetLastError(), so
+// that the C library passes it on, and returns the code. An Error whose code is
+// Result::Ok is not a failure, so Fallback is returned for it instead.
 inline DtNmosResult Fail(const Status& Done, Result Fallback)
 {
     if (Done)
@@ -137,7 +145,7 @@ inline DtNmosResult Fail(const Status& Done, Result Fallback)
     return DtNmos_SetLastError(ToNative(Code), Done.error().Message.c_str());
 }
 
-// Frees a DtNmosHttpResponse, for a std::unique_ptr.
+// Frees a DtNmosHttpResponse. A std::unique_ptr uses it as its deleter.
 struct HttpResponseFree
 {
     void operator()(DtNmosHttpResponse* Response) const
@@ -146,7 +154,7 @@ struct HttpResponseFree
     }
 };
 
-// Converts a request of the C API: a missing text is "".
+// Converts a request of the C API to an HttpRequest. A text that is NULL becomes "".
 inline HttpRequest FromNative(const DtNmosHttpRequest& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosHttpRequest, TimeoutMs);
@@ -162,7 +170,7 @@ inline HttpRequest FromNative(const DtNmosHttpRequest& Native)
     return Value;
 }
 
-// Converts a response of the C API.
+// Converts a response of the C API to an HttpResponse.
 inline HttpResponse FromNative(const DtNmosHttpResponse* Native)
 {
     HttpResponse Value;
@@ -182,8 +190,9 @@ inline HttpResponse FromNative(const DtNmosHttpResponse* Native)
     return Value;
 }
 
-// Returns a request as the C API takes it, pointing into Value, which must outlive it:
-// "" is NULL, but for the method and the URL.
+// Converts an HttpRequest to a request of the C API. The result points into the strings
+// of Value, so Value must live as long as the result is used. An empty content type and
+// an empty body become NULL.
 inline DtNmosHttpRequest ToNative(const HttpRequest& Value)
 {
     DtNmosHttpRequest Native{};
@@ -197,7 +206,8 @@ inline DtNmosHttpRequest ToNative(const HttpRequest& Value)
     return Native;
 }
 
-// Fills Native, an empty response of the C API, with Value.
+// Copies the status, headers and body of Value into Native, an empty response of the C
+// API. Fails when the C API has no memory for them.
 [[nodiscard]] inline Status ToNative(const HttpResponse& Value,
                                      DtNmosHttpResponse* Native)
 {
@@ -220,7 +230,8 @@ inline DtNmosHttpRequest ToNative(const HttpRequest& Value)
         Value.Body.data(), Value.Body.size()));
 }
 
-// The C HTTP callback of an HttpFunction, which User points to.
+// Sends a request of the C library through the program's HttpFunction, which User points
+// to, and fills Response with its answer. The C library calls it as its HTTP function.
 inline DtNmosResult HttpTrampoline(void* User, const DtNmosHttpRequest* Request,
                                    DtNmosHttpResponse* Response) noexcept
 {
@@ -239,15 +250,17 @@ inline DtNmosResult HttpTrampoline(void* User, const DtNmosHttpRequest* Request,
     return Fail(Done, Result::Http);
 }
 
-// The C HTTP function and its User for Http: libcurl's own for CurlHttp, so that a
-// request goes to it without being converted, and the trampoline for any other. A
-// missing function is NULL, which the C API refuses.
+// An HTTP function of the C API, with the User that it is called with.
 struct NativeHttp
 {
     DtNmosHttpFunc Function = nullptr;
     void* User = nullptr;
 };
 
+// Returns the HTTP function of the C API that calls Http. For CurlHttp it returns
+// libcurl's own C function, so that no request is converted. For any other function it
+// returns HttpTrampoline() with a pointer to Http, so Http must live as long as the C
+// library uses it. For an empty Http it returns NULL, which the C API refuses.
 inline NativeHttp ToNative(const HttpFunction& Http)
 {
     if (!Http)
@@ -261,31 +274,35 @@ inline NativeHttp ToNative(const HttpFunction& Http)
     return {HttpTrampoline, const_cast<HttpFunction*>(&Http)};
 }
 
-// A connection a WebSocketConnect opened, as the C library holds it: the connection, and
-// the message it received last, which the C library reads until the next Receive.
+// A WebSocket connection that the C library holds. The C library sees a pointer to it as
+// its connection handle.
 struct OpenWebSocket
 {
-    std::unique_ptr<WebSocketConnection> Connection;
+    std::unique_ptr<WebSocketConnection> Connection; // The program's connection
+    // The message that Connection received last. The C library reads it until it calls
+    // Receive again.
     std::string Message;
 };
 
-// The C transport of a WebSocketConnect, which it keeps; User of the C functions points
-// to it. It is not copied or moved, as the C library holds its address.
+// The WebSocket functions of the C API that call the program's WebSocketConnect. The C
+// library keeps the address of this struct, so the struct is not copied or moved.
 struct NativeWebSocket
 {
-    WebSocketConnect Connect;
-    DtNmosWebSocketTransport Transport{};
+    WebSocketConnect Connect;             // The program's function
+    DtNmosWebSocketTransport Transport{}; // The C functions, which Get() fills in
 
     NativeWebSocket() = default;
     NativeWebSocket(const NativeWebSocket&) = delete;
     NativeWebSocket& operator=(const NativeWebSocket&) = delete;
 
-    // Returns the C transport of Connect, or NULL for none, which is libcurl's.
+    // Returns the C functions that call Connect. Returns NULL when Connect is empty; the
+    // C library then uses libcurl.
     const DtNmosWebSocketTransport* Get();
 };
 
-// The C function that connects, through the WebSocketConnect of the NativeWebSocket that
-// User points to. The C library owns the connection it is given, until it closes it.
+// Opens a WebSocket connection with the program's WebSocketConnect, in the
+// NativeWebSocket that User points to. The C library calls it as its Connect function.
+// The C library owns the connection it gets in *Connection, until it closes it.
 inline DtNmosResult WebSocketConnectTrampoline(void* User, const char* Url,
                                                uint32_t TimeoutMs,
                                                void** Connection) noexcept
@@ -317,7 +334,8 @@ inline DtNmosResult WebSocketConnectTrampoline(void* User, const char* Url,
     return Fail(Done, Result::Network);
 }
 
-// The C function that receives a message on a connection the trampoline above made.
+// Receives a message on a connection that WebSocketConnectTrampoline() opened. The C
+// library calls it as its Receive function.
 inline DtNmosResult WebSocketReceiveTrampoline(void* User, void* Connection,
                                                uint32_t TimeoutMs, const char** Message,
                                                size_t* Length) noexcept
@@ -344,7 +362,8 @@ inline DtNmosResult WebSocketReceiveTrampoline(void* User, void* Connection,
     return Fail(Done, Result::Network);
 }
 
-// The C function that closes a connection the trampoline above made, and frees it.
+// Closes and frees a connection that WebSocketConnectTrampoline() opened. The C library
+// calls it as its Close function.
 inline void WebSocketCloseTrampoline(void* User, void* Connection) noexcept
 {
     (void)User;

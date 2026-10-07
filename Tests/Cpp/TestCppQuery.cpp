@@ -18,8 +18,9 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryFedSearch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A fed search holds the two registries it is fed, in that order and usable, and refuses
-// a service it does not look for. Moved, it keeps what it was fed, and is fed again.
+// A fed search holds the two registries it is fed, in that order, and both are usable.
+// It refuses a service it does not look for. Moved to another object, it keeps what it
+// was fed, and it can be fed again.
 //
 NMOS_TEST(CppQueryFedSearch)
 {
@@ -56,7 +57,7 @@ NMOS_TEST(CppQueryFedSearch)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryRefusesASearch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A search that looks for nothing is refused, and so is a search of the network whose
+// A search that looks for nothing is refused. So is a search of the network whose
 // interface address is no address.
 //
 NMOS_TEST(CppQueryRefusesASearch)
@@ -77,8 +78,8 @@ NMOS_TEST(CppQueryRefusesASearch)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryDiscovers -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // A search through multicast DNS alone, sent to a port on the loopback interface where
-// nobody answers, finds nothing in 100 ms, which is no failure; its log function is
-// called, if at all, during the search only.
+// nobody answers, finds nothing in 100 ms. Finding nothing is no failure. The search
+// may call its log function only while it runs.
 //
 NMOS_TEST(CppQueryDiscovers)
 {
@@ -107,7 +108,8 @@ NMOS_TEST(CppQueryDiscovers)
 #define CAMERA_SDP                                                                       \
     "v=0\r\no=- 1 1 IN IP4 10.0.0.1\r\ns=camera 1\r\nt=0 0\r\n"                          \
     "m=video 5004 RTP/AVP 96\r\nc=IN IP4 239.0.0.1/64\r\na=rtpmap:96 raw/90000\r\n"
-// A video sender with an SDP, and a video receiver on a device with a Connection API.
+// The JSON that the registry gives: a video sender with an SDP, a video receiver on a
+// device with a Connection API, and the sender's video flow.
 #define CAMERA                                                                           \
     "{\"id\": \"" CAMERA_ID "\", \"label\": \"camera 1\", \"flow_id\": \"" VIDEO_FLOW    \
     "\", \"transport\": \"urn:x-nmos:transport:rtp.mcast\", "                            \
@@ -120,14 +122,14 @@ NMOS_TEST(CppQueryDiscovers)
 #define VIDEO                                                                            \
     "{\"id\": \"" VIDEO_FLOW "\", \"format\": \"urn:x-nmos:format:video\", "             \
     "\"media_type\": \"video/raw\"}"
-// A grain of the Query API with the changes in data.
+// Makes a grain of the Query API that carries the changes in data.
 #define GRAIN(data)                                                                      \
     "{\"grain_type\": \"event\", \"source_id\": \"x\", \"flow_id\": \"y\", "             \
     "\"grain\": {\"type\": \"urn:x-nmos:format:data.event\", \"topic\": \"/senders/\", " \
     "\"data\": [" data "]}}"
 
-// A registry, and the node of the monitor, that answer what they know and record every
-// request as "<method> <URL>".
+// A registry and the node of the monitor, faked together. They answer the requests
+// they know, and record each request as "<method> <URL>".
 struct FakeNetwork
 {
     std::vector<std::string> Requests;
@@ -189,10 +191,10 @@ static DtNmos::Expected<DtNmos::Query> OpenQuery(FakeNetwork& Network)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryAsksTheRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A query lists the camera, with the media of its flow, finds it by its label, and
-// downloads and parses its SDP; it lists the monitor and finds it by its ID; a label
-// nobody has is not found. A query without an HTTP function is refused, and one that was
-// moved from fails with Result::State.
+// A query lists the camera with the media of its flow. It finds the camera by its
+// label, and downloads and parses its SDP. It lists the monitor and finds it by its ID.
+// A label that nobody has is not found. A query without an HTTP function is refused,
+// and a query that was moved from fails with Result::State.
 //
 NMOS_TEST(CppQueryAsksTheRegistry)
 {
@@ -243,9 +245,9 @@ NMOS_TEST(CppQueryAsksTheRegistry)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryConnects -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Connecting the monitor to the camera gives both and the camera's SDP, and sends the
-// node of the monitor a PATCH of its staged parameters; disconnecting it by its ID gives
-// the monitor, after another PATCH.
+// Connecting the monitor to the camera gives both, and the camera's SDP. The query sends
+// a PATCH of the staged parameters to the monitor's node. Disconnecting the monitor by
+// its ID gives the monitor, after another PATCH.
 //
 NMOS_TEST(CppQueryConnects)
 {
@@ -267,8 +269,8 @@ NMOS_TEST(CppQueryConnects)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryParsesASender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A sender read from its JSON has its ID, label and flow, and Media::Other, as its media
-// is that of its flow; text that is no JSON object is refused.
+// A sender read from its JSON has its ID, label and flow. Its media is Media::Other, as
+// the media belongs to the flow. Text that is no JSON object is refused.
 //
 NMOS_TEST(CppQueryParsesASender)
 {
@@ -283,8 +285,8 @@ NMOS_TEST(CppQueryParsesASender)
     NMOS_ASSERT(Refused.error().Code == DtNmos::Result::Parse);
 }
 
-// A WebSocket of the test, which gives its messages, an empty one as no message in time,
-// and then reports that it closed.
+// A WebSocket of the test. It gives its messages in turn; an empty one stands for no
+// message in time. After the last one, it reports that it closed.
 class FakeWebSocket : public DtNmos::WebSocketConnection
 {
   public:
@@ -317,10 +319,10 @@ class FakeWebSocket : public DtNmos::WebSocketConnection
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQuerySubscribes -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A subscription to the senders connects to the WebSocket the registry names, and
-// reports the camera as present, a poll in which nothing came as Result::Timeout, the
-// camera removed, and the WebSocket that closed as Result::Network; destroying the
-// subscription closes the WebSocket, and the query may go after it.
+// A subscription to the senders connects to the WebSocket that the registry names. Its
+// polls report the camera as present, then Result::Timeout, then the camera removed,
+// then Result::Network when the WebSocket closed. Destroying the subscription closes
+// the WebSocket, and the query may be destroyed after it.
 //
 NMOS_TEST(CppQuerySubscribes)
 {

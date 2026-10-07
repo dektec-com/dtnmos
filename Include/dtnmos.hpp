@@ -4,16 +4,17 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The C++ API of dtnmos is a wrapper over its C API that is compiled into the program,
-// header only, with the program's compiler; the C library stays the one implementation.
-// A program sees C++ types only: every struct of the C API has a value type that owns
-// what it holds, and every enum an enum class with the same values. A call that can fail
-// returns an Expected, which holds its value or the Error of the call, and the compiler
-// warns when a program ignores one. The names are those of the C API, with its prefix as
-// the namespace: DtNmos::Node::AddSender() for DtNmosNode_AddSender().
+// The C++ API wraps the C API. It consists of headers only, and the program compiles
+// them with its own compiler; all the work is done by the C library.
 //
-// It needs C++23, for std::expected: GCC 12, Clang 16 or Visual Studio 2022 17.3 or
-// newer. Link the CMake target dtnmos::cpp, which asks for it.
+// A program sees only C++ types. Each struct of the C API has a C++ struct that owns
+// its strings and lists, and each enum has an enum class with the same values. A call
+// that can fail returns an Expected, which holds either the value or an Error, and the
+// compiler warns when a program ignores it. The names are those of the C API, with the
+// prefix as the namespace: DtNmos::Node::AddSender() is DtNmosNode_AddSender().
+//
+// The headers need C++23, for std::expected: GCC 12, Clang 16, Visual Studio 2022 17.3
+// or newer. Link the CMake target dtnmos::cpp, which asks for C++23.
 
 #pragma once
 
@@ -50,14 +51,17 @@ struct Access;
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Results +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
-// A call that can fail returns an Expected<T>: its value, or the Error that says what
-// failed. A call without a value returns a Status, an Expected<void>. A program checks
-// one with if (!Result) and reads Result.error().Message; one that wants an exception
-// calls Result.value(), which throws std::bad_expected_access<Error> on a failure.
+// A call that can fail returns an Expected<T>. It holds the value when the call
+// succeeds, and an Error that says what went wrong when it fails. A call that gives no
+// value returns a Status, which is an Expected<void>.
+//
+// A program checks a result with if (!Result), and then reads Result.error().Message.
+// A program that prefers exceptions calls Result.value() instead. That throws
+// std::bad_expected_access<Error> when the call failed.
 //
 
-// What a call of the C API returned: the values of DtNmosResult, with the same numbers.
-// Failure and the values after it are failures.
+// The result codes of the C API, with the same numbers as DtNmosResult. Ok is success;
+// Failure and every code after it are failures.
 enum class Result : int
 {
     Ok = DTNMOS_OK,
@@ -75,48 +79,49 @@ enum class Result : int
     BufferTooSmall = DTNMOS_E_BUFFER_TOO_SMALL // A text does not fit the C API's buffer
 };
 
-// What failed, and why.
+// A failure of a call: what went wrong, and why.
 struct Error
 {
-    Result Code = Result::Internal; // The result of the call that failed
-    std::string Message;            // What failed and why, in English
+    Result Code = Result::Internal; // The code the call failed with
+    std::string Message;            // What went wrong and why, in English
 };
 
-// The value of a call, or the Error of the call that did not give it.
+// The result of a call that gives a value: the value, or an Error.
 template <typename T> using Expected = std::expected<T, Error>;
 
-// The outcome of a call that gives no value.
+// The result of a call that gives no value: nothing, or an Error.
 using Status = Expected<void>;
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= IDs +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-// The ID of an NMOS resource (a node, device, sender, receiver, flow or source): a UUID
-// in text form, lower case, e.g. "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01". An Id made
-// without one is empty, which is no ID. Ids compare as their texts do, and are keys of a
-// std::map or a std::unordered_map.
+// The ID of an NMOS resource, such as a node, device, sender, receiver, flow or source.
+// It is a UUID in text, in lower case, e.g. "5f38f7a2-1d91-5e0c-8a2b-6e1c2f7d9a01". An
+// Id that is made without a UUID is empty, and means "no ID". Ids compare as their texts
+// do, so they can be keys of a std::map or a std::unordered_map.
 class Id
 {
   public:
-    // Makes an ID from a name, so that a resource gets the same ID every time the program
-    // runs: the same Namespace and Name always give the same ID (a version 5 UUID, RFC
-    // 9562), e.g. from a node's ID and "device/<serial>:<port>". Fails with
-    // Result::InvalidArgument when Namespace is empty.
+    // Makes an ID from a name, so that a resource gets the same ID each time the program
+    // runs. The same Namespace and Name always give the same ID, a version 5 UUID (RFC
+    // 9562). A program makes e.g. a device's ID from the node's ID and the name
+    // "device/<serial>:<port>". Fails with Result::InvalidArgument when Namespace is
+    // empty.
     [[nodiscard]] static Expected<Id> FromName(const Id& Namespace,
                                                std::string_view Name);
 
-    // Reads an ID from its text, a UUID of 36 characters; hex digits in upper case are
-    // taken, and written in lower case. Fails with Result::InvalidArgument for any other
-    // text, "" included.
+    // Reads an ID from Text, which must be a UUID of 36 characters. Hex digits in upper
+    // case are accepted, and the ID holds them in lower case. Fails with
+    // Result::InvalidArgument for any other text, also for "".
     [[nodiscard]] static Expected<Id> FromText(std::string_view Text);
 
-    // Makes an empty ID.
+    // Makes an empty ID, which means "no ID".
     Id() = default;
 
-    // Returns whether this is no ID.
+    // Returns true when the ID is empty.
     bool IsEmpty() const;
 
-    // Returns the ID's text, "" for no ID.
+    // Returns the ID as text, or "" when it is empty.
     std::string ToString() const;
 
     friend auto operator<=>(const Id&, const Id&) = default;
@@ -124,13 +129,13 @@ class Id
 
   private:
     friend struct Detail::Access;
-    std::array<char, sizeof(DtNmosId::Text)> Uuid{}; // The text and its null, zero after
+    std::array<char, sizeof(DtNmosId::Text)> Uuid{}; // The text; zeros after it
 };
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Logging +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-// How important a log message is: the values of DtNmosLogLevel.
+// How important a log message is. The values are those of DtNmosLogLevel.
 enum class LogLevel : int
 {
     Debug = DTNMOS_LOG_DEBUG,
@@ -139,15 +144,15 @@ enum class LogLevel : int
     Error = DTNMOS_LOG_ERROR
 };
 
-// A program's function that receives the library's log messages. Message is valid only
-// during the call. It is called on the library's threads; an exception it throws is
-// dropped.
+// The program's function that receives the log messages of the library. Message is
+// valid only during the call. The library calls the function on its own threads. If the
+// function throws an exception, the library ignores it.
 using LogFunction = std::function<void(LogLevel Level, std::string_view Message)>;
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The library +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-// A version of the library.
+// A version number of the library, as major, minor and patch.
 struct Version
 {
     int Major = 0;
@@ -155,31 +160,34 @@ struct Version
     int Patch = 0;
 };
 
-// Returns the version of the library the program runs with, which may differ from the
-// version it was built against (DTNMOS_VERSION in dtnmos_version.h).
+// Returns the version of the library that the program runs with. It may differ from the
+// version that the program was built against, which is DTNMOS_VERSION in
+// dtnmos_version.h.
 Version GetVersion();
 
-// Returns the name of a result, e.g. "DTNMOS_E_NOT_FOUND", for messages.
+// Returns the name of a result code, e.g. "DTNMOS_E_NOT_FOUND", for messages.
 std::string_view Name(Result Code);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
-// Not for programs: what the C++ headers of dtnmos use to convert between their types and
-// those of the C API, and to call the C API.
+// This part is not for programs. The C++ headers use it to convert their types to and
+// from the types of the C API, and to call the C API.
 //
 
 namespace Detail
 {
 
-// Asserts that Field is the last field of the C struct Type, as the conversion of Type
-// knows it: fewer than alignof(Type) bytes follow it. A field added at the end of the
-// struct, as the C API adds them, fails the build until the conversion has it.
+// Checks at compile time that Field is the last field of the C struct Type, that is, that
+// fewer than alignof(Type) bytes follow it. A conversion of Type puts this check next to
+// the last field it converts. The C API adds new fields at the end of a struct, so a new
+// field makes the build fail until the conversion converts it too.
 #define DTNMOS_DETAIL_LAST_FIELD(Type, Field)                                            \
     static_assert(                                                                       \
         sizeof(Type) - offsetof(Type, Field) - sizeof(Type::Field) < alignof(Type),      \
         #Type " has a field after " #Field ", which the C++ API does not have")
 
-// Converts the C struct inside a type of the wrapper to and from that type.
+// Converts an Id to and from the DtNmosId of the C API. It reaches the private text of
+// the Id.
 struct Access
 {
     static Id FromNative(const DtNmosId& Native);
@@ -187,8 +195,9 @@ struct Access
     static std::string_view View(const Id& Value);
 };
 
-// Converts a result of the C API. Each value of DtNmosResult has a case, so that the
-// compiler warns of one it does not have; a value of a newer library is passed on.
+// Converts a result code of the C API to a Result. The switch has a case for each value
+// of DtNmosResult, so the compiler warns when the C API adds a value. A value that a
+// newer library returns, and that this header does not know, is kept as it is.
 inline Result FromNative(DtNmosResult Native)
 {
     switch (Native)
@@ -223,7 +232,8 @@ inline Result FromNative(DtNmosResult Native)
     return static_cast<Result>(Native);
 }
 
-// Converts a log level of the C API, as FromNative(DtNmosResult) does.
+// Converts a log level of the C API to a LogLevel, in the way FromNative(DtNmosResult)
+// converts a result code.
 inline LogLevel FromNative(DtNmosLogLevel Native)
 {
     switch (Native)
@@ -240,7 +250,8 @@ inline LogLevel FromNative(DtNmosLogLevel Native)
     return static_cast<LogLevel>(Native);
 }
 
-// Returns the text of a char array of a C struct, up to its null or its end.
+// Returns the text in a char array, Field, as a std::string. The text ends at the first
+// null, or at the end of the array when it has none.
 template <std::size_t N> std::string FromArray(const char (&Field)[N])
 {
     std::size_t Length = 0;
@@ -251,38 +262,40 @@ template <std::size_t N> std::string FromArray(const char (&Field)[N])
     return std::string(Field, Length);
 }
 
-// Returns a text for the C API: NULL for "", where NULL means none or the default.
+// Returns Text for a C function, or NULL when Text is empty. Use it for a field where the
+// C API reads NULL as "none" or "the default".
 inline const char* NullIfEmpty(const std::string& Text)
 {
     return Text.empty() ? nullptr : Text.c_str();
 }
 
-// Returns a text of the C API as a std::string, "" for NULL.
+// Returns a C string as a std::string, or "" when Native is NULL.
 inline std::string FromNative(const char* Native)
 {
     return Native != nullptr ? std::string(Native) : std::string();
 }
 
-// Converts a result to the C API.
+// Converts a Result to the result code of the C API.
 inline DtNmosResult ToNative(Result Code)
 {
     return static_cast<DtNmosResult>(Code);
 }
 
-// Converts a log level to the C API.
+// Converts a LogLevel to the log level of the C API.
 inline DtNmosLogLevel ToNative(LogLevel Level)
 {
     return static_cast<DtNmosLogLevel>(Level);
 }
 
-// Returns the Error of the C call that just failed with Native: its result, and the
-// message it left on this thread.
+// Returns the Error of a C call that has just failed with the code Native. The Error
+// holds the code and the message that the C call left on this thread.
 inline Error LastError(DtNmosResult Native)
 {
     return Error{FromNative(Native), FromNative(DtNmos_GetLastError())};
 }
 
-// Returns the Status of a C call's result, with the message of a failure.
+// Turns the result code of a C call into a Status. When the call failed, the Status holds
+// the Error, with the message the call left.
 [[nodiscard]] inline Status Check(DtNmosResult Native)
 {
     if (Native == DTNMOS_OK)
@@ -292,9 +305,9 @@ inline Error LastError(DtNmosResult Native)
     return std::unexpected(LastError(Native));
 }
 
-// Copies Text, with its null, into the char array Field of a C struct. Fails with
-// Result::InvalidArgument, and leaves Field as it was, when Text does not fit, rather
-// than cutting it; What names the field in the message.
+// Copies Text into a char array of a C struct, Field, and ends it with a null. When Text
+// does not fit, it fails with Result::InvalidArgument and leaves Field unchanged; it does
+// not shorten the text. What is the name of the field, for the message.
 template <std::size_t N>
 [[nodiscard]] Status CopyText(char (&Field)[N], std::string_view Text,
                               std::string_view What)
@@ -311,14 +324,14 @@ template <std::size_t N>
     return {};
 }
 
-// The message of an exception that is no std::exception.
+// The message that Guard() gives for an exception that is not a std::exception.
 inline constexpr const char* UnknownException =
     "The program's callback threw an exception.";
 
-// Calls Function, the program's, from a callback of the C library, which no exception
-// may leave. Function returns a Status or nothing. An exception it throws becomes an
-// Error with Code and the exception's what(). Built without exceptions, it calls
-// Function alone.
+// Calls a function of the program from a callback of the C library, and catches every
+// exception, as no exception may pass through C code. Function returns a Status or
+// nothing. When it throws, Guard() returns an Error with Code and the message of the
+// exception. In a program built without exceptions, Guard() only calls Function.
 template <typename F> [[nodiscard]] Status Guard(Result Code, F&& Function) noexcept
 {
 #if defined(__cpp_exceptions)
@@ -356,8 +369,9 @@ template <typename F> [[nodiscard]] Status Guard(Result Code, F&& Function) noex
 #endif
 }
 
-// The C log callback of a LogFunction, which User points to. An exception the function
-// throws is dropped, as the C callback returns nothing.
+// Passes a log message of the C library to the program's LogFunction, which User points
+// to. The C library calls it as its log callback. If the LogFunction throws, the
+// exception is ignored, as the C callback cannot report it.
 inline void LogTrampoline(void* User, DtNmosLogLevel Level, const char* Message) noexcept
 {
     const LogFunction& Log = *static_cast<const LogFunction*>(User);
@@ -367,7 +381,8 @@ inline void LogTrampoline(void* User, DtNmosLogLevel Level, const char* Message)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Access::FromNative -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// An ID the library gives has its null; one without is read up to its last character.
+// The library ends an ID with a null. A DtNmosId without one is read up to its last
+// character.
 //
 inline Id Access::FromNative(const DtNmosId& Native)
 {
@@ -422,7 +437,7 @@ inline Expected<Id> Id::FromName(const Id& Namespace, std::string_view Name)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Id::FromText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A UUID is 8, 4, 4, 4 and 12 hex digits, with a hyphen between each group.
+// A UUID has groups of 8, 4, 4, 4 and 12 hex digits, with a hyphen between two groups.
 //
 inline Expected<Id> Id::FromText(std::string_view Text)
 {
@@ -479,7 +494,7 @@ inline std::string_view Name(Result Code)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- std::hash<DtNmos::Id> -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Hashes an ID as its text, so that it is a key of a std::unordered_map.
+// Hashes an ID by its text, so that an Id can be a key of a std::unordered_map.
 //
 template <> struct std::hash<DtNmos::Id>
 {

@@ -1,14 +1,15 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*#* Borrowed.cpp *#*#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - Destroys an object while another borrows it, which must end the program
+// dtnmos - Destroys a borrowed search or query, which must end the program
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The tests dtnmos.CppBorrowedSearch and dtnmos.CppBorrowedQuery: a RegistrySearch
-// destroyed while a node borrows it, given "search", or a Query destroyed while a
-// subscription borrows it, given "query", calls std::terminate(). The program's terminate
-// handler ends it with 0; it returns 1 when the object was destroyed without that, or
-// when it could not set up the borrower.
+// The program behind the tests dtnmos.CppBorrowedSearch and dtnmos.CppBorrowedQuery.
+// Given "search", it destroys a RegistrySearch while a node borrows it. Given "query", it
+// destroys a Query while a subscription borrows it. Either must call std::terminate().
+// The program's own terminate handler then ends it with 0, which the test expects. The
+// program returns 1 when the object was destroyed without std::terminate(), or when it
+// could not set up the borrower.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
@@ -26,8 +27,8 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Terminated -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The terminate handler: what the test expects, so the program ends with 0, without the
-// abort() of the default handler, which CTest would count as a failure.
+// Ends the program with 0 when std::terminate() is called, as the test expects. The
+// default handler calls abort(), which CTest counts as a failure.
 //
 [[noreturn]] static void Terminated()
 {
@@ -48,7 +49,7 @@ static int NotSetUp(const char* What, const DtNmos::Error& Failure)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Destroyed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Destroys Borrowed, which must not return; returns 1 when it does.
+// Destroys Borrowed, which must call std::terminate(). Returns 1 when it does not.
 //
 template <typename T> static int Destroyed(std::unique_ptr<T>& Borrowed, const char* What)
 {
@@ -61,7 +62,7 @@ template <typename T> static int Destroyed(std::unique_ptr<T>& Borrowed, const c
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BorrowSearch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A node borrows a fed search, which is then destroyed.
+// Lets a node borrow a fed search, and then destroys the search.
 //
 static int BorrowSearch()
 {
@@ -86,7 +87,7 @@ static int BorrowSearch()
     return Destroyed(Search, "search");
 }
 
-// A WebSocket that never gives a message.
+// A WebSocket that never receives a message.
 class SilentWebSocket : public DtNmos::WebSocketConnection
 {
   public:
@@ -98,8 +99,8 @@ class SilentWebSocket : public DtNmos::WebSocketConnection
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- BorrowQuery -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A subscription borrows a query of a registry that answers its POST, which is then
-// destroyed.
+// Lets a subscription borrow a query, and then destroys the query. The registry of the
+// query answers every request with a subscription.
 //
 static int BorrowQuery()
 {

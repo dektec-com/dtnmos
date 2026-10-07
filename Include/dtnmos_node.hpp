@@ -7,17 +7,17 @@
 //
 // The C++ API of dtnmos_node.h. A node is the program as NMOS sees it. It holds devices,
 // and each device holds senders and receivers. The node registers them with an NMOS
-// registry, where controllers find them, and serves the Node API and the Connection API,
-// through which a controller connects a sender to a receiver. A program uses a node in
-// these steps:
+// registry, where controllers find them. It also serves the Node API and the Connection
+// API, through which a controller connects a sender to a receiver. A program uses a node
+// in these steps:
 //
-// 1. Node::Open() with the registry, or a RegistrySearch, and the node's ID.
-// 2. AddDevice(), then AddSender() and AddReceiver(), each with a function that is called
-//    when a controller activates it.
-// 3. Serve(), which serves the APIs and keeps the registration up to date on a thread of
-//    its own. A program with an HTTP server of its own calls Handle() for each request
-//    and Poll() regularly instead.
-// 4. Destroying the node closes it, which also unregisters everything.
+// 1. Node::Open() opens it, with the registry or a RegistrySearch, and the node's ID.
+// 2. AddDevice() adds a device. AddSender() and AddReceiver() add senders and receivers
+//    to it, each with a function that the node calls when a controller activates it.
+// 3. Serve() serves the APIs and keeps the registration up to date, on a thread of its
+//    own. A program with an HTTP server of its own calls Handle() for each request, and
+//    Poll() regularly, instead.
+// 4. Destroying the node closes it, and that unregisters everything.
 
 #pragma once
 
@@ -42,7 +42,7 @@ namespace DtNmos
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= The node +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
 
-// The kinds of a node's clock: the values of DtNmosClockKind.
+// The kind of clock a node has. The values are those of DtNmosClockKind.
 enum class ClockKind : int
 {
     None = DTNMOS_CLOCK_NONE,         // Refused
@@ -50,38 +50,42 @@ enum class ClockKind : int
     Ptp = DTNMOS_CLOCK_PTP            // A PTP grandmaster
 };
 
-// The node's clock, clk0, which every source names (IS-04's clocks).
+// The clock of a node. IS-04 calls it clk0, and every source of the node names it.
 struct Clock
 {
     ClockKind Kind = ClockKind::None;
-    // Ptp: the grandmaster's EUI-64, eight pairs of hexadecimal digits joined by '-', in
-    // either case, e.g. "00-1B-19-FF-FE-00-00-01". The node writes it in lower case, as
-    // IS-04 asks.
+    // For Ptp: the grandmaster's EUI-64. It is eight pairs of hexadecimal digits joined
+    // by '-', in upper or lower case, e.g. "00-1B-19-FF-FE-00-00-01". The node writes it
+    // in lower case, as IS-04 asks.
     std::string Grandmaster;
-    bool Traceable = false; // Ptp: the grandmaster is traceable to TAI
-    bool Locked = false;    // Ptp: the node follows the grandmaster; false: not yet
+    bool Traceable = false; // For Ptp: true when the grandmaster is traceable to TAI
+    bool Locked = false;    // For Ptp: true when the node follows the grandmaster
 
     friend bool operator==(const Clock&, const Clock&) = default;
 };
 
 // The program's function that chooses another registry when the node's registry keeps
-// failing: Failures polls in a row got no answer, or an error. It returns the base URL of
-// another registry, with which the node then registers from scratch, or nothing to stay
-// with the current one. The node calls it from Poll(), on that thread; one that throws,
-// or returns a URL longer than the C API takes, keeps the node where it is.
+// failing.
+//
+// The node calls it from Poll(), on the thread of Poll(), when Failures polls in a row
+// got no answer or an error. The function returns the base URL of another registry, and
+// the node then registers with that registry from the start. To keep the current
+// registry, the function returns nothing. The node also keeps it when the function
+// throws, or returns a URL that is longer than the C API takes.
 using RegistryFailedFunction =
     std::function<std::optional<std::string>(uint32_t Failures)>;
 
 // How a node is opened.
 struct NodeConfig
 {
-    DtNmos::Id
-        Id; // The node's ID; keep it the same across runs, e.g. with Id::FromName()
+    // The node's ID. Keep it the same across runs, e.g. by making it with Id::FromName().
+    DtNmos::Id Id;
     std::string Label;
     std::string Description;
     std::string Hostname;
-    // The address at which controllers reach the node's APIs. "": the address of this
-    // host on the route to the registry, or, with Search, on the default route.
+    // The address at which controllers reach the node's APIs. With "", the node takes
+    // the address of this host on the route to the registry, or, with Search, on the
+    // default route.
     std::string ApiHost;
     uint16_t ApiPort = 0; // The port of the APIs; 0 lets Serve() pick a free one
     // The base URL of the registry, e.g. "http://registry.local". "": use Search.
@@ -95,14 +99,15 @@ struct NodeConfig
     // How many polls in a row must fail before the node moves on. 0: 3, or 1 for a node
     // that uses Search, as IS-04 asks.
     uint32_t FailuresBeforeSwitch = 0;
-    // The search for registries the node uses when it has no RegistrationUrl; none
-    // without one. The node borrows it until it is closed or destroyed, and the program
-    // keeps it until then. The node uses the most preferred registry found. When that one
-    // fails, the node asks RegistryFailed if set, and otherwise moves to the next
-    // registry that has not failed yet; after all have failed, it starts again from the
-    // first.
+    // The search for registries that the node uses when it has no RegistrationUrl, or
+    // nullptr. The node borrows the search until the node is closed or destroyed, so the
+    // program must keep the search until then. The node registers with the most
+    // preferred registry that the search found. When that registry fails, the node asks
+    // RegistryFailed, if it is set. Otherwise the node moves to the next registry that
+    // has not failed yet. After all of them have failed, it starts again with the first.
     const RegistrySearch* Search = nullptr;
-    std::optional<DtNmos::Clock> Clock; // The node's clock from the start; none: internal
+    // The clock the node starts with. Without one, the node's clock is internal.
+    std::optional<DtNmos::Clock> Clock;
 };
 
 // How a device is added.
@@ -120,14 +125,16 @@ struct SenderConfig
     DtNmos::Id DeviceId; // The device it belongs to
     std::string Label;
     std::string Description;
-    // What it sends, video or audio. The node serves it as the sender's SDP. A reference
-    // clock of RefClockKind::LocalMac gets the MAC address of SourceIp's interface.
+    // The stream it sends, video or audio. The node serves it as the sender's SDP. When
+    // its reference clock is RefClockKind::LocalMac, the node fills in the MAC address of
+    // the interface that has SourceIp.
     DtNmos::Flow Flow;
     // The address it sends from, e.g. that of a card's network port. Required. The SDP
     // gives it as the origin and the source filter.
     std::string SourceIp;
-    // How long the program needs to apply an activation, in milliseconds. The function
-    // of a scheduled activation is called this much early. 0: at the time itself.
+    // How long the program needs to apply an activation, in milliseconds. The node calls
+    // the function of a scheduled activation this much early. With 0, it calls it at the
+    // time of the activation.
     uint32_t ActivationLeadMs = 0;
 };
 
@@ -142,9 +149,9 @@ struct ReceiverConfig
     // The address it receives on, e.g. that of a card's network port. Required.
     std::string InterfaceIp;
     uint32_t ActivationLeadMs = 0; // As in SenderConfig
-    // The stream the receiver receives from the start, until a controller connects it,
-    // which the node gives as its active transport parameters. "": any source, or no
-    // group, which is unicast to InterfaceIp.
+    // The stream the receiver receives until a controller connects it. The node gives
+    // this stream as the receiver's active transport parameters. A SourceIp of "" means
+    // any source, and a MulticastIp of "" means unicast to InterfaceIp.
     std::string SourceIp;         // The one source it takes
     std::string MulticastIp;      // The group it has joined
     uint16_t DestinationPort = 0; // The UDP port it receives on; 0 for 5004
@@ -152,29 +159,30 @@ struct ReceiverConfig
 
 // What a controller asks of a receiver: whether to receive, and which stream.
 //
-// With a transport file (an SDP), Flow is the flow in it of the receiver's media, with
-// the address, source and port the controller set. Without one, HasFlow is false and
-// Flow gives only the transport: its format is an empty one of the receiver's media, and
-// the destination, source and port are those the controller set, so that the receiver
-// keeps its format and only moves to the new stream.
+// When the controller gives a transport file (an SDP), Flow is the flow from that file
+// that has the receiver's media. Its address, source and port are those the controller
+// set. Without a transport file, HasFlow is false, and Flow holds only the destination,
+// source and port that the controller set. Its format is then empty, so that the
+// receiver keeps its format and only moves to the new stream.
 struct ReceiverActivation
 {
     bool MasterEnable = false; // False: stop receiving
     bool HasFlow = false;      // True: Flow comes from a transport file and has a format
     DtNmos::Flow Flow;         // The stream to receive
     DtNmos::Id SenderId;       // The sender the controller connects, or empty
-    // When the change takes effect, in nanoseconds of TAI since the PTP epoch: the time a
-    // scheduled activation asks for, or now for an immediate one. A function called
-    // ActivationLeadMs early may wait until then.
+    // When the change takes effect, in nanoseconds of TAI since the PTP epoch. For a
+    // scheduled activation it is the time the controller asked for; for an immediate one
+    // it is now. A function that the node calls ActivationLeadMs early may wait until
+    // then.
     uint64_t AtNs = 0;
 
     friend bool operator==(const ReceiverActivation&,
                            const ReceiverActivation&) = default;
 };
 
-// What a controller asks of a sender: whether to send, and where to. "auto" in the
-// controller's request is already replaced by the current destination and the SourceIp
-// of the sender's config.
+// What a controller asks of a sender: whether to send, and where to. Where the
+// controller's request says "auto", the node has already filled in the sender's current
+// destination and the SourceIp of its config.
 struct SenderActivation
 {
     bool MasterEnable = false;    // False: stop sending
@@ -187,18 +195,22 @@ struct SenderActivation
 };
 
 // The program's function that applies a controller's activation of a receiver or sender.
-// It returns a Status: the node passes the message of an Error to the controller, which
-// gets 500. One that throws fails with the exception's message.
 //
-// The node calls it for an immediate activation on the thread that handles the request,
-// and for a scheduled one in Poll(), ActivationLeadMs before it is due. It may block for
-// as long as applying takes; the node's lock is not held. Meanwhile, another request for
-// the same sender or receiver is answered with 423 (locked), and the function is never
-// called twice at once for one sender or receiver. The new parameters become active at
-// AtNs, or when the function returns if that is later. A failed scheduled activation is
-// logged. The node frees the function, and what it captured, once the sender or receiver
-// is removed or the node closes and no call of it runs: when Remove() or Close() returns
-// if none runs, and when the call that runs returns otherwise.
+// The function returns a Status. When it returns an Error, or throws, the controller
+// gets 500 with the error's or the exception's message.
+//
+// For an immediate activation, the node calls the function on the thread that handles
+// the request. For a scheduled one, it calls the function in Poll(), ActivationLeadMs
+// before the activation is due. The function may block for as long as applying takes,
+// as the node does not hold its lock. Meanwhile, the node answers another request for
+// the same sender or receiver with 423 (locked), and it never calls the function twice
+// at once for one sender or receiver. The new parameters become active at AtNs, or when
+// the function returns, whichever is later. The node logs a scheduled activation that
+// fails.
+//
+// The node frees the function, with what it captured, when it will not call it again.
+// That is after the sender or receiver is removed, or the node is closed, and after the
+// last call of the function that was running has returned.
 using ReceiverActivate =
     std::function<Status(const Id& Receiver, const ReceiverActivation& Activation)>;
 
@@ -212,23 +224,25 @@ bool HasServer();
 namespace Detail
 {
 
-// The function of a sender or receiver, as the C node holds it: its User, which the C
-// node owns from the moment it has the sender or receiver, and frees through
-// ReleaseEntry() when no call of it runs.
+// The function of a sender or receiver, which the C node gets as User. The C node owns
+// the entry once it has added the sender or receiver. It frees the entry through
+// ReleaseEntry() when it will not call the function again.
 struct ActivateEntry
 {
     SenderActivate Sender;
     ReceiverActivate Receiver;
 };
 
-// The release of an ActivateEntry, which User points to.
+// Frees the ActivateEntry that User points to. The C node calls it as the ReleaseUser of
+// the sender or receiver.
 inline void ReleaseEntry(void* User) noexcept
 {
     const std::unique_ptr<ActivateEntry> Released(static_cast<ActivateEntry*>(User));
 }
 
-// What a Node keeps beside the C node: the functions the C node calls, and the search
-// it borrows, which it returns when it is freed, after the C node.
+// What a Node keeps beside the C node: the functions that the C node calls, and the
+// search that the node borrows. Destroying the state gives the search back. The Node
+// destroys it after the C node.
 struct NodeState
 {
     HttpFunction Http;
@@ -241,7 +255,7 @@ struct NodeState
     NodeState& operator=(const NodeState&) = delete;
     ~NodeState() { ReturnSearch(); }
 
-    // Ends the borrowing of the search, once the C node is closed.
+    // Gives the borrowed search back. The Node calls it once the C node is closed.
     void ReturnSearch()
     {
         if (Search != nullptr)
@@ -252,7 +266,7 @@ struct NodeState
     }
 };
 
-// Frees a DtNmosNode, which closes it, for a std::unique_ptr.
+// Frees a DtNmosNode, which closes it. It is the deleter of a std::unique_ptr.
 struct NodeFree
 {
     void operator()(DtNmosNode* Node) const { DtNmosNode_Free(Node); }
@@ -260,98 +274,104 @@ struct NodeFree
 
 } // namespace Detail
 
-// A node, open from Open() until it is destroyed, or moved from. It is moved, not copied.
+// A node. Open() opens it, and destroying it closes it. A node is moved, not copied.
 //
-// Every function fails with Result::State, or returns 0, false or an empty value, for a
-// node that is closed or moved from.
+// Every function fails with Result::State, or returns 0, false or an empty value, when
+// the node is closed or was moved from.
 class Node
 {
   public:
-    // Opens a node with Config. Nothing is registered until the node is polled. Fails
-    // with Result::InvalidArgument when Config has no Id or no Http, neither a
-    // RegistrationUrl nor a Search, or a clock that the C API refuses.
+    // Opens a node with Config. The node registers nothing until it is polled. Fails with
+    // Result::InvalidArgument when Config has no Id or no Http, has neither a
+    // RegistrationUrl nor a Search, or has a clock that the C API refuses.
     [[nodiscard]] static Expected<Node> Open(const NodeConfig& Config);
 
     Node(Node&&) noexcept = default;
-    // Closes and frees this node before it takes Other's.
+    // Closes and frees this node, and then takes the node of Other.
     Node& operator=(Node&& Other) noexcept;
-    // Closes and frees the C node before the functions it calls: State is declared
-    // first, so that it is freed last.
+    // Closes and frees the C node, and then the functions that the C node calls. State is
+    // declared first, so that it is freed last.
     ~Node() = default;
 
     // Adds a device. The next poll registers it. Fails with Result::InvalidArgument when
-    // the node already has the ID.
+    // the node already has a device, sender or receiver with the ID.
     [[nodiscard]] Status AddDevice(const DeviceConfig& Device);
 
-    // Adds a receiver to a device; the node calls Activate when a controller activates
-    // it. The next poll registers it. Fails with Result::InvalidArgument when the node
-    // already has the ID, does not have the device, or the config has no InterfaceIp.
+    // Adds a receiver to a device. The node calls Activate when a controller activates
+    // the receiver, and the next poll registers it. Fails with Result::InvalidArgument
+    // when the node already has the ID, does not have the device, or the config has no
+    // InterfaceIp.
     [[nodiscard]] Status AddReceiver(const ReceiverConfig& Receiver,
                                      ReceiverActivate Activate);
 
-    // Adds a sender to a device; the node calls Activate when a controller activates it.
-    // The next poll registers it. Fails with Result::InvalidArgument when the node
-    // already has the ID, does not have the device, the flow is neither video nor audio,
-    // the config has no SourceIp, or a text of the flow is too long for the C API.
+    // Adds a sender to a device. The node calls Activate when a controller activates the
+    // sender, and the next poll registers it. Fails with Result::InvalidArgument when the
+    // node already has the ID, does not have the device, the flow is neither video nor
+    // audio, the config has no SourceIp, or a text in the flow is too long for the C API.
     [[nodiscard]] Status AddSender(const SenderConfig& Sender, SenderActivate Activate);
 
-    // Returns the port at which the node's APIs are reached: ApiPort, or the port Serve()
-    // picked.
+    // Returns the port at which controllers reach the node's APIs. It is ApiPort, or the
+    // port that Serve() picked.
     uint16_t ApiPort() const;
 
     // Returns the base URL of the node's APIs, e.g. "http://192.168.1.5:8080".
     [[nodiscard]] Expected<std::string> ApiUrl() const;
 
-    // Closes the node: stops serving, unregisters everything from the registry, and
-    // forgets all devices, senders and receivers, and their functions. The node is not
-    // opened again; open a new one.
+    // Closes the node. It stops serving, unregisters everything from the registry, and
+    // forgets all devices, senders and receivers. The node frees their functions. A
+    // closed node cannot be opened again; open a new one.
     [[nodiscard]] Status Close();
 
     // Returns the node's ID, from its config.
     Id GetId() const;
 
-    // Answers a request to the Node API or the Connection API, for a program that runs an
-    // HTTP server of its own instead of Serve(). Request.Url is the path and query. The
-    // answer is also one with an error status. Stop that server before the node is
-    // destroyed.
+    // Answers a request to the Node API or the Connection API. A program uses it when it
+    // runs an HTTP server of its own instead of Serve(). Request.Url holds the path and
+    // the query. An answer with an error status is an answer too, not a failure. Stop
+    // that server before the node is destroyed.
     [[nodiscard]] Expected<HttpResponse> Handle(const HttpRequest& Request);
 
     // Returns whether the registry has the node and all its devices, senders and
     // receivers.
     bool IsRegistered() const;
 
-    // Does the node's periodic work: applies scheduled activations that are due,
+    // Does the node's periodic work. It applies the scheduled activations that are due,
     // registers what is not registered yet, unregisters what was removed, and sends a
-    // heartbeat when one is due. Serve() calls it on its own thread; a program without it
-    // calls it itself. Returns how long until the node wants to be polled again. Having
-    // no registry is not a failure; a request that failed is, and the next poll tries
-    // again.
+    // heartbeat when one is due. Serve() calls it on a thread of its own; a program that
+    // does not use Serve() calls it itself. Returns how long the node can wait for the
+    // next poll. Having no registry is not a failure. A request that failed is a failure,
+    // and the next poll tries again.
     [[nodiscard]] Expected<std::chrono::milliseconds> Poll();
 
-    // Removes a device, sender or receiver; removing a device also removes its senders
-    // and receivers. The next poll unregisters them. It returns at once: an activation
-    // being applied meanwhile may still end after it, and none starts after it. The
-    // functions of what it removes are freed when no call of them runs, which is inside
-    // this call when none does; it may also be called from such a function. Fails with
-    // Result::NotFound when the node has no such ID.
+    // Removes a device, sender or receiver. Removing a device also removes its senders
+    // and receivers. The next poll unregisters them.
+    //
+    // Remove() returns at once. An activation that is running may still end after
+    // Remove() returns, but no new activation starts. The node frees the function of a
+    // removed sender or receiver when no call of it runs. When no call runs, that happens
+    // inside Remove(). A function may remove its own sender or receiver.
+    //
+    // Fails with Result::NotFound when the node has no such ID.
     [[nodiscard]] Status Remove(const Id& Resource);
 
     // Serves the Node API and the Connection API at ApiHost and ApiPort, and polls the
     // node on a thread of its own, until the node closes. Fails with Result::State when
-    // the library was built without the server (see HasServer()), and Result::Http when
-    // the server cannot listen at the address and port.
+    // the library was built without the server (see HasServer()), and with Result::Http
+    // when the server cannot listen at the address and port.
     [[nodiscard]] Status Serve();
 
-    // Sets the node's clock, clk0, which every source names, and registers the node again
-    // when it changed. Setting the clock the node has changes nothing, so a program may
-    // set it each time it checks its clock. Fails with Result::InvalidArgument when its
-    // Kind is not Internal or Ptp, or a Ptp clock's Grandmaster is not an EUI-64.
+    // Sets the node's clock, clk0, which every source names. When the clock changed, the
+    // node registers again. Setting the clock that the node already has changes nothing,
+    // so a program may set it each time it checks its clock. Fails with
+    // Result::InvalidArgument when its Kind is not Internal or Ptp, or when the
+    // Grandmaster of a Ptp clock is not an EUI-64.
     [[nodiscard]] Status SetClock(const Clock& NodeClock);
 
-    // Replaces the flow of a sender, e.g. after its format changed. Its SDP changes with
-    // it, and the next poll registers the new version. Fails with Result::NotFound when
-    // the node has no such sender, and Result::InvalidArgument when the flow is of
-    // another media than the sender's, or a text of it is too long for the C API.
+    // Replaces the flow of a sender, e.g. after its format changed. The sender's SDP
+    // changes with it, and the next poll registers the new version. Fails with
+    // Result::NotFound when the node has no such sender, and with Result::InvalidArgument
+    // when the flow carries another media than the sender's, or when a text in it is too
+    // long for the C API.
     [[nodiscard]] Status UpdateSender(const Id& Sender, const Flow& SenderFlow);
 
   private:
@@ -369,7 +389,7 @@ class Node
 namespace Detail
 {
 
-// Converts a clock kind of the C API, as FromNative(DtNmosResult) does.
+// Converts a clock kind from the C API, as FromNative(DtNmosResult) does.
 inline ClockKind FromNative(DtNmosClockKind Native)
 {
     switch (Native)
@@ -389,7 +409,7 @@ inline DtNmosClockKind ToNative(ClockKind Value)
     return static_cast<DtNmosClockKind>(Value);
 }
 
-// Converts a clock of the C API.
+// Converts a clock from the C API.
 inline Clock FromNative(const DtNmosClock& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosClock, Locked);
@@ -419,7 +439,7 @@ inline Expected<DtNmosClock> ToNative(const Clock& Value)
     return Native;
 }
 
-// Converts an activation of a sender of the C API.
+// Converts a sender's activation from the C API.
 inline SenderActivation FromNative(const DtNmosSenderActivation& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderActivation, AtNs);
@@ -432,7 +452,7 @@ inline SenderActivation FromNative(const DtNmosSenderActivation& Native)
     return Value;
 }
 
-// Converts an activation of a receiver of the C API.
+// Converts a receiver's activation from the C API.
 inline ReceiverActivation FromNative(const DtNmosReceiverActivation& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosReceiverActivation, AtNs);
@@ -445,7 +465,8 @@ inline ReceiverActivation FromNative(const DtNmosReceiverActivation& Native)
     return Value;
 }
 
-// The C callback of the function of a receiver, whose entry User points to.
+// Calls the program's function for a receiver's activation. The C node calls it; User
+// points to the receiver's ActivateEntry.
 inline DtNmosResult
 ReceiverTrampoline(void* User, const DtNmosId* Receiver,
                    const DtNmosReceiverActivation* Activation) noexcept
@@ -459,7 +480,8 @@ ReceiverTrampoline(void* User, const DtNmosId* Receiver,
     return Fail(Done, Result::Internal);
 }
 
-// The C callback of the function of a sender, whose entry User points to.
+// Calls the program's function for a sender's activation. The C node calls it; User
+// points to the sender's ActivateEntry.
 inline DtNmosResult SenderTrampoline(void* User, const DtNmosId* Sender,
                                      const DtNmosSenderActivation* Activation) noexcept
 {
@@ -470,8 +492,9 @@ inline DtNmosResult SenderTrampoline(void* User, const DtNmosId* Sender,
     return Fail(Done, Result::Internal);
 }
 
-// The C callback of a RegistryFailedFunction, which User points to: writes the URL it
-// returns into NextUrl, of Size bytes.
+// Calls the program's RegistryFailedFunction, which User points to. The C node calls
+// it. It writes the URL that the function returns into NextUrl, of Size bytes, and
+// returns false when there is none.
 inline bool RegistryFailedTrampoline(void* User, uint32_t Failures, char* NextUrl,
                                      size_t Size) noexcept
 {
@@ -501,8 +524,8 @@ inline bool HasServer()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The node keeps the functions and the search the C node calls; the C node copies the
-// rest during the call.
+// The node keeps the functions that the C node calls, and the search. The C node copies
+// the rest of the config during the call.
 //
 inline Expected<Node> Node::Open(const NodeConfig& Config)
 {
@@ -538,7 +561,7 @@ inline Expected<Node> Node::Open(const NodeConfig& Config)
     NativeConfig.Search = Config.Search != nullptr ? Config.Search->GetNative() : nullptr;
     if (Config.Search != nullptr && Config.Search->State != nullptr)
     {
-        // Borrowed until the node returns it, also when it does not open.
+        // The node borrows the search until it gives it back, also when it fails to open.
         Kept.Search = Config.Search->State.get();
         ++Kept.Search->Borrowers;
     }
@@ -569,7 +592,7 @@ inline Expected<Node> Node::Open(const NodeConfig& Config)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::= -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The C node goes first, as in the destructor: a member-wise move would free the
+// The C node is freed first, as in the destructor. A member-wise move would free the
 // functions while the C node may still call them.
 //
 inline Node& Node::operator=(Node&& Other) noexcept
@@ -603,8 +626,9 @@ inline Status Node::AddDevice(const DeviceConfig& Device)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::AddReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The entry of the function goes to the C node once it has the receiver, which releases
-// it; until then this function keeps it, and frees it when the receiver is refused.
+// The C node owns the entry of the function once it has added the receiver, and
+// releases it later. Until then, this function owns the entry, and frees it when the C
+// node refuses the receiver.
 //
 inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate Activate)
 {
@@ -634,7 +658,7 @@ inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate
         Entry.get()));
     if (Added)
     {
-        // The C node owns the entry now, and releases it.
+        // The C node owns the entry now, and releases it later.
         (void)Entry.release();
     }
     return Added;
@@ -690,7 +714,8 @@ inline uint16_t Node::ApiPort() const
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::ApiUrl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C function is asked for the size first, and then writes into a buffer of it.
+// The C function first tells the size it needs, and then writes into a buffer of that
+// size.
 //
 inline Expected<std::string> Node::ApiUrl() const
 {
@@ -720,8 +745,8 @@ inline Expected<std::string> Node::ApiUrl() const
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::CheckOpen -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A closed node keeps its C node, which then fails by itself; only a moved-from one has
-// none.
+// A closed node keeps its C node, and the C node fails its calls by itself. Only a node
+// that was moved from has no C node.
 //
 inline Status Node::CheckOpen() const
 {
@@ -735,8 +760,8 @@ inline Status Node::CheckOpen() const
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The C node releases the entries of the functions as it closes, and stops using the
-// search, which the node then returns.
+// The C node releases the entries of the functions as it closes. After that, the C node
+// does not use the search, and the node gives the search back.
 //
 inline Status Node::Close()
 {
@@ -814,8 +839,7 @@ inline Expected<std::chrono::milliseconds> Node::Poll()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C node releases the entries of the functions of what it removes, when no call of
-// them runs.
+// The C node releases the entry of a removed function when no call of it runs.
 //
 inline Status Node::Remove(const Id& Resource)
 {

@@ -1,12 +1,14 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#* dtnmos_query.hpp *#*#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - The C++ API of a registry's clients, and of finding registries
+// dtnmos - The C++ API for asking a registry, following it, and finding registries
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The C++ API of dtnmos_query.h. Discover() searches the network once for registries,
-// with DNS-SD; a RegistrySearch keeps searching on a thread of its own, for the nodes and
-// clients of an application to share.
+// This is the C++ API of dtnmos_query.h. A Query asks a registry for its senders and
+// receivers, and connects them as a controller does. A Subscription tells the program
+// when resources in the registry change. Discover() searches the network once for
+// registries, with DNS-SD. A RegistrySearch keeps searching on a thread of its own, and
+// the nodes and clients of an application share it.
 
 #pragma once
 
@@ -43,34 +45,35 @@ struct SubscriptionState;
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+= The Query API (IS-04 v1.3) +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
-// A Query asks one registry for its senders and receivers, and connects them as an NMOS
-// controller does (IS-05 v1.1), through the Connection API of the node it finds through
-// the registry. Open it on the registry's URL; then list or find senders and receivers.
+// A Query asks one registry for its senders and receivers. It also connects them, as an
+// NMOS controller does (IS-05 v1.1): it finds the node of a receiver or sender through
+// the registry, and sends the request to the Connection API of that node. Open a query
+// on the URL of the registry, then list or find senders and receivers.
 //
 
 // How a query is opened.
 struct QueryConfig
 {
-    std::string RegistryUrl; // Base URL of the registry, e.g. "http://registry.local"
-    std::string ApiVersion;  // Query API version; "" for "v1.3", the only one supported
-    HttpFunction Http;       // Sends the requests, e.g. CurlHttp. Required
+    std::string RegistryUrl; // The base URL of the registry, e.g. "http://registry.local"
+    std::string ApiVersion;  // The Query API version; "" for "v1.3", the only one known
+    HttpFunction Http;       // Sends the requests, e.g. CurlHttp; required
     uint32_t TimeoutMs = 0;  // How long a request may take; 5000 when 0
     LogFunction Log;         // Receives log messages; may be empty
 };
 
-// A sender, as the registry lists it. A string the registry does not give is "".
+// A sender, as the registry lists it. A string that the registry does not give is "".
 struct SenderInfo
 {
-    // Reads a sender from its JSON, as a Change gives it. Its Media is Media::Other, as
-    // the media is part of the flow, not of the sender. Fails with Result::Parse when
-    // Json is no JSON object.
+    // Reads a sender from its JSON, as the Pre or Post of a Change holds it. The JSON
+    // of a sender does not tell its media, so Media is Media::Other. Fails with
+    // Result::Parse when Json is not a JSON object.
     [[nodiscard]] static Expected<SenderInfo> Parse(std::string_view Json);
 
-    DtNmos::Id Id;
-    DtNmos::Id FlowId; // The flow it sends; empty when it has none
-    DtNmos::Id DeviceId;
-    std::string Label;
-    std::string Description;
+    DtNmos::Id Id;           // The ID of the sender
+    DtNmos::Id FlowId;       // The flow it sends; empty when it has none
+    DtNmos::Id DeviceId;     // The device it belongs to
+    std::string Label;       // Its label
+    std::string Description; // Its description
     DtNmos::Media Media = DtNmos::Media::None; // From its flow; Other without one
     std::string Transport;                     // e.g. "urn:x-nmos:transport:rtp.mcast"
     std::string ManifestHref;                  // The URL of its SDP; "" when it has none
@@ -78,14 +81,14 @@ struct SenderInfo
     friend bool operator==(const SenderInfo&, const SenderInfo&) = default;
 };
 
-// A receiver, as the registry lists it. A string the registry does not give is "".
+// A receiver, as the registry lists it. A string that the registry does not give is "".
 struct ReceiverInfo
 {
-    DtNmos::Id Id;
-    DtNmos::Id DeviceId;
-    std::string Label;
-    std::string Description;
-    DtNmos::Media Media = DtNmos::Media::None; // From its format; Other for another
+    DtNmos::Id Id;                             // The ID of the receiver
+    DtNmos::Id DeviceId;                       // The device it belongs to
+    std::string Label;                         // Its label
+    std::string Description;                   // Its description
+    DtNmos::Media Media = DtNmos::Media::None; // From its format; Other for another one
     std::string Transport;                     // e.g. "urn:x-nmos:transport:rtp"
     DtNmos::Id SenderId; // The sender it is connected to; empty when none
     bool Active = false; // True when that connection is active
@@ -93,38 +96,40 @@ struct ReceiverInfo
     friend bool operator==(const ReceiverInfo&, const ReceiverInfo&) = default;
 };
 
-// What Query::Connect() did: the receiver and sender, as the registry lists them, and the
-// SDP the receiver was given as its transport file.
+// What Query::Connect() connected: the receiver and the sender, as the registry lists
+// them, and the SDP that the receiver was given as its transport file.
 struct Connection
 {
-    ReceiverInfo Receiver;
-    SenderInfo Sender;
-    std::string Sdp;
+    ReceiverInfo Receiver; // The receiver that was connected
+    SenderInfo Sender;     // The sender it was connected to
+    std::string Sdp;       // The SDP of the sender
 };
 
 // A connection to one registry, to ask it questions and to connect its receivers.
 //
-// The program owns the query, which is moved, not copied, and closes when it is
-// destroyed. A Subscription borrows it, as a node borrows a RegistrySearch: the program
-// destroys the query after its subscriptions, and a query destroyed while a subscription
-// borrows it prints so and calls std::terminate(). Every function fails with
-// Result::State for a query that was moved from, besides what it names.
+// The program owns the query. A query is moved, not copied, and closes when it is
+// destroyed. A Subscription borrows the query it is opened with, so the program must
+// destroy its subscriptions before their query. A query that is destroyed while a
+// subscription borrows it prints an error and calls std::terminate().
+//
+// Every function also fails with Result::State for a query that was moved from.
 class Query
 {
   public:
-    // Opens a query on the registry Config names. Fails with Result::InvalidArgument for
-    // a config without a registry URL or Http, or with an API version other than v1.3.
+    // Opens a query on the registry that Config names. Fails with Result::InvalidArgument
+    // when Config has no registry URL or no Http, or an API version other than v1.3.
     [[nodiscard]] static Expected<Query> Open(const QueryConfig& Config);
 
     Query(Query&&) noexcept = default;
-    // Closes this query, which no subscription may borrow, before it takes Other's.
+    // Closes this query, and then takes over Other. Calls std::terminate() when a
+    // subscription borrows this query.
     Query& operator=(Query&& Other) noexcept;
-    // Closes the query; calls std::terminate() while a subscription borrows it.
+    // Closes the query. Calls std::terminate() when a subscription borrows it.
     ~Query();
 
-    // Connects a receiver to a sender, both given by ID or label: the receiver starts
-    // receiving what the sender sends. The node of the receiver is asked to activate it
-    // at once, with the sender's SDP. Fails with:
+    // Connects a receiver to a sender, so that the receiver receives what the sender
+    // sends. Receiver and Sender are each an ID or a label. The query asks the node of
+    // the receiver to activate it at once, with the SDP of the sender. Fails with:
     //   Result::NotFound         the receiver or sender does not exist, the receiver's
     //                            device has no Connection API, or the sender has no SDP
     //   Result::Ambiguous        a label names more than one
@@ -135,38 +140,39 @@ class Query
     [[nodiscard]] Expected<Connection> Connect(std::string_view Receiver,
                                                std::string_view Sender);
 
-    // Disconnects a receiver, given by ID or label: it stops receiving. Returns the
-    // receiver, and fails as Connect() does.
+    // Disconnects a receiver, so that it stops receiving. Receiver is an ID or a label.
+    // Returns the receiver. Fails as Connect() does.
     [[nodiscard]] Expected<ReceiverInfo> Disconnect(std::string_view Receiver);
 
     // Finds a receiver by its ID or its label, as FindSender() finds a sender.
     [[nodiscard]] Expected<ReceiverInfo> FindReceiver(std::string_view IdOrLabel);
 
-    // Finds a sender by its ID or its label: by ID when IdOrLabel is a UUID, by label
-    // otherwise. Fails with Result::NotFound when no sender has it, Result::Ambiguous
-    // when several senders have the label, whose IDs the message lists, and the failures
-    // of the request.
+    // Finds a sender by its ID or its label. IdOrLabel is taken as an ID when it is a
+    // UUID, and as a label otherwise. Fails with:
+    //   Result::NotFound   no sender has that ID or label
+    //   Result::Ambiguous  several senders have that label; the message lists their IDs
+    // and the failures of the request.
     [[nodiscard]] Expected<SenderInfo> FindSender(std::string_view IdOrLabel);
 
-    // Makes a sender, given by ID or label, send to DestinationIp and DestinationPort;
-    // its node is asked to activate the new destination at once. Returns the sender, and
-    // fails as Connect() does, and with Result::InvalidArgument for a sender that does
-    // not send RTP.
+    // Makes a sender send to DestinationIp and DestinationPort. Sender is an ID or a
+    // label. The query asks the node of the sender to activate the new destination at
+    // once. Returns the sender. Fails as Connect() does, and with Result::InvalidArgument
+    // for a sender that does not send RTP.
     [[nodiscard]] Expected<SenderInfo> MoveSender(std::string_view Sender,
                                                   std::string_view DestinationIp,
                                                   uint16_t DestinationPort);
 
-    // Lists all receivers of the registry, also when the registry returns them page by
-    // page.
+    // Returns all receivers of the registry. It also reads the later pages when the
+    // registry returns the receivers page by page.
     [[nodiscard]] Expected<std::vector<ReceiverInfo>> Receivers();
 
-    // Downloads the SDP of Sender, from its ManifestHref. Fails with Result::NotFound
-    // when the sender has none, and the failures of the request. SenderSdp() also parses
-    // it.
+    // Downloads the SDP of Sender from its ManifestHref, and returns the text. Fails with
+    // Result::NotFound when the sender has no SDP, and the failures of the request.
+    // SenderSdp() downloads and parses it in one call.
     [[nodiscard]] Expected<std::string> SenderManifest(const SenderInfo& Sender);
 
-    // Lists all senders of the registry, with the media of each one's flow, also when the
-    // registry returns them page by page.
+    // Returns all senders of the registry, each with the media of its flow. It also
+    // reads the later pages when the registry returns the senders page by page.
     [[nodiscard]] Expected<std::vector<SenderInfo>> Senders();
 
     // Downloads the SDP of Sender and parses it, as Sdp::Parse() does.
@@ -177,6 +183,7 @@ class Query
 
     Query() = default;
 
+    // Fails with Result::State when the query was moved from.
     [[nodiscard]] Status CheckOpen() const;
     // Calls std::terminate() when a subscription borrows the query.
     void CheckUnborrowed() const noexcept;
@@ -186,68 +193,71 @@ class Query
 
 // +=+=+=+=+=+=+=+=+=+= A subscription to the resources of a registry +=+=+=+=+=+=+=+=+=+=
 //
-// A subscription tells the program when resources in the registry change: when a sender
-// is added, changed or removed, for example. Open it with a query; then call Poll()
-// regularly, which calls the program's function for each change. The first poll reports
+// A subscription tells the program when resources in the registry change, for example
+// when a sender is added, changed or removed. Open it with a query. Then call Poll()
+// regularly; it calls the program's function for each change. The first poll reports
 // every resource that is there.
 //
 
-// What happened to a resource: the values of DtNmosChangeKind.
+// What happened to a resource. The values are those of DtNmosChangeKind.
 enum class ChangeKind : int
 {
-    Present = DTNMOS_CHANGE_PRESENT, // It is there; the first poll reports every one so
+    Present = DTNMOS_CHANGE_PRESENT, // It is there; the first poll reports each one so
     Added = DTNMOS_CHANGE_ADDED,
     Modified = DTNMOS_CHANGE_MODIFIED,
     Removed = DTNMOS_CHANGE_REMOVED
 };
 
-// Returns the name of a kind of change, e.g. "added".
+// Returns a name for Kind to use in messages, e.g. "added".
 std::string_view Name(ChangeKind Kind);
 
-// One change of a resource.
+// One change of a resource in the registry.
 struct Change
 {
-    ChangeKind Kind = ChangeKind::Present;
-    DtNmos::Id Id;                   // The resource's ID
+    ChangeKind Kind = ChangeKind::Present; // What happened
+    DtNmos::Id Id;                         // The ID of the resource
     std::optional<std::string> Pre;  // Its JSON before the change; none when not there
     std::optional<std::string> Post; // Its JSON after the change; none when it is gone
 
     friend bool operator==(const Change&, const Change&) = default;
 };
 
-// The program's function that receives each change, called by Subscription::Poll() on
-// its thread; an exception it throws is dropped.
+// The program's function that receives each change. Subscription::Poll() calls it, on the
+// thread that calls Poll(). An exception it throws is dropped.
 using ChangeFunction = std::function<void(const Change& Changed)>;
 
 // How a subscription is opened.
 struct SubscriptionConfig
 {
-    std::string ResourcePath;     // Which resources, e.g. "/senders"
-    uint32_t MaxUpdateRateMs = 0; // The least time between two messages; 100 when 0
-    WebSocketConnect WebSocket;   // Opens the WebSocket; none for the one on libcurl
-    ChangeFunction OnChange;      // Called by Poll() for each change
+    std::string ResourcePath;     // Which resources to follow, e.g. "/senders"
+    uint32_t MaxUpdateRateMs = 0; // The shortest time between two messages; 100 when 0
+    WebSocketConnect WebSocket;   // Opens the WebSocket; empty for the one on libcurl
+    ChangeFunction OnChange;      // Receives each change; Poll() calls it
 };
 
-// A subscription to changes in a registry, open from Open() until it is destroyed, which
-// closes its WebSocket; the registry then ends the subscription. It is moved, not copied.
+// A subscription to changes in a registry. It is open from Open() until it is destroyed.
+// Destroying it closes its WebSocket, and the registry then ends the subscription. A
+// subscription is moved, not copied.
 class Subscription
 {
   public:
-    // Opens a subscription: asks the registry of Registry for one to the resources at
-    // Config.ResourcePath, and connects to its WebSocket. The subscription borrows
-    // Registry until it is destroyed. Fails with Result::Parse when the registry's answer
-    // names no WebSocket, and the failures of the request and of the WebSocket's
-    // connection.
+    // Opens a subscription to the resources at Config.ResourcePath. It asks the registry
+    // of Registry for the subscription, and connects to the WebSocket that the registry
+    // names. The subscription borrows Registry until it is destroyed. Fails with
+    // Result::Parse when the answer of the registry names no WebSocket, and with the
+    // failures of the request and of the connection to the WebSocket.
     [[nodiscard]] static Expected<Subscription> Open(Query& Registry,
                                                      const SubscriptionConfig& Config);
 
     Subscription(Subscription&&) noexcept = default;
+    // Closes this subscription, and then takes over Other.
     Subscription& operator=(Subscription&& Other) noexcept;
+    // Closes the subscription.
     ~Subscription();
 
-    // Waits up to Timeout for a message from the registry, and calls OnChange for each
-    // change in it, on this thread. The first message reports every resource as
-    // ChangeKind::Present. Fails with:
+    // Waits up to Timeout for a message from the registry. For each change in the
+    // message, it calls OnChange, on this thread. The first message reports every
+    // resource as ChangeKind::Present. Fails with:
     //   Result::Timeout  no message came
     //   Result::Parse    a message could not be read; polling may go on
     //   Result::Network  the WebSocket closed or failed; open a new subscription, which
@@ -255,7 +265,7 @@ class Subscription
     // and Result::State for a subscription that was moved from.
     [[nodiscard]] Status Poll(std::chrono::milliseconds Timeout);
 
-    // Returns the URL of its WebSocket, "" for one that was moved from.
+    // Returns the URL of the WebSocket, or "" for a subscription that was moved from.
     std::string Url() const;
 
   private:
@@ -266,12 +276,12 @@ class Subscription
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+= Finding registries through DNS-SD +=+=+=+=+=+=+=+=+=+=+=+=+=
 //
-// A registry announces its APIs on the network with DNS-SD. Discover() searches once,
-// through multicast DNS on the local link and through the network's DNS server, and
-// returns the registries it found.
+// A registry announces its APIs on the network with DNS-SD. Discover() searches once, and
+// returns the registries it found. It asks multicast DNS on the local link and the DNS
+// server of the network at the same time.
 //
 
-// Which API of a registry to look for: the values of DtNmosService.
+// Which API of a registry to look for. The values are those of DtNmosService.
 enum class Service : int
 {
     None = DTNMOS_SERVICE_NONE,   // Not given; refused
@@ -280,8 +290,8 @@ enum class Service : int
         DTNMOS_SERVICE_REGISTRATION // The Registration API (_nmos-register._tcp)
 };
 
-// How registries are searched for: the values of DtNmosSearch, and Both, which is the
-// two combined.
+// How to search for registries. Multicast and Unicast are the values of DtNmosSearch;
+// Both is the two together.
 enum class Search : unsigned
 {
     Multicast =
@@ -294,33 +304,34 @@ enum class Search : unsigned
 struct DiscoveryConfig
 {
     DtNmos::Service Service = DtNmos::Service::None; // Which API to look for
-    // The IPv4 address of the network interface to search on; "" for the one of the
-    // default route.
+    // The IPv4 address of the network interface to search on; "" for the interface of
+    // the default route.
     std::string InterfaceAddress;
-    // Where to send multicast DNS queries, "<IPv4 address>:<port>"; "" for
+    // Where to send the multicast DNS queries, as "<IPv4 address>:<port>"; "" for
     // "224.0.0.251:5353". A test may give a responder of its own.
     std::string Destination;
     uint32_t TimeoutMs = 0; // How long to collect answers; 1000 when 0
     LogFunction Log;        // Receives log messages; may be empty
-    DtNmos::Search Searches = DtNmos::Search::Both;
-    // The DNS server, "<IPv4 address>:<port>"; "" for the host's first IPv4 DNS server,
-    // at port 53.
+    DtNmos::Search Searches = DtNmos::Search::Both; // Which ways to search
+    // The DNS server, as "<IPv4 address>:<port>"; "" for the first IPv4 DNS server of the
+    // host, at port 53.
     std::string DnsServer;
-    // The domain to search through the DNS server, e.g. "example.com"; "" for the host's
-    // own. Without a DNS server or a domain, only multicast DNS is searched.
+    // The domain to search through the DNS server, e.g. "example.com"; "" for the domain
+    // of the host. Without a DNS server or a domain, Discover() asks multicast DNS only.
     std::string DnsDomain;
 };
 
-// One API of a registry that was found. A string not announced is "".
+// One API of a registry that was found. A string that the registry does not announce is
+// "".
 struct RegistryInfo
 {
     DtNmos::Service Service = DtNmos::Service::None; // Which API this is
     std::string Instance; // The announced name, e.g. "Registry 1"
     std::string Host;     // The host name, e.g. "registry-1.local"
-    std::string Address;  // The host's IPv4 address, when announced
-    uint16_t Port = 0;
-    // The base URL of the API, "<protocol>://<address>:<port>"; with the host name
-    // instead of the address for https, or when no address was announced.
+    std::string Address;  // The IPv4 address of the host, when it is announced
+    uint16_t Port = 0;    // The port of the API
+    // The base URL of the API, "<protocol>://<address>:<port>". It has the host name
+    // instead of the address for https, and when no address was announced.
     std::string Url;
     std::string ApiProto;    // "http" or "https"
     std::string ApiVersions; // e.g. "v1.2,v1.3"
@@ -332,12 +343,14 @@ struct RegistryInfo
     friend bool operator==(const RegistryInfo&, const RegistryInfo&) = default;
 };
 
-// Searches the network for registries of Config.Service, through multicast DNS and the
-// DNS server at the same time, and returns what it found: usable ones first; then by
-// priority, those without one last; those from the DNS server before those from
-// multicast DNS; then by name. Among registries of the same priority, IS-04 asks a client
-// to pick one at random; that is up to the program. Finding none is not a failure. Fails
-// with:
+// Searches the network for registries with the API Config.Service, and returns the ones
+// it found. It asks multicast DNS and the DNS server at the same time. Finding none is
+// not a failure.
+//
+// The registries come in this order: the usable ones first; then by priority, with
+// those without a priority last; then the ones that the DNS server announced before the
+// ones that multicast DNS did; then by name. IS-04 asks a client to pick at random among
+// registries of the same priority; that is up to the program. Fails with:
 //   Result::InvalidArgument  an address or domain in Config is malformed
 //   Result::Network          the socket could not be opened, or the multicast query
 //                            could not be sent
@@ -346,7 +359,7 @@ struct RegistryInfo
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+= One search of an application +=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
 
-// The APIs a search looks for.
+// Which APIs a RegistrySearch looks for.
 enum class Finds : unsigned
 {
     Query = DTNMOS_FINDS_QUERY,
@@ -357,50 +370,56 @@ enum class Finds : unsigned
 // How a search is opened.
 struct RegistrySearchConfig
 {
-    DtNmos::Finds Finds = DtNmos::Finds::Both; // The APIs to look for
-    // How to search, as for Discover(), for each API in Finds; its Service is not used.
-    // Without one: multicast DNS and the host's DNS server, on the interface of the
-    // default route.
+    DtNmos::Finds Finds = DtNmos::Finds::Both; // Which APIs to look for
+    // How to search for each API in Finds, as for Discover(); its Service is not used.
+    // Without it, the search asks multicast DNS and the DNS server of the host, on the
+    // interface of the default route.
     std::optional<DiscoveryConfig> Discovery;
-    // True: never search; hold the lists the program gives with Feed() instead.
+    // True: the search never searches. It holds the lists that the program gives it with
+    // Feed() instead.
     bool Fed = false;
 };
 
-// A search for registries that runs in the background, every 3 seconds, and sooner while
-// a node that uses it has no registry (after 1, 2, 4 and 8 seconds, as IS-04 asks). A
-// program opens one, and gives it to its nodes (NodeConfig.Search); several nodes share
-// one. A program that finds registries in another way "feeds" the search the list.
+// A search for registries that runs in the background.
 //
-// The program owns the search, which is moved, not copied, and stops when it is
-// destroyed. A node borrows it, and the program destroys the search after the nodes that
-// borrow it are closed or destroyed: a search destroyed while a node borrows it prints
-// so and calls std::terminate(), as a std::thread destroyed without join() does. Moving
-// the search moves no node off it.
+// It searches every 3 seconds. While a node that uses it has no registry, it searches
+// sooner: after 1, 2, 4 and 8 seconds, as IS-04 asks. A program opens one search, and
+// gives it to its nodes in NodeConfig.Search; several nodes share it. A program that
+// finds its registries in another way gives the search the list instead ("feeds" it).
+//
+// The program owns the search. A search is moved, not copied, and stops when it is
+// destroyed. A node borrows the search, so the program must close or destroy its nodes
+// before their search. A search that is destroyed while a node borrows it prints an
+// error and calls std::terminate(), just as destroying a std::thread without join()
+// does. Moving a search does not take it away from the nodes that borrow it.
 class RegistrySearch
 {
   public:
-    // Opens a search and, unless it is fed, starts searching. Fails with
-    // Result::InvalidArgument when Config looks for nothing.
+    // Opens a search. Unless it is fed, it starts searching. Fails with
+    // Result::InvalidArgument when Config looks for no API.
     [[nodiscard]] static Expected<RegistrySearch>
     Open(const RegistrySearchConfig& Config);
 
     RegistrySearch(RegistrySearch&&) noexcept = default;
-    // Stops this search, which no node may borrow, before it takes Other's.
+    // Stops this search, and then takes over Other. Calls std::terminate() when a node
+    // borrows this search.
     RegistrySearch& operator=(RegistrySearch&& Other) noexcept;
-    // Stops the search; calls std::terminate() while a node borrows it.
+    // Stops the search. Calls std::terminate() when a node borrows it.
     ~RegistrySearch();
 
-    // Gives a fed search its list of registries for Kind: base URLs, e.g.
-    // "http://registry.local:8010", the most preferred first. It replaces the list it
-    // had. Fails with Result::State when the search is not fed, and
-    // Result::InvalidArgument when it does not look for Kind, or a URL is not http or
-    // https.
+    // Gives a fed search its list of registries for Kind. Urls are base URLs, e.g.
+    // "http://registry.local:8010", with the most preferred one first. The list replaces
+    // the one the search had. Fails with:
+    //   Result::State            the search is not fed
+    //   Result::InvalidArgument  the search does not look for Kind, or a URL is not http
+    //                            or https
     [[nodiscard]] Status Feed(DtNmos::Service Kind, const std::vector<std::string>& Urls);
 
-    // Returns the registries for Kind found so far, in the order of Discover(); none
-    // until the first search ends. The registries of a fed search are usable, with their
-    // URL as name and their place in the list as priority. Fails with
-    // Result::InvalidArgument when the search does not look for Kind.
+    // Returns the registries for Kind that the search found so far, in the order that
+    // Discover() gives. The list is empty until the first search ends. The registries of
+    // a fed search are usable; their URL is their name, and their place in the list is
+    // their priority. Fails with Result::InvalidArgument when the search does not look
+    // for Kind.
     [[nodiscard]] Expected<std::vector<RegistryInfo>> List(DtNmos::Service Kind) const;
 
   private:
@@ -410,6 +429,7 @@ class RegistrySearch
 
     // Calls std::terminate() when a node borrows the search.
     void CheckUnborrowed() const noexcept;
+    // Returns the C search, or nullptr for a search that was moved from.
     DtNmosRegistrySearch* GetNative() const;
 
     std::unique_ptr<Detail::RegistrySearchState> State;
@@ -417,11 +437,16 @@ class RegistrySearch
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
+// Not for programs: what the C++ headers use to convert the types of this header to and
+// from those of the C API, and the state that a query, a subscription and a search keep
+// on the heap.
+//
 
 namespace Detail
 {
 
-// Converts a service of the C API, as FromNative(DtNmosResult) does.
+// Converts a DtNmosService to a Service. Each value has a case, so that the compiler
+// warns about a value that the conversion misses.
 inline Service FromNative(DtNmosService Native)
 {
     switch (Native)
@@ -436,7 +461,7 @@ inline Service FromNative(DtNmosService Native)
     return static_cast<Service>(Native);
 }
 
-// Converts the search that found a registry, one of the values of DtNmosSearch.
+// Converts the way that a registry was found, a value of DtNmosSearch, to a Search.
 inline Search FromNative(DtNmosSearch Native)
 {
     switch (Native)
@@ -454,7 +479,7 @@ inline DtNmosService ToNative(Service Value)
     return static_cast<DtNmosService>(Value);
 }
 
-// Converts a registry of the C API.
+// Converts a registry that the C API found to a RegistryInfo.
 inline RegistryInfo FromNative(const DtNmosRegistryInfo& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosRegistryInfo, FoundBy);
@@ -474,13 +499,13 @@ inline RegistryInfo FromNative(const DtNmosRegistryInfo& Native)
     return Value;
 }
 
-// Frees a DtNmosRegistryList, for a std::unique_ptr.
+// Frees a DtNmosRegistryList; the deleter of a std::unique_ptr.
 struct RegistryListFree
 {
     void operator()(DtNmosRegistryList* List) const { DtNmosRegistryList_Free(List); }
 };
 
-// Converts a list of registries of the C API, and frees it.
+// Converts a list of registries that the C API returned, and frees the list.
 inline std::vector<RegistryInfo> TakeList(DtNmosRegistryList* Native)
 {
     const std::unique_ptr<DtNmosRegistryList, RegistryListFree> Owned(Native);
@@ -492,9 +517,11 @@ inline std::vector<RegistryInfo> TakeList(DtNmosRegistryList* Native)
     return Value;
 }
 
-// Returns a discovery config as the C API takes it, pointing into Value, which must
-// outlive it, and into Log, the LogFunction the C API calls; "" is NULL. Log is Value's,
-// or a copy of it that lives longer.
+// Returns Value as the C API takes it. An empty text becomes NULL.
+//
+// The result points into Value and into Log, so both must outlive it. Log is the
+// LogFunction that the C API calls. It is the Log of Value, or a copy of it that lives
+// longer than Value.
 inline DtNmosDiscoveryConfig ToNative(const DiscoveryConfig& Value,
                                       const LogFunction& Log)
 {
@@ -514,7 +541,7 @@ inline DtNmosDiscoveryConfig ToNative(const DiscoveryConfig& Value,
     return Native;
 }
 
-// Frees a DtNmosRegistrySearch, for a std::unique_ptr.
+// Frees a DtNmosRegistrySearch; the deleter of a std::unique_ptr.
 struct RegistrySearchFree
 {
     void operator()(DtNmosRegistrySearch* Search) const
@@ -523,18 +550,19 @@ struct RegistrySearchFree
     }
 };
 
-// What a RegistrySearch owns on the heap, where its nodes find it when it moves: the C
-// search, the log function it calls for as long as it runs, which is declared first so
-// that it is freed after the search, and how many nodes borrow it.
+// Holds what a RegistrySearch owns. It is on the heap, so that it stays in one place when
+// the RegistrySearch moves, and the nodes that borrow the search still find it.
 struct RegistrySearchState
 {
+    // The log function that the C search calls while it runs. It is declared before
+    // Native, so that it is destroyed after the C search.
     LogFunction Log;
-    std::unique_ptr<DtNmosRegistrySearch, RegistrySearchFree> Native;
-    std::atomic<int> Borrowers = 0;
+    std::unique_ptr<DtNmosRegistrySearch, RegistrySearchFree> Native; // The C search
+    std::atomic<int> Borrowers = 0; // How many nodes borrow the search
 };
 
-// Prints Message and calls std::terminate() when Borrowers is not 0: an object of the
-// program is destroyed while another borrows it.
+// Prints Message and calls std::terminate() when Borrowers is above 0. A program calls
+// it when it destroys an object that another object still borrows.
 inline void TerminateIfBorrowed(const std::atomic<int>& Borrowers,
                                 const char* Message) noexcept
 {
@@ -546,7 +574,7 @@ inline void TerminateIfBorrowed(const std::atomic<int>& Borrowers,
     }
 }
 
-// Converts a sender of the C API.
+// Converts a sender that the C API returned to a SenderInfo.
 inline SenderInfo FromNative(const DtNmosSenderInfo& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderInfo, ManifestHref);
@@ -562,7 +590,7 @@ inline SenderInfo FromNative(const DtNmosSenderInfo& Native)
     return Value;
 }
 
-// Converts a receiver of the C API.
+// Converts a receiver that the C API returned to a ReceiverInfo.
 inline ReceiverInfo FromNative(const DtNmosReceiverInfo& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosReceiverInfo, Active);
@@ -578,7 +606,8 @@ inline ReceiverInfo FromNative(const DtNmosReceiverInfo& Native)
     return Value;
 }
 
-// Returns a sender as the C API takes it, pointing into Value, which must outlive it.
+// Returns Value as the C API takes it. The result points into Value, so Value must
+// outlive it.
 inline DtNmosSenderInfo ToNative(const SenderInfo& Value)
 {
     DtNmosSenderInfo Native{};
@@ -593,7 +622,8 @@ inline DtNmosSenderInfo ToNative(const SenderInfo& Value)
     return Native;
 }
 
-// Free the lists and the connection of the C API, for a std::unique_ptr.
+// Free a list of senders, a list of receivers and a connection of the C API; the
+// deleters of a std::unique_ptr.
 struct SenderListFree
 {
     void operator()(DtNmosSenderList* List) const { DtNmosSenderList_Free(List); }
@@ -609,7 +639,7 @@ struct ConnectionFree
     void operator()(DtNmosConnection* Value) const { DtNmosConnection_Free(Value); }
 };
 
-// Converts a list of senders of the C API, and frees it.
+// Converts a list of senders that the C API returned, and frees the list.
 inline std::vector<SenderInfo> TakeSenders(DtNmosSenderList* Native)
 {
     const std::unique_ptr<DtNmosSenderList, SenderListFree> Owned(Native);
@@ -621,7 +651,7 @@ inline std::vector<SenderInfo> TakeSenders(DtNmosSenderList* Native)
     return Value;
 }
 
-// Converts a list of receivers of the C API, and frees it.
+// Converts a list of receivers that the C API returned, and frees the list.
 inline std::vector<ReceiverInfo> TakeReceivers(DtNmosReceiverList* Native)
 {
     const std::unique_ptr<DtNmosReceiverList, ReceiverListFree> Owned(Native);
@@ -633,8 +663,9 @@ inline std::vector<ReceiverInfo> TakeReceivers(DtNmosReceiverList* Native)
     return Value;
 }
 
-// Returns the one sender of a list of one of the C API, which a C call that finds one
-// gives, and frees the list.
+// Returns the sender that a C function found, and frees the list it came in. Code is the
+// result of the C function, and Native is its list, which holds the one sender it found.
+// Fails with the error of Code.
 inline Expected<SenderInfo> TakeOneSender(DtNmosResult Code, DtNmosSenderList* Native)
 {
     const Status Found = Check(Code);
@@ -650,7 +681,7 @@ inline Expected<SenderInfo> TakeOneSender(DtNmosResult Code, DtNmosSenderList* N
     return std::move(Senders.front());
 }
 
-// Returns the one receiver of a list of one, as TakeOneSender() does.
+// Returns the receiver that a C function found, as TakeOneSender() returns a sender.
 inline Expected<ReceiverInfo> TakeOneReceiver(DtNmosResult Code,
                                               DtNmosReceiverList* Native)
 {
@@ -667,7 +698,8 @@ inline Expected<ReceiverInfo> TakeOneReceiver(DtNmosResult Code,
     return std::move(Receivers.front());
 }
 
-// Converts a kind of change of the C API, as FromNative(DtNmosResult) does.
+// Converts a DtNmosChangeKind to a ChangeKind. Each value has a case, so that the
+// compiler warns about a value that the conversion misses.
 inline ChangeKind FromNative(DtNmosChangeKind Native)
 {
     switch (Native)
@@ -689,7 +721,8 @@ inline DtNmosChangeKind ToNative(ChangeKind Value)
     return static_cast<DtNmosChangeKind>(Value);
 }
 
-// Converts a change of the C API. An ID that is no UUID is empty.
+// Converts a change that the C API reported to a Change. An ID that is not a UUID
+// becomes an empty Id.
 inline Change FromNative(const DtNmosChange& Native)
 {
     DTNMOS_DETAIL_LAST_FIELD(DtNmosChange, PostLength);
@@ -707,7 +740,8 @@ inline Change FromNative(const DtNmosChange& Native)
     return Value;
 }
 
-// Frees a DtNmosQuery or a DtNmosSubscription, which closes it, for a std::unique_ptr.
+// Free a DtNmosQuery and a DtNmosSubscription, which closes it; the deleters of a
+// std::unique_ptr.
 struct QueryFree
 {
     void operator()(DtNmosQuery* Query) const { DtNmosQuery_Free(Query); }
@@ -721,37 +755,41 @@ struct SubscriptionFree
     }
 };
 
-// What a Query owns on the heap, where its subscriptions find it when it moves: the
-// functions the C query calls, declared first so that they are freed after it, the C
-// query, and how many subscriptions borrow it.
+// Holds what a Query owns. It is on the heap, so that it stays in one place when the
+// Query moves, and the subscriptions that borrow the query still find it.
 struct QueryState
 {
+    // The functions that the C query calls. They are declared before Native, so that
+    // they are destroyed after the C query.
     HttpFunction Http;
     LogFunction Log;
-    std::unique_ptr<DtNmosQuery, QueryFree> Native;
-    std::atomic<int> Borrowers = 0;
+    std::unique_ptr<DtNmosQuery, QueryFree> Native; // The C query
+    std::atomic<int> Borrowers = 0; // How many subscriptions borrow the query
 };
 
-// The C callback of a ChangeFunction, which User points to. An exception it throws is
-// dropped, as the C callback returns nothing.
+// Calls the ChangeFunction that User points to; the C callback of a subscription. The C
+// callback cannot return a failure, so an exception that the function throws is
+// dropped.
 inline void ChangeTrampoline(void* User, const DtNmosChange* Changed) noexcept
 {
     const ChangeFunction& OnChange = *static_cast<const ChangeFunction*>(User);
     (void)Guard(Result::Internal, [&] { OnChange(FromNative(*Changed)); });
 }
 
-// What a Subscription owns on the heap: the functions the C subscription calls, the query
-// it borrows, and the C subscription, which goes first, before the borrowing ends.
+// Holds what a Subscription owns. It is on the heap, so that the C subscription can keep
+// pointers to OnChange and WebSocket when the Subscription moves.
 struct SubscriptionState
 {
-    ChangeFunction OnChange;
-    NativeWebSocket WebSocket;
-    QueryState* Borrowed = nullptr;
-    std::unique_ptr<DtNmosSubscription, SubscriptionFree> Native;
+    ChangeFunction OnChange;        // The function that the C subscription calls
+    NativeWebSocket WebSocket;      // The WebSocket that the C subscription reads
+    QueryState* Borrowed = nullptr; // The query it borrows
+    std::unique_ptr<DtNmosSubscription, SubscriptionFree> Native; // The C subscription
 
     SubscriptionState() = default;
     SubscriptionState(const SubscriptionState&) = delete;
     SubscriptionState& operator=(const SubscriptionState&) = delete;
+    // Closes the C subscription first, so that it stops using the query. Only then does
+    // it stop borrowing the query.
     ~SubscriptionState()
     {
         Native.reset();
@@ -888,7 +926,8 @@ inline std::string_view Name(ChangeKind Kind)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Query::Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The query keeps the functions the C query calls; the C query copies the rest.
+// The C query copies the config, except the functions it calls. The query keeps those
+// in its state.
 //
 inline Expected<Query> Query::Open(const QueryConfig& Config)
 {
@@ -1081,8 +1120,8 @@ inline Expected<std::vector<ReceiverInfo>> Query::Receivers()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Query::SenderManifest -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The C function is asked for the size first, and then writes into a buffer of it; it
-// downloads the SDP for each.
+// The C function is called twice: first to learn the size of the SDP, then to write the
+// SDP into a buffer of that size. It downloads the SDP on both calls.
 //
 inline Expected<std::string> Query::SenderManifest(const SenderInfo& Sender)
 {
@@ -1163,8 +1202,8 @@ inline Expected<SenderInfo> SenderInfo::Parse(std::string_view Json)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Subscription::Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The subscription keeps the functions the C subscription calls; the C subscription
-// copies the rest.
+// The C subscription copies the config, except the functions it calls. The subscription
+// keeps those in its state.
 //
 inline Expected<Subscription> Subscription::Open(Query& Registry,
                                                  const SubscriptionConfig& Config)
@@ -1213,7 +1252,8 @@ inline Subscription& Subscription::operator=(Subscription&& Other) noexcept
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Subscription::~ -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The state closes the C subscription, and then returns the query it borrowed.
+// The destructor of SubscriptionState closes the C subscription, and then stops
+// borrowing the query.
 //
 inline Subscription::~Subscription() = default;
 

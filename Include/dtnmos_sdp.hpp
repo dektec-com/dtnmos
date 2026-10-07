@@ -1,15 +1,17 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*#*# dtnmos_sdp.hpp *#*#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos - The C++ API of the SDP of SMPTE ST 2110 flows, read and written
+// dtnmos - The C++ API for reading and writing the SDP of SMPTE ST 2110 streams
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// The C++ API of dtnmos_sdp.h. An SDP file describes RTP streams: for each one, its
-// format, where it is sent and how it is timed. Sdp::Parse() reads one into an Sdp, which
-// holds its Session and one Flow per stream, and Sdp::Write() writes it back. A flow's
-// format is a std::variant of a struct per kind of media: ST 2110-20 video, -30 audio,
-// -22 compressed video and -40 ancillary data. Every type here is a value that owns its
-// strings, and is copied with =.
+// This is the C++ API of dtnmos_sdp.h. An SDP file describes RTP streams. For each
+// stream it gives the format, where the stream is sent, and how it is timed.
+//
+// Sdp::Parse() reads an SDP into an Sdp. An Sdp holds a Session and one Flow per stream.
+// Sdp::Write() turns an Sdp back into text. The format of a flow is a std::variant with
+// one struct per kind of media: ST 2110-20 video, -30 audio, -22 compressed video and
+// -40 ancillary data. Every type here is a value that owns its strings, and is copied
+// with =.
 
 #pragma once
 
@@ -32,14 +34,17 @@ namespace DtNmos
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Values +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
-// The values ST 2110 defines for the parameters of a stream, one enum class per
-// parameter, with the values of the C enums. In each:
-// - None (0) means the parameter is not given;
-// - Other means a value dtnmos does not know, e.g. of a later edition of the standard.
-//   The parameter is then kept, as written, in the format's OtherParameters, so that it
-//   is written back unchanged.
-// Text() gives the SDP's text of a value ("" for None and Other), and FromText<E>() the
-// value of a text (None for "", Other for one it does not know).
+// ST 2110 defines a set of values for each parameter of a stream. Each parameter has an
+// enum class here, with the same values as the C enum. Two values have a special meaning
+// in every one of them:
+// - None (0) means that the SDP does not give the parameter.
+// - Other means that the SDP gives a value dtnmos does not know, for example from a
+//   later edition of the standard. dtnmos then keeps the parameter, as written, in the
+//   OtherParameters of the format, so that it writes the parameter back unchanged.
+//
+// Text() returns the text that an SDP uses for a value, and "" for None and Other.
+// FromText<E>() returns the value for a text: None for "", and Other for a text it does
+// not know.
 //
 
 // What a stream carries, from the encoding in its a=rtpmap line.
@@ -156,14 +161,15 @@ enum class RefClockKind : int
     Other = DTNMOS_REFCLOCK_OTHER        // Another kind, kept as text
 };
 
-// Returns the value of an SDP's text: None for "", Other for a text it does not know. E
-// is AudioEncoding, Colorimetry, PackingMode, Range, Sampling, Tcs or TransmitterType.
+// Returns the value that Text, as an SDP writes it, stands for. It returns None for "",
+// and Other for a text it does not know. E is one of AudioEncoding, Colorimetry,
+// PackingMode, Range, Sampling, Tcs and TransmitterType.
 template <typename E> E FromText(std::string_view Text);
 
-// Returns the name of Kind, e.g. "video", for messages.
+// Returns a name for Kind to use in messages, e.g. "video".
 std::string_view Name(Media Kind);
 
-// Return the SDP's text of a value, "" for None and Other.
+// Return the text that an SDP uses for Value, or "" for None and Other.
 std::string_view Text(AudioEncoding Value);
 std::string_view Text(Colorimetry Value);
 std::string_view Text(PackingMode Value);
@@ -174,11 +180,14 @@ std::string_view Text(TransmitterType Value);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Formats +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
-// The format of a stream, one struct per kind of media. A parameter the SDP does not give
-// is 0, None or "". OtherParameters holds the parameters dtnmos does not know, or whose
-// value it does not know, as written and separated by "; ", e.g. "TCS=ST2115LOGS9;
-// TROFF=37"; the writer writes them after the others, unchanged. To write a value dtnmos
-// does not know, set the field to Other and put the parameter there.
+// Each kind of media has a struct for the format of its streams. A parameter that the SDP
+// does not give is 0, None or "".
+//
+// OtherParameters holds the parameters that dtnmos does not know, and the known ones
+// whose value it does not know. They are kept as the SDP wrote them, separated by "; ",
+// e.g. "TCS=ST2115LOGS9; TROFF=37". Sdp::Write() writes them after the other parameters,
+// unchanged. To write a value that dtnmos does not know, set the field to Other and put
+// the parameter in OtherParameters.
 //
 
 // The format of an ST 2110-20 video stream, from its a=fmtp line.
@@ -201,18 +210,20 @@ struct VideoFormat
     std::string OtherParameters;
 
     // Fills in Colorimetry and Tcs when they are None, with the usual values for the
-    // picture's Height: Bt601 up to 576 lines (SD), Bt709 up to 1080 (HD), Bt2020 above
-    // (UHD); and Sdr. With a Height of 0 Colorimetry stays None. HDR cannot be told from
-    // the picture size: for Pq or Hlg with Bt2100, set them yourself. Range is left None,
-    // which means Narrow.
+    // Height of the picture. Colorimetry becomes Bt601 up to 576 lines (SD), Bt709 up to
+    // 1080 lines (HD), and Bt2020 above that (UHD). Tcs becomes Sdr. With a Height of 0,
+    // Colorimetry stays None.
+    //
+    // The picture size does not tell whether a stream is HDR. For Pq or Hlg with Bt2100,
+    // set Tcs and Colorimetry yourself. Range stays None, which means Narrow.
     void SetDefaults();
 
     friend bool operator==(const VideoFormat&, const VideoFormat&) = default;
 };
 
-// The format of an ST 2110-30 or -31 audio stream, from its a=rtpmap, a=ptime and a=fmtp
-// lines. A stream is audio only for the encodings of AudioEncoding, so Encoding is never
-// Other.
+// The format of an ST 2110-30 or -31 audio stream. The SDP gives it in its a=rtpmap,
+// a=ptime and a=fmtp lines. dtnmos takes a stream as audio only when it has one of the
+// encodings of AudioEncoding, so Encoding is never Other.
 struct AudioFormat
 {
     AudioEncoding Encoding = AudioEncoding::None;
@@ -225,9 +236,10 @@ struct AudioFormat
     friend bool operator==(const AudioFormat&, const AudioFormat&) = default;
 };
 
-// The format of an ST 2110-22 compressed video stream: the picture parameters of ST
-// 2110-20, the codec's parameters (for JPEG XS: profile, level, sublevel, packetmode
-// and transmode) and the bandwidth (b=AS).
+// The format of an ST 2110-22 compressed video stream. It has the picture parameters
+// that ST 2110-20 video has, the parameters of the codec, and the bandwidth (b=AS). For
+// JPEG XS, the parameters of the codec are profile, level, sublevel, packetmode and
+// transmode.
 struct CompressedVideoFormat
 {
     std::string Encoding; // The codec, e.g. "jxsv"
@@ -248,7 +260,7 @@ struct CompressedVideoFormat
     std::string Level;
     std::string Sublevel;
     uint32_t PacketMode = 0;       // packetmode
-    uint32_t TransmissionMode = 0; // transmode; a parsed SDP without it has 1 (RFC 9134)
+    uint32_t TransmissionMode = 0; // transmode; Parse() gives 1 when the SDP has none
     uint64_t BandwidthKbps = 0;    // b=AS; 0 when not given
     std::string OtherParameters;
 
@@ -278,56 +290,60 @@ struct AncFormat
     friend bool operator==(const AncFormat&, const AncFormat&) = default;
 };
 
-// The format of a stream dtnmos does not know: its encoding and its a=fmtp line as
-// written.
+// The format of a stream of a kind that dtnmos does not know. It keeps the encoding and
+// the a=fmtp line as the SDP wrote them.
 struct OtherFormat
 {
-    std::string Encoding;
-    std::optional<std::string> Fmtp; // The a=fmtp line's parameters; none without one
+    std::string Encoding;            // The encoding of the a=rtpmap line
+    std::optional<std::string> Fmtp; // The parameters of a=fmtp; none without that line
 
     friend bool operator==(const OtherFormat&, const OtherFormat&) = default;
 };
 
-// The format of a flow: which of them it holds is its Media. std::monostate is a flow
-// without a format, Media::None, which is refused where a format is needed.
+// The format of a flow. The struct it holds tells the media of the flow. std::monostate
+// means that the flow has no format, which is Media::None. A function that needs a
+// format refuses a flow without one.
 using FlowFormat = std::variant<std::monostate, VideoFormat, AudioFormat,
                                 CompressedVideoFormat, AncFormat, OtherFormat>;
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+= Flows +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
 
-// The clock a stream's timestamps follow (a=ts-refclk). A PTP domain is read in both
-// spellings, ":<number>" (ST 2110-10) and ":domain-nmbr=<number>" (RFC 7273), and written
-// in the first.
+// The clock that the timestamps of a stream follow (a=ts-refclk). Parse() reads a PTP
+// domain in both spellings, ":<number>" (ST 2110-10) and ":domain-nmbr=<number>" (RFC
+// 7273). Write() writes the first.
 struct RefClock
 {
     RefClockKind Kind = RefClockKind::None;
-    std::string PtpVersion;  // Ptp: e.g. "IEEE1588-2008"
-    std::string Grandmaster; // Ptp: the grandmaster's EUI-64; "" when Traceable
-    bool Traceable = false;  // Ptp: traceable to TAI, without a grandmaster named
-    int Domain = -1;         // Ptp: 0 to 127; -1 when not given
-    std::string LocalMac;    // LocalMac: the sender's MAC address
-    std::string Text;        // Other: the line's value
+    std::string PtpVersion;  // For Ptp: the version, e.g. "IEEE1588-2008"
+    std::string Grandmaster; // For Ptp: the EUI-64 of the grandmaster; "" when Traceable
+    bool Traceable = false;  // For Ptp: traceable to TAI, without a grandmaster named
+    int Domain = -1;         // For Ptp: the domain, 0 to 127; -1 when the SDP gives none
+    std::string LocalMac;    // For LocalMac: the MAC address of the sender
+    std::string Text;        // For Other: the value of the line, as written
 
     friend bool operator==(const RefClock&, const RefClock&) = default;
 };
 
-// One RTP stream: a media section of an SDP.
+// One RTP stream, as one media section of an SDP describes it.
 struct Flow
 {
-    std::string DestinationIp; // Where it is sent (c=), without TTL; may be a host name
+    // The address the stream is sent to (c=), without TTL. It may be a host name.
+    std::string DestinationIp;
     uint16_t DestinationPort = 0; // The UDP port (m=)
-    std::string SourceIp;         // The only source to receive from; "" for any source
-    uint8_t PayloadType = 0;      // The RTP payload type (the first in m=)
-    uint32_t ClockRate = 0; // RTP clock (a=rtpmap): 90000 for video, the sample rate for
-                            // audio
+    // The only source that a receiver takes the stream from; "" for any source.
+    std::string SourceIp;
+    uint8_t PayloadType = 0; // The RTP payload type, the first one in m=
+    // The RTP clock rate (a=rtpmap): 90000 for video, the sample rate for audio.
+    uint32_t ClockRate = 0;
     DtNmos::RefClock RefClock;     // The clock the timestamps follow (a=ts-refclk)
-    bool MediaClockDirect = false; // a=mediaclk:direct=<offset> is present
-    uint32_t MediaClockOffset = 0; // Its offset
-    uint32_t Leg = 0; // 0, or 1 for the second path of an ST 2022-7 pair (a=group:DUP)
-    FlowFormat Format;
+    bool MediaClockDirect = false; // True when the SDP has a=mediaclk:direct=<offset>
+    uint32_t MediaClockOffset = 0; // The offset of a=mediaclk:direct
+    // 0, or 1 for the second path of an ST 2022-7 pair (a=group:DUP).
+    uint32_t Leg = 0;
+    FlowFormat Format; // The format; its struct tells the media
 
-    // Returns what the flow carries: the kind of its Format.
+    // Returns the media of the flow, which the struct in Format tells.
     Media GetMedia() const;
 
     friend bool operator==(const Flow&, const Flow&) = default;
@@ -339,15 +355,15 @@ struct Flow
 // The session part of an SDP, which all its streams share.
 struct Session
 {
-    std::string Name;     // The session name (s=)
-    std::string OriginIp; // The sender's address or host name (o=)
-    uint64_t SessionId = 0;
-    uint64_t SessionVersion = 0; // Increase it when the SDP changes
+    std::string Name;            // The name of the session (s=)
+    std::string OriginIp;        // The address or host name of the sender (o=)
+    uint64_t SessionId = 0;      // The session ID (o=)
+    uint64_t SessionVersion = 0; // The version (o=); increase it when the SDP changes
 
     friend bool operator==(const Session&, const Session&) = default;
 };
 
-// An SDP: its session and its flows.
+// An SDP, with its session and its flows.
 struct Sdp
 {
     // Reads the SDP in Text. Fails with:
@@ -356,15 +372,18 @@ struct Sdp
     //   Result::InvalidArgument  the SDP has no media sections
     [[nodiscard]] static Expected<Sdp> Parse(std::string_view Text);
 
-    DtNmos::Session Session;
-    std::vector<Flow> Flows; // In the order of the media sections
+    DtNmos::Session Session; // The session part
+    std::vector<Flow> Flows; // One per media section, in the order of the SDP
 
-    // Writes the SDP as text. A flow with Leg 1 is the second path of the flow with Leg 0
-    // just before it: the two are written as an ST 2022-7 pair. An IPv4 multicast
-    // destination is written with a TTL of 64. Fails with Result::InvalidArgument when
-    // there are no flows, the session has no OriginIp, a flow has no format, no
-    // destination or no audio encoding, a Leg 1 has no Leg 0 before it, or a text is
-    // longer than the C API's field.
+    // Writes the SDP as text, and returns it.
+    //
+    // A flow with Leg 1 is the second path of the flow with Leg 0 just before it, and the
+    // two are written as an ST 2022-7 pair. An IPv4 multicast destination gets a TTL of
+    // 64. Fails with Result::InvalidArgument when:
+    // - there are no flows, or the session has no OriginIp;
+    // - a flow has no format, no destination, or no audio encoding;
+    // - a flow with Leg 1 has no flow with Leg 0 before it;
+    // - a text is longer than the C API can hold.
     [[nodiscard]] Expected<std::string> Write() const;
 
     friend bool operator==(const Sdp&, const Sdp&) = default;
@@ -372,11 +391,16 @@ struct Sdp
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+=+= What the wrapper shares +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
 //
+// Not for programs: what the C++ headers use to convert the types of an SDP to and from
+// those of the C API.
+//
 
 namespace Detail
 {
 
-// Convert the enums of an SDP from the C API, as FromNative(DtNmosResult) does.
+// Convert an enum of the C API to the enum class with the same values. Each value of the
+// C enum has a case, so that the compiler warns about a value that the conversion
+// misses. A value from a newer library is passed on as it is.
 inline Media FromNative(DtNmosMedia Native)
 {
     switch (Native)
@@ -583,7 +607,7 @@ inline RefClockKind FromNative(DtNmosRefClockKind Native)
     return static_cast<RefClockKind>(Native);
 }
 
-// Convert the enums of an SDP to the C API.
+// Convert an enum class to the enum of the C API with the same values.
 inline DtNmosMedia ToNative(Media Value)
 {
     return static_cast<DtNmosMedia>(Value);
@@ -631,7 +655,9 @@ inline DtNmosRefClockKind ToNative(RefClockKind Value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FromNative -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Convert the structs of an SDP from the C API. Each asserts the last field it knows.
+// Convert a struct of the C API to the C++ type. Each conversion asserts which field it
+// knows to be the last one of the C struct, so that a field the C API adds fails the
+// build until the conversion handles it.
 //
 inline VideoFormat FromNative(const DtNmosVideoFormat& Native)
 {
@@ -786,9 +812,9 @@ inline Session FromNative(const DtNmosSession& Native)
     return Value;
 }
 
-// A Flow as the C API takes it: a DtNmosFlow whose pointer fields point into the texts
-// and the list that this object keeps. It is not copied or moved, as that would leave
-// the pointers behind.
+// Holds a Flow as the C API takes it: a DtNmosFlow, and the texts and the list that its
+// pointer fields point to. It cannot be copied or moved, because the pointers would then
+// point into the old object.
 class NativeFlow
 {
   public:
@@ -796,25 +822,27 @@ class NativeFlow
     NativeFlow(const NativeFlow&) = delete;
     NativeFlow& operator=(const NativeFlow&) = delete;
 
-    // Returns the C flow, valid while this object is and until the next Set().
+    // Returns the C flow. It stays valid while this object lives, until the next Set().
     const DtNmosFlow& Get() const { return Native; }
 
-    // Makes the C flow that Value is. Fails with Result::InvalidArgument when a text is
-    // longer than its C field.
+    // Fills the C flow from Value. Fails with Result::InvalidArgument when a text of
+    // Value is longer than the C field can hold.
     [[nodiscard]] Status Set(const Flow& Value);
 
   private:
+    // Fills the format of the C flow from the format of Value.
     [[nodiscard]] Status SetFormat(const Flow& Value);
 
-    DtNmosFlow Native{};
+    DtNmosFlow Native{}; // The C flow
+    // The texts that the pointer fields of Native point to.
     std::string OtherParameters;
     std::string ChannelOrder;
     std::string Fmtp;
     std::string RefClockText;
-    std::vector<DtNmosDidSdid> Pairs;
+    std::vector<DtNmosDidSdid> Pairs; // The list that Native.Format.Anc.DidSdid points to
 };
 
-// A Session as the C API takes it, as NativeFlow is a Flow.
+// Holds a Session as the C API takes it, in the way that NativeFlow holds a Flow.
 class NativeSession
 {
   public:
@@ -822,11 +850,12 @@ class NativeSession
     NativeSession(const NativeSession&) = delete;
     NativeSession& operator=(const NativeSession&) = delete;
 
-    // Returns the C session, valid while this object is and until the next Set().
+    // Returns the C session. It stays valid while this object lives, until the next
+    // Set().
     const DtNmosSession& Get() const { return Native; }
 
-    // Makes the C session that Value is. Fails with Result::InvalidArgument when its
-    // OriginIp is longer than the C field.
+    // Fills the C session from Value. Fails with Result::InvalidArgument when the
+    // OriginIp of Value is longer than the C field can hold.
     [[nodiscard]] Status Set(const DtNmos::Session& Value);
 
   private:
@@ -1000,7 +1029,7 @@ inline Status NativeSession::Set(const DtNmos::Session& Value)
     return CopyText(Native.OriginIp, Value.OriginIp, "Session.OriginIp");
 }
 
-// Converts a parsed SDP of the C API.
+// Converts an SDP that the C API parsed into an Sdp. The caller still owns Native.
 inline Sdp FromNative(const DtNmosSdp* Native)
 {
     Sdp Value;
@@ -1012,7 +1041,7 @@ inline Sdp FromNative(const DtNmosSdp* Native)
     return Value;
 }
 
-// Frees a DtNmosSdp, for a std::unique_ptr.
+// Frees a DtNmosSdp; the deleter of a std::unique_ptr.
 struct SdpFree
 {
     void operator()(DtNmosSdp* Sdp) const { DtNmosSdp_Free(Sdp); }
@@ -1024,7 +1053,8 @@ struct SdpFree
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FromText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C functions take a text with its null, which a std::string_view need not have.
+// The C functions need a text that ends with a null, and a std::string_view may not have
+// one, so Text is copied into a std::string first.
 //
 template <> inline AudioEncoding FromText<AudioEncoding>(std::string_view Text)
 {
@@ -1107,7 +1137,8 @@ inline std::string_view Text(TransmitterType Value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFormat::SetDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C function reads the height, the colorimetry and the TCS, and sets the last two.
+// The C function reads only Height, Colorimetry and Tcs, and changes only the last two,
+// so only those are copied.
 //
 inline void VideoFormat::SetDefaults()
 {
@@ -1122,7 +1153,8 @@ inline void VideoFormat::SetDefaults()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Flow::GetMedia -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The alternatives of FlowFormat are in the order of their values of Media.
+// The types in FlowFormat come in the same order as the values of Media, so the index
+// of the type in the variant picks the media.
 //
 inline Media Flow::GetMedia() const
 {
@@ -1150,7 +1182,8 @@ inline Expected<Sdp> Sdp::Parse(std::string_view Text)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Sdp::Write -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C function is asked for the size first, and then writes into a buffer of it.
+// The C function is called twice: first to learn the size of the text, then to write
+// the text into a buffer of that size.
 //
 inline Expected<std::string> Sdp::Write() const
 {

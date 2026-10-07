@@ -375,8 +375,8 @@ static void FreeReceiver(NmosNodeReceiver* Receiver)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_Release -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The releases of the callbacks are called once the node is empty and closed, so that one
-// that calls the node finds it closed.
+// The function calls the releases of the callbacks last, when the node is empty and
+// closed. A release that calls the node then finds it closed.
 //
 void NmosNode_Release(DtNmosNode* Node)
 {
@@ -1145,7 +1145,8 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
                               "A sender of the node sends video or audio, not %s.",
                               DtNmosMedia_Name(Sender->Flow->Media));
     }
-    // The callback, freed without its release when the sender is not added.
+    // The entry of the callback. When the sender is not added, the entry is freed, and
+    // its release is not called.
     NmosCallback* Callback = calloc(1, sizeof(*Callback));
     if (Callback == NULL)
     {
@@ -1266,7 +1267,8 @@ DtNmosResult DtNmosNode_AddReceiver(DtNmosNode* Node,
                               "A receiver of the node receives video or audio, not %s.",
                               DtNmosMedia_Name(Receiver->Media));
     }
-    // The callback, freed without its release when the receiver is not added.
+    // The entry of the callback. When the receiver is not added, the entry is freed, and
+    // its release is not called.
     NmosCallback* Callback = calloc(1, sizeof(*Callback));
     if (Callback == NULL)
     {
@@ -2082,7 +2084,8 @@ DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- UnregisterAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Deletes from the registry everything the node registered, children before parents.
-// The callbacks of the senders and receivers it removes go onto *Released.
+// The function puts the callbacks of the senders and receivers it removes on the list
+// *Released, for the caller to release.
 //
 static void UnregisterAll(DtNmosNode* Node, NmosCallback** Released)
 {
@@ -2114,8 +2117,8 @@ static void UnregisterAll(DtNmosNode* Node, NmosCallback** Released)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_Close -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The releases of the callbacks are called once the node is empty and closed, as those
-// of NmosNode_Release() are, so that one that calls the node finds it closed.
+// The function calls the releases of the callbacks last, when the node is empty and
+// closed, as NmosNode_Release() does. A release that calls the node then finds it closed.
 //
 DtNmosResult DtNmosNode_Close(DtNmosNode* Node)
 {

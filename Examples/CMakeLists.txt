@@ -23,7 +23,7 @@ foreach(program IN LISTS _dtnmos_examples)
   dtnmos_set_warnings(${program})
 endforeach()
 
-# DtNmosRegisterNode written with the C++ API, as DtNmosRegisterNodeCpp, on the same
+# DtNmosRegisterNodeCpp is DtNmosRegisterNode written with the C++ API. It uses the same
 # helpers.
 if(DTNMOS_WITH_CPP)
   set(sources "${CMAKE_CURRENT_SOURCE_DIR}/DtNmosRegisterNode.cpp"

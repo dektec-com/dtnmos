@@ -705,7 +705,9 @@ static bool ReceiverFlow(DtNmosMedia Media, const NmosParameters* Staged,
 // lock of the node and applied without it.
 typedef struct NmosActivation
 {
-    NmosCallback* Callback; // of the sender or receiver; a call takes a use of it
+    // The callback entry of the sender or receiver. A call of the callback holds one use
+    // of it while the callback runs.
+    NmosCallback* Callback;
     DtNmosId Resource;
     DtNmosSenderActivation Sender;
     DtNmosReceiverActivation Receiver;
@@ -731,9 +733,9 @@ static bool CallsActivation(const NmosActivation* a)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CallActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Calls the callback that applies the activation a, without the lock, with a use of it
-// that the caller took. A callback that fails leaves its message with
-// DtNmos_SetLastError(), on this thread.
+// Calls the callback that applies the activation a. The caller has taken a use of the
+// callback entry, and does not hold the node's lock. A callback that fails leaves its
+// message with DtNmos_SetLastError(), on this thread.
 //
 static DtNmosResult CallActivation(const NmosActivation* a)
 {
@@ -1018,8 +1020,9 @@ static void PatchJson(DtNmosNode* Node, const char* Id, bool Sender, const NmosJ
         }
     }
     NmosBuffer_Free(&b);
-    // A sender or receiver removed during its activation is released now, its last call
-    // done, and after the answer, whose reason may be the message of this thread.
+    // If the sender or receiver was removed during the call, its release comes now, as
+    // the last call has ended. It comes after the answer, because the answer's reason
+    // may be the message of this thread, which a release may change.
     NmosCallback_ReleaseAll(Released);
 }
 
@@ -1231,7 +1234,8 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
             Failure = DtNmos_GetLastError()[0] != '\0' ? DtNmos_GetLastError()
                                                        : "The activation failed.";
         }
-        // The reason is kept, as a release may fail on this thread too.
+        // The reason is copied, because a release below may fail on this thread and
+        // change its message.
         char Reason[512];
         if (Failure != NULL)
         {
@@ -1240,9 +1244,9 @@ void NmosConnection_Poll(DtNmosNode* Node, uint32_t* WaitMs)
         }
         if (Calls)
         {
-            // The use of the call ends when the callback returns, not at the time the
-            // activation may still wait for below: a sender removed meanwhile is released
-            // now.
+            // The call's use ends when the callback returns, not at the time of the
+            // activation, which the poll may still wait for below. If the sender or
+            // receiver was removed meanwhile, its release comes now.
             NmosCallback* Released = NULL;
             NmosNode_Lock(Node);
             NmosCallback_Drop(a.Callback, &Released);

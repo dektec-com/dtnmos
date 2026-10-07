@@ -76,35 +76,44 @@ copy-pasted header naming the wrong file otherwise survives for years.
 
 ## The C++ API
 
-The `.hpp` headers in `Include/` are a C++23 wrapper over the C API, header only, beside
-the C header each wraps. The rules above hold for them, but for rule 10, which is for C
-functions, and with these:
+The `.hpp` headers in `Include/` are the C++ API: a C++23 wrapper around the C API, with
+no compiled code of its own. Each `.hpp` file sits beside the C header it wraps. The
+rules above apply to these headers too, except rule 10, which is about C function names.
+These rules apply as well:
 
-- **Names are those of the C API, with its prefix as the namespace**, in PascalCase:
-  namespaces, types, functions, fields, parameters and local variables alike, e.g.
-  `DtNmos::Node::AddSender()` for `DtNmosNode_AddSender()`. A getter whose name would be
-  a type's is `Get...`, e.g. `GetId()`, and a parameter does not take the name of a
-  type. What the standard library calls by name keeps the standard's name: `begin()`,
-  `end()`, `size()`, `value_type`.
-- **A private member has no mark**, no `_` and no `m`. It never takes the name of a type
-  or of a function of its class: the types that only the wrapper uses are in
-  `DtNmos::Detail`, not nested in the class, and the C handle of a class is `Native`.
-- **No C struct and no C enum in the API.** Each struct has a value type and each enum an
-  `enum class` with the C values; the wrapper converts at the boundary. A conversion
-  asserts with `DTNMOS_DETAIL_LAST_FIELD` which field it knows to be the last of its C
-  struct, and converts an enum with a `switch` over every value and no `default`, so that
-  the compiler refuses a field or a value that the C API adds and the wrapper does not
-  convert. A field small enough to fit in the struct's padding escapes the assertion, so
-  **a field added to a public struct, or a value to a public enum, is converted in the
-  same commit**, and review checks it.
-- **A call that can fail returns an `Expected` or a `Status`**, marked `[[nodiscard]]`;
-  the wrapper throws nothing of its own, and builds without exceptions.
-- **Rule 11 holds for the public members of a class**: alphabetical, with the static
-  functions that make an object, such as `Open`, first. Review checks it, as
-  `Scripts/check_style.sh` reads only the `DTNMOS_API` lines of a `.h`.
+- **The names are those of the C API, with the prefix as the namespace.** For example,
+  `DtNmosNode_AddSender()` becomes `DtNmos::Node::AddSender()`. Namespaces, types,
+  functions, fields, parameters and local variables are all in PascalCase.
+  - A getter is called `Get...` when its plain name would be the name of a type, e.g.
+    `GetId()`.
+  - A parameter does not take the name of a type.
+  - A name that the standard library calls keeps the standard's spelling: `begin()`,
+    `end()`, `size()`, `value_type`.
+- **A private member has no prefix or suffix**, no `_` and no `m`. So that none is
+  needed, a member never has the name of a type or of a function of its class. Types
+  that only the wrapper uses go in `DtNmos::Detail`, not inside the class. The member
+  that holds the C handle is called `Native` in every class.
+- **The API has no C structs and no C enums.** Each C struct has a C++ struct, and each
+  C enum an `enum class` with the same values. The wrapper converts between them.
+  - Each conversion of a struct names the last field it knows, with
+    `DTNMOS_DETAIL_LAST_FIELD`. When the C API adds a field at the end, the build then
+    fails until the conversion handles it.
+  - Each conversion of an enum is a `switch` with a case for every value and no
+    `default`. When the C API adds a value, the compiler then warns, which the build
+    treats as an error.
+  - A small new field can fit in the padding at the end of a struct, where the check
+    does not see it. So **a commit that adds a field to a public struct, or a value to a
+    public enum, also adds it to the C++ conversion**. Review checks this.
+- **A function that can fail returns an `Expected` or a `Status`**, marked
+  `[[nodiscard]]`. The wrapper never throws an exception itself, and it builds with
+  exceptions turned off.
+- **Rule 11 applies to the public members of a class**: they are in alphabetical order,
+  after the static functions that create an object, such as `Open`. Review checks
+  this, because `Scripts/check_style.sh` only checks the `DTNMOS_API` lines of a `.h`.
 
-`Tests/Cpp` has its suite, built with `DTNMOS_WITH_CPP`, which is on where CMake finds a
-C++ compiler; it is built a second time with `-fno-exceptions`, except by MSVC.
+The tests of the C++ API are in `Tests/Cpp`. They are built when `DTNMOS_WITH_CPP` is on,
+which it is when CMake finds a C++ compiler. Each suite is built a second time with
+`-fno-exceptions`, except with MSVC.
 
 ## Tools
 

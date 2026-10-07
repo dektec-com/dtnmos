@@ -15,25 +15,25 @@
 #include "NmosOs.h"
 #include "dtnmos_node.h"
 
-// The callback of a sender or receiver, with its User and the release of it, which the
-// node and each running call of the callback share. Uses counts the node's registration
-// of the sender or receiver and each call that runs; the one that brings it to 0 releases
-// the User and frees this. Uses is counted under the node's lock.
+// The callback of a sender or receiver, with its User and its release. The sender or
+// receiver and each running call of the callback use it, and Uses counts them. Whoever
+// brings Uses to 0 calls the release and frees the entry. Uses changes only under the
+// node's lock.
 typedef struct NmosCallback
 {
     DtNmosSenderActivateFunc Sender;     // a sender's callback, or null
     DtNmosReceiverActivateFunc Receiver; // a receiver's callback, or null
     void* User;                          // the program's argument to the callback
-    DtNmosReleaseFunc Release;           // frees User, or null
-    int Uses;
-    struct NmosCallback* Next; // in a list of callbacks to release
+    DtNmosReleaseFunc Release;           // frees User; null when there is none
+    int Uses; // 1 while the sender or receiver exists, plus 1 for each running call
+    struct NmosCallback* Next; // the next entry in a list of entries to release
 } NmosCallback;
 
-// Gives back a use of Callback, which the caller took, under the node's lock. When it was
-// the last, Callback goes onto the list *Released, which the caller gives to
-// NmosCallback_ReleaseAll() after it has released the lock.
+// Gives back one use of Callback. The caller holds the node's lock. When this was the
+// last use, the function puts Callback on the list *Released. The caller passes that
+// list to NmosCallback_ReleaseAll() after it has unlocked the node.
 void NmosCallback_Drop(NmosCallback* Callback, NmosCallback** Released);
-// Calls the release of each callback of the list Released, and frees them. The caller
+// Calls the release of each entry on the list Released, and frees the entries. The caller
 // does not hold the node's lock.
 void NmosCallback_ReleaseAll(NmosCallback* Released);
 

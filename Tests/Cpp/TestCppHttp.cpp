@@ -17,9 +17,10 @@ using ResponsePtr = std::unique_ptr<DtNmosHttpResponse, DtNmos::Detail::HttpResp
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppHttpConverts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A request with a body that holds a null converts to the C API and back to itself, and
-// one without a body gives the C API no body and no content type; a response with two
-// headers and a body fills a C response that converts back to itself.
+// A request with a body that holds a null converts to the C API and back unchanged. A
+// request without a body gives the C API no body and no content type. A response with
+// two headers and a body fills a C response, which converts back unchanged; its headers
+// are found by name in any case.
 //
 NMOS_TEST(CppHttpConverts)
 {
@@ -59,7 +60,7 @@ NMOS_TEST(CppHttpConverts)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CallTrampoline -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Calls Http as the C library calls it, with a GET of the registry, into Response.
+// Calls Http as the C library calls it: with a GET of the registry, which fills Response.
 //
 static DtNmosResult CallTrampoline(const DtNmos::HttpFunction& Http,
                                    DtNmosHttpResponse* Response)
@@ -72,10 +73,11 @@ static DtNmosResult CallTrampoline(const DtNmos::HttpFunction& Http,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppHttpTrampoline -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The C library's call of an HttpFunction gives it the request, and fills the C
-// response with its answer. An Error it returns is the call's result and message; one
-// with Result::Ok, no failure, becomes Result::Http. With exceptions, one it throws is
-// Result::Http with its what().
+// The C library calls an HttpFunction through its trampoline. The function gets the
+// request, and its answer fills the C response. An Error it returns is the result and
+// message of the call. An Error with Result::Ok is no failure, and the call fails with
+// Result::Http. With exceptions, an exception it throws fails the call with Result::Http
+// and its what().
 //
 NMOS_TEST(CppHttpTrampoline)
 {
@@ -114,9 +116,9 @@ NMOS_TEST(CppHttpTrampoline)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppHttpCurl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// The C API is given libcurl's own function for CurlHttp, the trampoline for another
-// function, and none for an empty one. CurlHttp fails for a port nobody listens on, and
-// in a library without libcurl with Result::State.
+// The C API gets libcurl's own function for CurlHttp, the trampoline for any other
+// function, and no function for an empty one. CurlHttp fails for a port where nobody
+// listens. In a library without libcurl it fails with Result::State.
 //
 NMOS_TEST(CppHttpCurl)
 {

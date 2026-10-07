@@ -13,8 +13,8 @@
 #include "NmosTest.h"
 #include "dtnmos_sdp.hpp"
 
-// A video stream sent on two paths (ST 2022-7), and an audio stream: Camera.sdp of the
-// examples.
+// Camera.sdp of the examples: a video stream sent on two paths (ST 2022-7), and an
+// audio stream.
 static const char* const CameraSdp =
     "v=0\r\n"
     "o=- 1443716955 1443716955 IN IP4 192.168.1.10\r\n"
@@ -52,10 +52,11 @@ static const char* const CameraSdp =
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpReadsCamera -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Sdp::Parse() reads the session and the three flows of Camera.sdp: 1920x1080i 25 video
-// to 239.10.1.1:5004 from 192.168.1.10, its second path to 239.20.1.1 as Leg 1, and L24
-// audio at 48000 Hz with 2 channels to 239.10.1.2:5006, on PTP domain 127. What it
-// writes reads back the same.
+// Sdp::Parse() reads the session and the three flows of Camera.sdp. The first is
+// 1920x1080i 25 video to 239.10.1.1:5004 from 192.168.1.10, on PTP domain 127. The
+// second is its second path, to 239.20.1.1, as Leg 1. The third is L24 audio at 48000
+// Hz with 2 channels to 239.10.1.2:5006. Writing the SDP and reading it again gives the
+// same Sdp.
 //
 NMOS_TEST(CppSdpReadsCamera)
 {
@@ -118,8 +119,7 @@ static bool RoundTrip(const DtNmos::Flow& Value)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Transport -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Returns a flow whose fields outside its format all differ from their defaults, with
-// Format.
+// Returns a flow with Format whose other fields all differ from their defaults.
 //
 static DtNmos::Flow Transport(DtNmos::FlowFormat Format)
 {
@@ -145,10 +145,11 @@ static DtNmos::Flow Transport(DtNmos::FlowFormat Format)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpRoundTrips -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A flow of each kind, every field of it and of its format set to a value that is not
-// its default, converts to the C API and back to itself; so do a flow without a format,
-// an Other format without an a=fmtp line and the session. A field that one direction
-// forgets comes back as its default, and fails.
+// Every field converts to the C API and back unchanged. The test sets every field of a
+// flow of each kind, and of its format, to a value that is not its default. It also
+// converts a flow without a format, an OtherFormat without an a=fmtp line, and the
+// session. A field that one direction forgets comes back as its default, and fails the
+// test.
 //
 NMOS_TEST(CppSdpRoundTrips)
 {
@@ -234,7 +235,7 @@ NMOS_TEST(CppSdpRoundTrips)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpGetsMedia -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A flow's media is the kind of its format, and each kind has the C API's name.
+// A flow's media is the kind of its format. Each kind has the C API's name.
 //
 NMOS_TEST(CppSdpGetsMedia)
 {
@@ -257,8 +258,8 @@ NMOS_TEST(CppSdpGetsMedia)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpTexts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A value has the SDP's text, which reads back as the value; "" is None, and a text the
-// library does not know is Other, whose text is "".
+// A value has the SDP's text, and that text reads back as the value. "" reads as None.
+// A text the library does not know reads as Other, and Other has the text "".
 //
 NMOS_TEST(CppSdpTexts)
 {
@@ -286,8 +287,9 @@ NMOS_TEST(CppSdpTexts)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpDefaults -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// SetDefaults() gives a 1080-line picture Bt709 and Sdr, a 2160-line one Bt2020, and
-// keeps a colorimetry that is set; with a height of 0 the colorimetry stays None.
+// SetDefaults() gives a picture of 1080 lines Bt709 and Sdr, and one of 2160 lines
+// Bt2020. It keeps a colorimetry and TCS that are set. With a height of 0, the
+// colorimetry stays None.
 //
 NMOS_TEST(CppSdpDefaults)
 {
@@ -315,9 +317,9 @@ NMOS_TEST(CppSdpDefaults)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppSdpRefusesToWrite -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Write() refuses an SDP without flows, and one whose flow has a destination of 300
-// characters, longer than the C API's field, naming the field; Parse() refuses text that
-// is no SDP.
+// Write() refuses an SDP without flows. It also refuses one whose flow has a
+// destination of 300 characters, longer than the C API's field, and names the field.
+// Parse() refuses text that is no SDP.
 //
 NMOS_TEST(CppSdpRefusesToWrite)
 {

@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*# OnlyDtNmosQuery.cpp *#*#*#*#*#*#*#*#*#*#*#*#* (C) 2026 DekTec
 //
-// dtnmos - dtnmos_query.hpp alone: it needs no other header, and links into two sources
+// dtnmos - Checks that dtnmos_query.hpp compiles alone and links into two sources
 //
 // SPDX-License-Identifier: BSD-3-Clause
 

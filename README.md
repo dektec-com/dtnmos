@@ -383,10 +383,28 @@ static DtNmosResult connect_receiver(void* user, const DtNmosId* receiver,
 }
 ```
 
-`DtNmosNode_Remove()` returns at once, and a call of the function that runs then may
-still end after it. A `ReleaseUser` in the config of the sender or receiver frees the
-function's `user` once no call of it runs: inside `Remove()` or `Close()` when none
-does, and after the last call otherwise.
+The node never frees `user`; it only passes it to the function. `DtNmosNode_Remove()`
+returns at once, and if the function is running at that moment, it may still be
+running afterwards. So a program that frees `user` gives a `ReleaseUser` function in the
+config, and frees it there. The node calls that function when it is done with `user`:
+once the sender or receiver is removed and no call of the function is running. That is
+inside `Remove()` or `Close()` when the function is not running, and otherwise when its
+last call returns.
+
+```c
+static void release_port(void* user)
+{
+  struct my_port* port = user;  // the object of this receiver alone
+  my_port_stop(port);           // what must wait until no activation runs
+  free(port);
+}
+
+receiver.ReleaseUser = release_port;
+DtNmosNode_AddReceiver(node, &receiver, connect_receiver, port);
+```
+
+Senders that share one object lower a count of its users in the release instead, and
+free the object when the count reaches 0.
 
 An immediate activation calls the function while the controller waits for the answer. A
 scheduled one, absolute or relative, is answered with 202 and called from
@@ -408,29 +426,32 @@ them against it.
 
 ## In C++
 
-The C++ API is headers over the C library, one beside each C header: `dtnmos.hpp`,
-`dtnmos_sdp.hpp`, `dtnmos_http.hpp`, `dtnmos_query.hpp` and `dtnmos_node.hpp`. A program
-compiles them with its own compiler, C++23 or newer, and links `dtnmos::cpp`; the C
-library stays the one implementation. Its names are those of the C API with its prefix
-as the namespace: `DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
+The C++ API is a set of headers on top of the C library. There is one beside each C
+header: `dtnmos.hpp`, `dtnmos_sdp.hpp`, `dtnmos_http.hpp`, `dtnmos_query.hpp` and
+`dtnmos_node.hpp`. A program compiles them with its own compiler, which must support
+C++23, and links the CMake target `dtnmos::cpp`. All the work is still done by the C
+library. The names are those of the C API, with the prefix as the namespace:
+`DtNmos::Node::AddSender()` is `DtNmosNode_AddSender()`.
 
-- **No C type in the API.** Every struct is a value with `std::string`, `std::vector`
-  and `std::optional`, copied with `=` and compared with `==`; every enum an `enum class`
-  with the C values. A flow's format is a `std::variant`, and its media the kind it
-  holds.
-- **Results.** A call that can fail returns a `DtNmos::Expected<T>`, which is
-  `std::expected<T, DtNmos::Error>`, or a `DtNmos::Status` without a value, and the
-  compiler warns when one is ignored. `Error` has the `Result` and the message. The API
-  throws nothing of its own, and builds without exceptions.
-- **One owner.** `Open()` returns an object that is open, and destroying it closes it; a
-  node, a search, a query and a subscription are moved, not copied. A node borrows the
-  `RegistrySearch` of its config, and a subscription its `Query`: the program destroys
-  them after their borrowers, and one destroyed while borrowed ends the program with
-  `std::terminate()`, as a `std::thread` that is not joined does.
-- **Callbacks** are `std::function`s, and may capture what they need. The node frees the
-  function of a sender or receiver when it is removed and no call of it runs. An
-  activation that fails returns an `Error`, or throws, and the controller gets its
-  message.
+- **C++ types only.** Each C struct has a C++ struct that owns its strings and lists.
+  You copy it with `=` and compare it with `==`. Each C enum has an `enum class` with the
+  same values. A flow's format is a `std::variant`, and the kind of format it holds is
+  the flow's media.
+- **Results.** A function that can fail returns a `DtNmos::Expected<T>`, which is a
+  `std::expected<T, DtNmos::Error>`. A function without a value returns a
+  `DtNmos::Status`. The compiler warns when a program ignores one. An `Error` holds the
+  `Result` code and a message. The API never throws an exception itself, and it builds
+  with exceptions turned off.
+- **One owner.** `Open()` returns an object that is open, and destroying the object
+  closes it. You move a node, a search, a query or a subscription; you cannot copy them.
+  A node borrows the `RegistrySearch` in its config, and a subscription borrows its
+  `Query`. Destroy the search or query after the objects that borrow it. If a program
+  destroys it too early, `std::terminate()` stops the program, as it does for a
+  `std::thread` that was not joined.
+- **Callbacks** are `std::function`s, which may capture what they need. The node frees
+  the function of a sender or receiver after it is removed, as soon as no call of the
+  function is running. An activation can fail by returning an `Error` or by throwing; the
+  controller then gets the message.
 
 A node that finds its registry with DNS-SD, with a receiver:
 

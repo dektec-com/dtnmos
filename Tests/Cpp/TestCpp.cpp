@@ -19,8 +19,9 @@
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppIdFromName -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Id::FromName() gives the ID that DtNmosId_FromName() gives for the same namespace and
-// name, the same one each time; an empty namespace is refused with the C API's message.
+// Id::FromName() gives the same ID as DtNmosId_FromName() for the same namespace and
+// name, and gives it again on a second call. An empty namespace is refused with
+// Result::InvalidArgument and a message.
 //
 NMOS_TEST(CppIdFromName)
 {
@@ -44,8 +45,9 @@ NMOS_TEST(CppIdFromName)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppIdFromText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Id::FromText() takes a UUID, and writes one in upper case in lower case; it refuses "",
-// a UUID one character short or long, one without its hyphens, and one that is not hex.
+// Id::FromText() reads a UUID, and turns upper-case hex into lower case. It refuses "",
+// a UUID that is one character too short or too long, one without its hyphens, and one
+// with a letter that is not hex.
 //
 NMOS_TEST(CppIdFromText)
 {
@@ -74,8 +76,9 @@ NMOS_TEST(CppIdFromText)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppIdIsAKey -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// An empty Id is no ID and orders first; Ids order as their texts do, and are keys of a
-// std::map and a std::unordered_set, two of three alike.
+// An empty Id is no ID, and orders before any other. Ids order as their texts do. They
+// are keys of a std::unordered_set, which holds two of three Ids when two are equal, and
+// of a std::map, which lists the smaller first.
 //
 NMOS_TEST(CppIdIsAKey)
 {
@@ -97,8 +100,8 @@ NMOS_TEST(CppIdIsAKey)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppResultsConvert -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Every result converts to its C value and back, with the C value's number and name; a
-// log level as well.
+// Every result converts to its C value and back. It keeps the C value's number, and has
+// the C value's name. A log level converts to its C value and back as well.
 //
 NMOS_TEST(CppResultsConvert)
 {
@@ -136,8 +139,9 @@ NMOS_TEST(CppResultsConvert)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppCheck -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A C call that fails gives an Error with its result and the message it left; one that
-// succeeds, a Status that holds no Error. The version is the library's.
+// Check() turns a C result that is a failure into an Error. The Error has the result and
+// the message that the call left. A result of DTNMOS_OK gives a Status without an Error.
+// GetVersion() gives the version of the library.
 //
 NMOS_TEST(CppCheck)
 {
@@ -156,8 +160,9 @@ NMOS_TEST(CppCheck)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppCopyText -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A text that fits a char array of 8 is copied with its null; one of 8 characters is
-// refused, and leaves the array as it was.
+// CopyText() copies a text of 7 characters, with its null, into a char array of 8. It
+// refuses a text of 8 characters with Result::InvalidArgument, names the field in the
+// message, and leaves the array as it was.
 //
 NMOS_TEST(CppCopyText)
 {
@@ -173,7 +178,8 @@ NMOS_TEST(CppCopyText)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppLog -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The C log callback of a LogFunction passes the level and the message on, "" for NULL.
+// The C log callback of a LogFunction passes the level and the message on. A NULL
+// message arrives as "".
 //
 NMOS_TEST(CppLog)
 {
@@ -193,10 +199,10 @@ NMOS_TEST(CppLog)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppGuard -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Guard() passes on the Status of the function it calls. With exceptions, one that the
-// function throws becomes an Error with the code given: a std::exception with its
-// what(), anything else with a message of its own; a log function that throws is
-// dropped.
+// Guard() passes on the Status of the function it calls. With exceptions, it catches what
+// the function throws: a std::exception becomes an Error with the code given and its
+// what(), anything else an Error with a message of its own. A log function that throws
+// is called without effect.
 //
 NMOS_TEST(CppGuard)
 {

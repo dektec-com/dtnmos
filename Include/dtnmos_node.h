@@ -117,17 +117,29 @@ typedef struct DtNmosDeviceConfig
     const char* Description;
 } DtNmosDeviceConfig;
 
-// The program's function that frees what User, the argument of a sender's or receiver's
-// callback, holds, once the node calls the callback with it no more.
+// The program's function that the node calls when it is done with the User of a
+// sender's or receiver's callback.
 //
-// The node calls it once, after the sender or receiver is removed, by DtNmosNode_Remove()
-// of it or of its device, or by DtNmosNode_Close(), and when no call of its callback
-// runs: inside the call that removes it when none runs, and otherwise on the thread of
-// the last call that ran, after it returns. It is called without the node's lock; it must
-// not take a lock that the program holds around DtNmosNode_Remove() or
-// DtNmosNode_Close(), and it may call the node's functions but DtNmosNode_Close(). It is
-// not called when DtNmosNode_AddSender() or DtNmosNode_AddReceiver() fails; the program
-// still owns User then.
+// The node never frees or changes User itself: it only passes it to the callback. With
+// the release it tells the program that it will not call the callback again, so that the
+// program may now free what User points to, or end its use of it in any other way. A
+// program that gives each sender its own object, for example, frees that object here; one
+// whose senders share an object lowers a count of its users here, and frees it when the
+// count reaches 0. A program whose User needs no cleanup leaves ReleaseUser NULL.
+//
+// The node calls the release once, after the sender or receiver is removed, and after
+// the last call of the callback that was running has returned. Removing happens with
+// DtNmosNode_Remove() of the sender, the receiver or their device, or with
+// DtNmosNode_Close().
+//
+// If no call of the callback is running, the node calls the release inside
+// DtNmosNode_Remove() or DtNmosNode_Close(). Otherwise it calls it on the thread of the
+// running call, when that call returns. The node does not hold its lock then. The release
+// must not take a lock that the program holds around DtNmosNode_Remove() or
+// DtNmosNode_Close(), as it may run inside them.
+//
+// When DtNmosNode_AddSender() or DtNmosNode_AddReceiver() fails, the node does not call
+// the release: the program still owns User, and frees it itself.
 typedef void (*DtNmosReleaseFunc)(void* User);
 
 // How a sender is added. Strings and the flow are copied.
@@ -147,9 +159,9 @@ typedef struct DtNmosSenderConfig
     // How long the program needs to apply an activation, in milliseconds. The callback
     // of a scheduled activation is called this much early. 0: at the time itself.
     uint32_t ActivationLeadMs;
-    // Frees the User of the callback once the callback is called with it no more; NULL:
-    // the program frees it itself, after DtNmosNode_Remove() and when no call of the
-    // callback can still run.
+    // Called when the node is done with User (see DtNmosReleaseFunc), e.g. to free it.
+    // NULL: no call; a program that frees User itself must first make sure that no call
+    // of the callback still runs.
     DtNmosReleaseFunc ReleaseUser;
 } DtNmosSenderConfig;
 
@@ -274,8 +286,8 @@ DTNMOS_API DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* Node, char* Buffer,
                                           size_t* Size);
 
 // Closes Node: stops serving, unregisters everything from the registry, and forgets all
-// devices, senders and receivers, calling the ReleaseUser of each that has one. The node
-// may be opened again.
+// devices, senders and receivers. When the node is closed, it calls the ReleaseUser of
+// each sender and receiver that has one. The node may be opened again.
 DTNMOS_API DtNmosResult DtNmosNode_Close(DtNmosNode* Node);
 
 // Closes Node if it is open, and frees it. NULL does nothing.
@@ -326,10 +338,10 @@ DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 // Removes a device, sender or receiver from Node; removing a device also removes its
 // senders and receivers. The next poll unregisters them.
 //
-// It returns at once. A call of the callback of what it removes that runs meanwhile may
-// still end after it, and is then answered with 404; no call starts after it. The
-// ReleaseUser of the config is called when no call runs (see DtNmosReleaseFunc), which
-// may be inside this call.
+// It returns at once, without waiting for a callback. A callback of a removed sender or
+// receiver that is running may still be running after this returns; the controller
+// then gets 404. The node does not start a new call of it. The ReleaseUser of the
+// sender or receiver tells when the last call has ended (see DtNmosReleaseFunc).
 //
 // Returns DTNMOS_OK, or DTNMOS_E_NOT_FOUND when the node has no such ID.
 DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);

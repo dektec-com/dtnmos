@@ -36,9 +36,9 @@ option(
   DTNMOS_WITH_SERVER
   "Build the server of the node on civetweb, dtnmos_node_serve()"
   OFF)
-# The C++ API is headers over the C library, which a C++ program compiles itself; the
-# library is C alone. Its tests and example need a C++23 compiler, and are built by
-# default where a C++ compiler is found.
+# The C++ API is headers over the C library, which a C++ program compiles itself. The
+# library itself is C. The tests and the example of the C++ API need a C++23 compiler.
+# They are built by default when CMake finds a C++ compiler.
 include(CheckLanguage)
 check_language(CXX)
 set(_dtnmos_cpp_default OFF)
@@ -150,9 +150,10 @@ if(MSVC)
 endif()
 dtnmos_set_warnings(dtnmos)
 
-# The C++ API, dtnmos::cpp: the C library with C++23, which the headers need. The feature
-# is set as a property rather than with target_compile_features, which would need C++
-# enabled here; it is checked where a program links the target.
+# The target of the C++ API, dtnmos::cpp. It links the C library and asks for C++23,
+# which the headers need. It sets C++23 as a property, because target_compile_features
+# would need C++ enabled in this project. CMake checks the property where a program
+# links the target.
 add_library(dtnmos_cpp INTERFACE)
 add_library(dtnmos::cpp ALIAS dtnmos_cpp)
 target_link_libraries(dtnmos_cpp INTERFACE dtnmos)

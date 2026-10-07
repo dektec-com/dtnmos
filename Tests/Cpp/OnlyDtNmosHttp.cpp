@@ -1,6 +1,6 @@
 // #*#*#*#*#*#*#*#*#*#*#*#*# OnlyDtNmosHttp.cpp *#*#*#*#*#*#*#*#*#*#*#*#*# (C) 2026 DekTec
 //
-// dtnmos - dtnmos_http.hpp alone: it needs no other header, and links into two sources
+// dtnmos - Checks that dtnmos_http.hpp compiles alone and links into two sources
 //
 // SPDX-License-Identifier: BSD-3-Clause
 

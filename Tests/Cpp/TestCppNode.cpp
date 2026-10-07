@@ -26,15 +26,15 @@
 
 #define CONNECTION "/x-nmos/connection/v1.1/single/"
 
-// A registry that accepts everything, and records each request as "<method> <URL>"; the
-// requests to Unreachable get no answer.
+// A registry that accepts every request, and records each one as "<method> <URL>". A
+// request to a URL that holds Unreachable gets no answer.
 struct FakeRegistry
 {
     std::mutex Mutex;
     std::vector<std::string> Requests;
     std::string Unreachable;
 
-    // Returns the HttpFunction of the registry, which keeps a pointer to it.
+    // Returns the HttpFunction of the registry. The function keeps a pointer to it.
     DtNmos::HttpFunction Http()
     {
         return [this](const DtNmos::HttpRequest& Request)
@@ -80,7 +80,7 @@ static DtNmos::Id IdOf(const char* Text)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- VideoFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Returns 1280x720p50 10-bit 4:2:2 video to 239.0.0.1:5004.
+// Returns a flow of 1280x720p50 10-bit 4:2:2 video to 239.0.0.1:5004.
 //
 static DtNmos::Flow VideoFlow()
 {
@@ -102,8 +102,9 @@ static DtNmos::Flow VideoFlow()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- OpenNode -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Opens a node at 192.168.1.5:8080 that registers with Registry at registry.test, with a
-// device; Changes, when given, changes the config first.
+// Opens a node at 192.168.1.5:8080, which registers with Registry at registry.test,
+// and adds a device to it. Changes, when given, changes the config before the node is
+// opened.
 //
 static DtNmos::Expected<DtNmos::Node>
 OpenNode(FakeRegistry& Registry, void (*Changes)(DtNmos::NodeConfig&) = nullptr)
@@ -134,7 +135,7 @@ OpenNode(FakeRegistry& Registry, void (*Changes)(DtNmos::NodeConfig&) = nullptr)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SenderOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Returns the config of the video sender, from 192.168.1.5, on the device.
+// Returns the config of the video sender on the device, which sends from 192.168.1.5.
 //
 static DtNmos::SenderConfig SenderOf()
 {
@@ -149,7 +150,7 @@ static DtNmos::SenderConfig SenderOf()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ReceiverOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Returns the config of an audio receiver on 192.168.1.5, on the device.
+// Returns the config of an audio receiver on the device, which receives on 192.168.1.5.
 //
 static DtNmos::ReceiverConfig ReceiverOf()
 {
@@ -164,8 +165,8 @@ static DtNmos::ReceiverConfig ReceiverOf()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Patch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Sends a PATCH with Body to the staged parameters at Path, the sender's or receiver's
-// part of the Connection API, and returns the answer.
+// Sends a PATCH with Body to the staged parameters at Path in the Connection API, and
+// returns the answer. Path is e.g. "senders/<ID>".
 //
 static DtNmos::HttpResponse Patch(DtNmos::Node& Node, const std::string& Path,
                                   const std::string& Body)
@@ -180,9 +181,9 @@ static const char* const Enable =
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeOpens -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A node without an HTTP function is refused. One with it has its ID, port and URL, and
-// registers itself, its device, sender and receiver with the registry, through the
-// program's HTTP function.
+// A node without an HTTP function is refused. A node with one has the ID, port and URL
+// of its config. Its first poll registers the node, the device, the sender and the
+// receiver: at least 6 POSTs reach the registry through the program's HTTP function.
 //
 NMOS_TEST(CppNodeOpens)
 {
@@ -211,9 +212,10 @@ NMOS_TEST(CppNodeOpens)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeActivates -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A controller's activation of the sender, to 239.0.0.9:5010, reaches its function with
-// the sender's ID, the destination and its source 192.168.1.5; one of the receiver
-// without a transport file reaches its function without a flow, of the receiver's media.
+// A controller activates the sender, to 239.0.0.9:5010. The sender's function gets the
+// sender's ID, that destination and the source 192.168.1.5. A controller then activates
+// the receiver without a transport file. The receiver's function gets no flow: HasFlow
+// is false, and the flow is of the receiver's media, audio, to 192.168.1.5.
 //
 NMOS_TEST(CppNodeActivates)
 {
@@ -265,9 +267,9 @@ NMOS_TEST(CppNodeActivates)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeFailsAnActivation -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A function that returns an Error fails the activation: the controller gets 500 with
-// its message, and the node goes on. With exceptions, one that throws does the same with
-// the exception's what().
+// A function that returns an Error fails the activation: the controller gets 500 and
+// the Error's message, and the node goes on polling. With exceptions, a function that
+// throws fails it the same way, with the exception's what().
 //
 NMOS_TEST(CppNodeFailsAnActivation)
 {
@@ -299,9 +301,11 @@ NMOS_TEST(CppNodeFailsAnActivation)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeRemoves -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Removing the sender frees its function and what that captured, when Remove() returns;
-// removing the device frees the function of its receiver. A function that removes its own
-// sender does so, and the controller is told that it was removed during its activation.
+// Removing a sender or receiver frees its function, and what the function captured. The
+// two functions share a token, so its use count is 3. Removing the sender makes it 2,
+// and removing the device, which removes the receiver, makes it 1. A function that
+// removes its own sender gets success; the controller gets 404, and the function is
+// freed once it has returned.
 //
 NMOS_TEST(CppNodeRemoves)
 {
@@ -344,8 +348,9 @@ NMOS_TEST(CppNodeRemoves)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeRemovesWhileActivated -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Removing the sender while a controller's thread activates it returns at once, and
-// keeps what its function captured until the activation returns, which frees it.
+// Removing the sender while a controller's thread activates it returns at once. The
+// function keeps its token while it runs: the use count stays 2. When the activation
+// returns, the function is freed and the count is 1, and the controller gets 404.
 //
 NMOS_TEST(CppNodeRemovesWhileActivated)
 {
@@ -386,9 +391,9 @@ NMOS_TEST(CppNodeRemovesWhileActivated)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeMoves -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A node that is moved keeps its sender and its function; a node moved onto another
-// closes that one first, which unregisters it; the node moved from fails with
-// Result::State.
+// A node that is moved keeps its sender and the sender's function: a PATCH reaches the
+// function. Moving a node onto another closes the other first, which unregisters it.
+// The node that was moved from fails with Result::State, and has no ID.
 //
 NMOS_TEST(CppNodeMoves)
 {
@@ -425,8 +430,9 @@ NMOS_TEST(CppNodeMoves)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeUsesASearch -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A node given a fed search borrows it, and registers with the registry it was fed, also
-// after the search moved. Once the node is closed, the search may go before it.
+// A node given a fed search borrows it, and registers with the registry that the
+// search was fed. That still works after the search was moved to another object. Once
+// the node is closed, the search may be destroyed before the node.
 //
 NMOS_TEST(CppNodeUsesASearch)
 {
@@ -456,8 +462,8 @@ NMOS_TEST(CppNodeUsesASearch)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeMovesToAnotherRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A node whose registry fails asks its RegistryFailed function, which gives it another,
-// where it registers.
+// A node whose registry does not answer asks its RegistryFailed function, which names
+// another registry. The node then registers with that one.
 //
 NMOS_TEST(CppNodeMovesToAnotherRegistry)
 {
@@ -482,9 +488,9 @@ NMOS_TEST(CppNodeMovesToAnotherRegistry)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeChangesItsClockAndFlow -.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// A PTP clock converts to the C API and back to itself, and the node takes it; one whose
-// grandmaster is no EUI-64 is refused. The sender takes a video flow to another group,
-// and refuses an audio flow.
+// A PTP clock converts to the C API and back unchanged, and the node takes it. A PTP
+// clock whose grandmaster is no EUI-64 is refused. The sender takes a video flow to
+// another group, and refuses an audio flow.
 //
 NMOS_TEST(CppNodeChangesItsClockAndFlow)
 {
@@ -525,9 +531,9 @@ NMOS_TEST(CppNodeChangesItsClockAndFlow)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeIsDestroyedWhileActivated -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// A node that serves, and is destroyed while a controller's request activates its
-// sender, waits for the function, which then finishes on what it captured; with libcurl
-// and the server only.
+// A node that serves is destroyed while a controller's request activates its sender.
+// The destruction waits for the server's threads, so the function finishes, and sets
+// Finished, on what it captured. The test runs only with libcurl and the server.
 //
 NMOS_TEST(CppNodeIsDestroyedWhileActivated)
 {

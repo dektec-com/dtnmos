@@ -4,16 +4,16 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 //
-// Does what DtNmosRegisterNode.c does, with the same options and output, through the C++
-// API: runs an NMOS node for --seconds, registers it with a device, a video sender and a
-// video receiver, and serves its Node API and Connection API (IS-05), so that a
-// controller can connect them. The registry is the one at --registry, or one the node
-// finds on the network with DNS-SD. Each activation a controller makes is printed; the
-// program sends or receives nothing.
+// Does what DtNmosRegisterNode.c does, with the same options and output, but with the
+// C++ API. It runs an NMOS node for --seconds. The node registers a device, a video
+// sender and a video receiver, and serves its Node API and Connection API (IS-05), so
+// that a controller can connect them. The registry is the one at --registry, or one that
+// the node finds on the network with DNS-SD. The program prints each activation that a
+// controller makes, but sends and receives nothing.
 //
-// Needs dtnmos built with libcurl and the server; without the server it registers the
-// node but serves no Connection API. Exits with 0 when the time is over, and 1 when a
-// call failed.
+// It needs dtnmos built with libcurl and the server. Without the server, it registers
+// the node but serves no Connection API. It exits with 0 when the time is over, and with
+// 1 when a call failed.
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Include files -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
@@ -47,14 +47,14 @@ static const ExampleOption Options[] = {
     {"--traceable", false, "With --ptp: the grandmaster is traceable to TAI"},
 };
 
-// The namespace of this example's node IDs, the one of DtNmosRegisterNode.c, so that
-// both give a node of the same label the same IDs.
+// The namespace of the node IDs. It is the one of DtNmosRegisterNode.c, so that both
+// programs give a node with the same label the same IDs.
 static const char* const Namespace = "7c1d5a40-2b6e-4f39-9e0a-58d3b1c4e2f7";
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Failed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Prints "What: RESULT_NAME: the message of the failure" for a failed call, as
-// Example_Failed() does, and returns EXAMPLE_FAILED.
+// Prints "What: RESULT_NAME: message" for a call that failed, as Example_Failed() does,
+// and returns EXAMPLE_FAILED.
 //
 static int Failed(const char* What, const DtNmos::Error& Failure)
 {
@@ -66,9 +66,9 @@ static int Failed(const char* What, const DtNmos::Error& Failure)
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The receiver's function, called when a controller connects or disconnects it. A real
-// program would set up its receiving here, and return an Error when it cannot; this one
-// prints what it would receive.
+// Prints what the receiver would receive. The node calls it when a controller connects
+// or disconnects the receiver. A real program would set up its receiving here, and
+// return an Error when it cannot.
 //
 static DtNmos::Status ActivateReceiver(const DtNmos::Id& Receiver,
                                        const DtNmos::ReceiverActivation& Activation)
@@ -100,8 +100,8 @@ static DtNmos::Status ActivateReceiver(const DtNmos::Id& Receiver,
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// The sender's function, called when a controller enables, disables or redirects it.
-// Prints where it would send to.
+// Prints where the sender would send to. The node calls it when a controller enables,
+// disables or redirects the sender.
 //
 static DtNmos::Status ActivateSender(const DtNmos::Id& Sender,
                                      const DtNmos::SenderActivation& Activation)
@@ -170,9 +170,9 @@ static DtNmos::Flow DefaultFlow()
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Adds the device, a sender of Flow and a video receiver to the node. They send from and
-// receive on Address, and their IDs are made from the node's ID. Returns EXAMPLE_OK, or
-// EXAMPLE_FAILED after printing why.
+// Adds the device, a sender of Flow and a video receiver to the node. The sender sends
+// from Address, and the receiver receives on it. Their IDs are made from the node's ID.
+// Returns EXAMPLE_OK, or EXAMPLE_FAILED after it printed why.
 //
 static int AddAll(DtNmos::Node& Node, const std::string& Label, const DtNmos::Flow& Flow,
                   const std::string& Address)
@@ -220,10 +220,10 @@ static int AddAll(DtNmos::Node& Node, const std::string& Label, const DtNmos::Fl
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Run -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
-// Runs the node for Seconds: prints where it serves, and when it becomes registered. With
-// the server, the node polls itself on a thread of its own and the program only waits;
-// without it, the program polls the node when the node asks. Returns the program's exit
-// code.
+// Runs the node for Seconds, and prints where it serves and when it is registered. With
+// the server, the node polls itself on a thread of its own, and the program only waits.
+// Without the server, the program polls the node as often as the node asks. Returns the
+// program's exit code.
 //
 static int Run(DtNmos::Node& Node, int64_t Seconds)
 {
@@ -242,8 +242,9 @@ static int Run(DtNmos::Node& Node, int64_t Seconds)
         std::printf("dtnmos was built without its server: no Connection API is served\n");
     }
     std::fflush(stdout);
-    // The registry holds the node once it has registered. A change, an activation among
-    // them, makes the registration pending again until the next poll, which is not news.
+    // The program prints "registered" once, the first time the registry holds the node.
+    // Each change, such as an activation, makes the registration pending until the next
+    // poll; that is not printed.
     bool Registered = false;
     for (int64_t Elapsed = 0; Elapsed < Seconds * 1000;)
     {
@@ -311,7 +312,7 @@ int main(int Argc, char** Argv)
     const char* GivenLabel = Example_Value(Argc, Argv, "--label");
     const std::string Label = GivenLabel != nullptr ? GivenLabel : "dtnmos example";
 
-    // The flow the sender sends: the first of an SDP file, or a flow of its own.
+    // The sender sends the first flow of the SDP file, or the default flow.
     DtNmos::Flow Flow = DefaultFlow();
     const char* SdpPath = Example_Value(Argc, Argv, "--sdp");
     if (SdpPath != nullptr)
@@ -346,10 +347,10 @@ int main(int Argc, char** Argv)
         Config.Clock->Locked = Example_HasFlag(Argc, Argv, "--locked");
         Config.Clock->Traceable = Example_HasFlag(Argc, Argv, "--traceable");
     }
-    // Without --registry, the node takes the registries a search of the program finds
-    // with DNS-SD; a program of more nodes shares one search among them. The node
-    // borrows the search, so the program declares it before the node, which is then
-    // destroyed first.
+    // Without --registry, the node takes its registries from a search of the program,
+    // which finds them with DNS-SD. A program with several nodes shares one search
+    // among them. The node borrows the search, so the program declares the search
+    // before the node: the node is then destroyed first.
     const char* Url = Example_Value(Argc, Argv, "--registry");
     std::unique_ptr<DtNmos::RegistrySearch> Search;
     if (Url != nullptr)
@@ -391,8 +392,8 @@ int main(int Argc, char** Argv)
     {
         Exit = Run(*Node, Seconds);
     }
-    // Destroying the node closes it, which deletes what it registered from the registry;
-    // the search it borrowed goes after it.
+    // Destroying the node closes it, which deletes from the registry what it registered.
+    // The search that the node borrowed is destroyed after it.
     Node = std::unexpected(DtNmos::Error{});
     std::printf("unregistered\n");
     return Exit;

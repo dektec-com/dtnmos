@@ -4,9 +4,9 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# dtnmos_add_test(<suite> <source>...) builds the suite of a source file, and of the
-# sources after it, into a program of its own, test_<suite>, and registers it with CTest
-# as dtnmos.<suite>, as CDTAPI does. NmosTest.h is the whole framework.
+# dtnmos_add_test(<suite> <source>...) builds a suite from its sources into a program of
+# its own, test_<suite>, and registers it with CTest as dtnmos.<suite>, as CDTAPI does.
+# NmosTest.h is the whole framework.
 function(dtnmos_add_test suite source)
   set(target "test_${suite}")
   set(framework "${CMAKE_CURRENT_SOURCE_DIR}/NmosTest.h")
@@ -41,12 +41,14 @@ dtnmos_add_test(Query Loopback/TestQuery.c)
 dtnmos_add_test(Sdp Unit/TestSdp.c)
 dtnmos_add_test(Subscription Loopback/TestSubscription.c)
 
-# The suites of the C++ API, one per C++ header, on NmosTest.h as the others. Each C++
-# header has a source of its own that includes only it, so that it compiles alone, and so
-# that a function it defines without inline fails to link. MSVC warns of a switch that
-# misses a value of its enum, which the conversions rely on, only when asked. Each suite
-# is built a second time without exceptions, as <suite>NoExceptions, except by MSVC,
-# whose standard library does not support that.
+# The suites of the C++ API, one per C++ header, on NmosTest.h like the others.
+# - Each suite has a source that includes only its header. That checks that the header
+#   compiles alone. As the test source includes the header too, a function that the
+#   header defines without inline fails to link.
+# - The conversions rely on a warning for a switch that misses a value of its enum.
+#   MSVC gives that warning, C4062, only when asked, so it is turned on as an error.
+# - Each suite is built a second time without exceptions, as <suite>NoExceptions. MSVC
+#   does not build that, as its standard library does not support it.
 if(DTNMOS_WITH_CPP)
   set(_dtnmos_cpp_suites
       "Cpp TestCpp OnlyDtNmos" "CppSdp TestCppSdp OnlyDtNmosSdp"
@@ -72,9 +74,9 @@ if(DTNMOS_WITH_CPP)
       target_compile_options(test_${suite}NoExceptions PRIVATE -fno-exceptions)
     endif()
   endforeach()
-  # A search destroyed while a node borrows it, and a query destroyed while a
-  # subscription borrows it, call std::terminate(), whose handler in the program ends it
-  # with 0.
+  # The program of two tests. It destroys a search while a node borrows it, or a query
+  # while a subscription borrows it, which must call std::terminate(). The program's own
+  # terminate handler then ends it with 0.
   add_executable(test_CppBorrowed Cpp/Borrowed.cpp)
   set_target_properties(test_CppBorrowed PROPERTIES FOLDER "Tests")
   target_link_libraries(test_CppBorrowed PRIVATE dtnmos::cpp)
@@ -126,8 +128,8 @@ if(DTNMOS_INSTALL)
   if(CMAKE_GENERATOR MATCHES "Visual Studio")
     list(APPEND _package_vcpkg_options "-DCMAKE_VS_GLOBALS=VcpkgEnabled=false")
   endif()
-  # A consumer of the C++ API as well, which links dtnmos::cpp, when there is a compiler
-  # for it.
+  # The package test also builds a consumer of the C++ API, which links dtnmos::cpp, when
+  # there is a C++ compiler.
   set(_package_cpp_options)
   if(DTNMOS_WITH_CPP)
     list(APPEND _package_cpp_options "-DDTNMOS_PACKAGE_CPP=ON"
