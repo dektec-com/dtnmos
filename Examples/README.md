@@ -10,7 +10,7 @@ is also written with the C++ API, as `DtNmosRegisterNodeCpp`, built with
 | `DtNmosReadSdp` | Reads the SDP of an ST 2110 sender and prints its session and flows; `--write` writes them back as the SDP a sender of dtnmos gives |
 | `DtNmosListSenders` | Lists the senders a registry holds, with `--receivers` its receivers too, and with `--sdp` the SDP of each sender |
 | `DtNmosConnect` | Connects a receiver of a registry to a sender, each by its ID or label, as a controller of IS-05 does; `--disconnect` disconnects it |
-| `DtNmosRegisterNode` | Registers a node with a sender and a receiver, serves its Node API and Connection API, and prints what a controller activates on them; with `--ptp` the node has a PTP clock |
+| `DtNmosRegisterNode` | Registers a node with a sender and a receiver, serves its Node API and Connection API, and prints what a controller activates on them; with `--ptp` the node has a PTP clock, and with `--inactive` the sender starts inactive and the program makes it active once registered |
 | `DtNmosRegisterNodeCpp` | `DtNmosRegisterNode` with the C++ API, `DtNmosRegisterNode.cpp`: the same options, output and IDs |
 
 Every program lists its options with `--help`. A program that talks to a registry takes

@@ -14,8 +14,10 @@
 // 239.100.1.1:5004, sent from --address; the receiver receives on that address too. With
 // a card, give the address of its network port. The IDs are made from --label, so that
 // the node keeps them when it starts again. The node's clock is internal, or with --ptp
-// that of a PTP grandmaster, --locked and --traceable as given. Each activation a
-// controller makes is printed; the program only prints, and sends or receives nothing:
+// that of a PTP grandmaster, --locked and --traceable as given. With --inactive the
+// sender starts inactive, and the program makes it active once the node is registered,
+// as a player that starts to play. Each activation a controller makes is printed; the
+// program only prints, and sends or receives nothing:
 //
 //     node "dtnmos example" 6aac9516-..., registering with http://192.168.1.5:8010
 //     sender 9dfb9312-..., receiver a3b1ccff-...
@@ -54,6 +56,9 @@ static const ExampleOption Options[] = {
      "00-1b-19-ff-fe-00-00-01; internal by default"},
     {"--locked", false, "With --ptp: the node is locked to the grandmaster"},
     {"--traceable", false, "With --ptp: the grandmaster is traceable to TAI"},
+    {"--inactive", false,
+     "The sender starts inactive, and the program makes it active once the node is "
+     "registered"},
 };
 
 // The namespace of this example's node IDs, a version 4 UUID of its own.
@@ -169,11 +174,13 @@ static void DefaultFlow(DtNmosFlow* Flow)
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddAll -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Adds the device, a sender of Flow and a video receiver to the node. They send from and
-// receive on Address, and their IDs are made from the node's ID. Returns EXAMPLE_OK, or
+// receive on Address, and their IDs are made from the node's ID; the sender's ID goes to
+// SenderId. With Inactive the sender starts inactive. Returns EXAMPLE_OK, or
 // EXAMPLE_FAILED after printing why.
 //
 static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
-                  const DtNmosFlow* Flow, const char* Address)
+                  const DtNmosFlow* Flow, const char* Address, bool Inactive,
+                  DtNmosId* SenderId)
 {
     char Name[256];
     DtNmosDeviceConfig Device;
@@ -197,11 +204,13 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
     Sender.Label = Name;
     Sender.Flow = Flow;
     Sender.SourceIp = Address;
+    Sender.Inactive = Inactive;
     Result = DtNmosNode_AddSender(Node, &Sender, ActivateSender, NULL);
     if (Result != DTNMOS_OK)
     {
         return Example_Failed("DtNmosNode_AddSender", Result);
     }
+    *SenderId = Sender.Id;
 
     DtNmosReceiverConfig Receiver;
     memset(&Receiver, 0, sizeof(Receiver));
@@ -225,10 +234,11 @@ static int AddAll(DtNmosNode* Node, const DtNmosId* NodeId, const char* Label,
 //
 // Runs the node for Seconds: prints where it serves, and when it becomes registered. With
 // the server, the node polls itself on a thread of its own and the program only waits;
-// without it, the program polls the node when the node asks. Returns the program's exit
-// code.
+// without it, the program polls the node when the node asks. An inactive sender, when
+// Inactive is not null, is made active once the node is registered; while a controller's
+// activation runs that is refused, and tried again. Returns the program's exit code.
 //
-static int Run(DtNmosNode* Node, int64_t Seconds)
+static int Run(DtNmosNode* Node, int64_t Seconds, const DtNmosId* Inactive)
 {
     const bool Serves = DtNmos_HasServer();
     if (Serves)
@@ -269,6 +279,20 @@ static int Run(DtNmosNode* Node, int64_t Seconds)
             Registered = true;
             printf("registered\n");
             fflush(stdout);
+        }
+        if (Registered && Inactive != NULL)
+        {
+            const DtNmosResult Result = DtNmosNode_SetSenderActive(Node, Inactive, true);
+            if (Result == DTNMOS_OK)
+            {
+                printf("sender %s: made active\n", Inactive->Text);
+                fflush(stdout);
+                Inactive = NULL;
+            }
+            else if (Result != DTNMOS_E_STATE)
+            {
+                return Example_Failed("DtNmosNode_SetSenderActive", Result);
+            }
         }
         const int Wait = NextMs > 1000 ? 1000 : (int)NextMs;
         Example_SleepMs(Wait);
@@ -396,11 +420,14 @@ int main(int Argc, char** Argv)
     {
         ApiHost(Node, Address, sizeof(Address));
     }
-    int Exit = AddAll(Node, &Config.Id, Label, &Flow, Address);
+    const bool Inactive = Example_HasFlag(Argc, Argv, "--inactive");
+    DtNmosId SenderId;
+    memset(&SenderId, 0, sizeof(SenderId));
+    int Exit = AddAll(Node, &Config.Id, Label, &Flow, Address, Inactive, &SenderId);
     DtNmosSdp_Free(Sdp);
     if (Exit == EXAMPLE_OK)
     {
-        Exit = Run(Node, Seconds);
+        Exit = Run(Node, Seconds, Inactive ? &SenderId : NULL);
     }
     // Freeing the node closes it, which deletes what it registered from the registry; the
     // search it borrowed goes after it.

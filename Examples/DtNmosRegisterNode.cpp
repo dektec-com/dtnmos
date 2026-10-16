@@ -45,6 +45,9 @@ static const ExampleOption Options[] = {
      "00-1b-19-ff-fe-00-00-01; internal by default"},
     {"--locked", false, "With --ptp: the node is locked to the grandmaster"},
     {"--traceable", false, "With --ptp: the grandmaster is traceable to TAI"},
+    {"--inactive", false,
+     "The sender starts inactive, and the program makes it active once the node is "
+     "registered"},
 };
 
 // The namespace of the node IDs. It is the one of DtNmosRegisterNode.c, so that both
@@ -172,10 +175,11 @@ static DtNmos::Flow DefaultFlow()
 //
 // Adds the device, a sender of Flow and a video receiver to the node. The sender sends
 // from Address, and the receiver receives on it. Their IDs are made from the node's ID.
-// Returns EXAMPLE_OK, or EXAMPLE_FAILED after it printed why.
+// With Inactive the sender starts inactive. Returns EXAMPLE_OK, or EXAMPLE_FAILED after
+// it printed why.
 //
 static int AddAll(DtNmos::Node& Node, const std::string& Label, const DtNmos::Flow& Flow,
-                  const std::string& Address)
+                  const std::string& Address, bool Inactive)
 {
     const DtNmos::Id NodeId = Node.GetId();
     const DtNmos::Id DeviceId =
@@ -196,7 +200,8 @@ static int AddAll(DtNmos::Node& Node, const std::string& Label, const DtNmos::Fl
                            .Description = "",
                            .Flow = Flow,
                            .SourceIp = Address,
-                           .ActivationLeadMs = 0},
+                           .ActivationLeadMs = 0,
+                           .Inactive = Inactive},
                           ActivateSender);
     if (!Done)
     {
@@ -222,10 +227,12 @@ static int AddAll(DtNmos::Node& Node, const std::string& Label, const DtNmos::Fl
 //
 // Runs the node for Seconds, and prints where it serves and when it is registered. With
 // the server, the node polls itself on a thread of its own, and the program only waits.
-// Without the server, the program polls the node as often as the node asks. Returns the
-// program's exit code.
+// Without the server, the program polls the node as often as the node asks. An inactive
+// sender, when Inactive has one, is made active once the node is registered; while a
+// controller's activation runs that is refused, and tried again. Returns the program's
+// exit code.
 //
-static int Run(DtNmos::Node& Node, int64_t Seconds)
+static int Run(DtNmos::Node& Node, int64_t Seconds, std::optional<DtNmos::Id> Inactive)
 {
     const bool Serves = DtNmos::HasServer();
     if (Serves)
@@ -263,6 +270,20 @@ static int Run(DtNmos::Node& Node, int64_t Seconds)
             Registered = true;
             std::printf("registered\n");
             std::fflush(stdout);
+        }
+        if (Registered && Inactive)
+        {
+            const DtNmos::Status Made = Node.SetSenderActive(*Inactive, true);
+            if (Made)
+            {
+                std::printf("sender %s: made active\n", Inactive->ToString().c_str());
+                std::fflush(stdout);
+                Inactive.reset();
+            }
+            else if (Made.error().Code != DtNmos::Result::State)
+            {
+                return Failed("Node::SetSenderActive", Made.error());
+            }
         }
         const int Wait = Next.count() > 1000 ? 1000 : static_cast<int>(Next.count());
         Example_SleepMs(Wait);
@@ -387,10 +408,17 @@ int main(int Argc, char** Argv)
     }
     const char* GivenAddress = Example_Value(Argc, Argv, "--address");
     const std::string Address = GivenAddress != nullptr ? GivenAddress : ApiHost(*Node);
-    int Exit = AddAll(*Node, Label, Flow, Address);
+    const bool Inactive = Example_HasFlag(Argc, Argv, "--inactive");
+    int Exit = AddAll(*Node, Label, Flow, Address, Inactive);
     if (Exit == EXAMPLE_OK)
     {
-        Exit = Run(*Node, Seconds);
+        std::optional<DtNmos::Id> InactiveSender;
+        if (Inactive)
+        {
+            InactiveSender =
+                DtNmos::Id::FromName(Node->GetId(), "sender").value_or(DtNmos::Id());
+        }
+        Exit = Run(*Node, Seconds, InactiveSender);
     }
     // Destroying the node closes it, which deletes from the registry what it registered.
     // The search that the node borrowed is destroyed after it.
