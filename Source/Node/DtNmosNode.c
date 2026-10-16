@@ -1189,7 +1189,10 @@ DtNmosResult DtNmosNode_AddSender(DtNmosNode* Node, const DtNmosSenderConfig* Se
         Added->Description = CopyText(Sender->Description);
         Added->SourceIp = CopyText(Sender->SourceIp);
         Added->Callback = Callback;
-        Added->MasterEnable = true;
+        // Active, unless the program adds it inactive.
+        Added->MasterEnable = !(Sender->Size >= offsetof(DtNmosSenderConfig, Inactive) +
+                                                    sizeof(Sender->Inactive) &&
+                                Sender->Inactive);
         Added->SessionId = Node->LastVersion / 1000000000u;
         Added->SessionVersion = 1;
         if (Sender->Size >= offsetof(DtNmosSenderConfig, ActivationLeadMs) +
@@ -1483,6 +1486,46 @@ DtNmosResult DtNmosNode_SetClock(DtNmosNode* Node, const DtNmosClock* Clock)
     }
     NmosNode_Unlock(Node);
     return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_SetSenderActive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+DtNmosResult DtNmosNode_SetSenderActive(DtNmosNode* Node, const DtNmosId* Id, bool Active)
+{
+    const DtNmosResult Open = NmosNode_CheckOpen(Node, "DtNmosNode_SetSenderActive");
+    if (Open != DTNMOS_OK)
+    {
+        return Open;
+    }
+    if (Id == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosNode_SetSenderActive() needs an ID.");
+    }
+    NmosNode_Lock(Node);
+    DtNmosResult Result = DTNMOS_OK;
+    NmosNodeSender* Sender = NmosNode_FindSender(Node, Id);
+    bool Changed = false;
+    if (Sender == NULL)
+    {
+        Result =
+            NmosError_Fail(DTNMOS_E_NOT_FOUND, "The node has no sender %s.", Id->Text);
+    }
+    else
+    {
+        Result = NmosConnection_SetSenderActive(Sender, Active, &Changed);
+    }
+    if (Changed)
+    {
+        // A new version of the sender, which the poll registers at once rather than at
+        // the next heartbeat.
+        NewVersion(Node, Sender->Version, sizeof(Sender->Version));
+        ++Sender->SessionVersion;
+        Sender->Registered = false;
+        Node->Wake = true;
+    }
+    NmosNode_Unlock(Node);
+    return Result;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_UpdateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

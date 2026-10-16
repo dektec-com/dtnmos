@@ -127,7 +127,8 @@ DtNmosResult NmosConnection_InitSender(NmosNodeSender* Sender)
     t->SourcePort = Sender->Flow.DestinationPort;
     t->DestinationPort = Sender->Flow.DestinationPort;
     t->RtpEnabled = true;
-    c->Active.MasterEnable = true;
+    // It starts active unless the program added it inactive.
+    c->Active.MasterEnable = Sender->MasterEnable;
     c->Staged = c->Active;
     Sender->Connection = c;
     return DTNMOS_OK;
@@ -139,6 +140,42 @@ void NmosConnection_ClearSender(NmosNodeSender* Sender)
 {
     FreeConnection(Sender->Connection);
     Sender->Connection = NULL;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_SetSenderActive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The program's change comes after a controller's: while the callback applies an
+// activation, MakeActive() writes the parameters it applies when the callback returns,
+// which would undo the change, so the program is refused and tries again. A scheduled
+// activation keeps its staged parameters and applies them at its time.
+//
+DtNmosResult NmosConnection_SetSenderActive(NmosNodeSender* Sender, bool Active,
+                                            bool* Changed)
+{
+    NmosConnection* c = Sender->Connection;
+    *Changed = false;
+    if (c->Applying)
+    {
+        return NmosError_Fail(DTNMOS_E_STATE,
+                              "Sender %s is applying an activation; try again later.",
+                              Sender->Id.Text);
+    }
+    if (c->Active.MasterEnable == Active)
+    {
+        return DTNMOS_OK;
+    }
+    c->Active.MasterEnable = Active;
+    if (c->Staged.DueNs == 0)
+    {
+        c->Staged.MasterEnable = Active;
+    }
+    Sender->MasterEnable = Active && c->Active.Transport.RtpEnabled;
+    // A sender that is parked is subscribed to no receiver in IS-04; one made active
+    // again to the receiver a controller connected it to.
+    snprintf(Sender->ReceiverId.Text, sizeof(Sender->ReceiverId.Text), "%s",
+             Sender->MasterEnable ? c->Active.PeerId : "");
+    *Changed = true;
+    return DTNMOS_OK;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosConnection_InitReceiver -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.

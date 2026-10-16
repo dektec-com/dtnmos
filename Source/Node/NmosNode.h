@@ -68,7 +68,7 @@ typedef struct NmosNodeSender
     char Version[32];       // its IS-04 version stamp, renewed on each change
     bool Registered;        // the registry has this version, with its source and flow
     bool WasRegistered; // the registry has some version, which removing it must delete
-    bool MasterEnable;  // a controller has enabled it
+    bool MasterEnable;  // a controller, or the program, has enabled it
     uint64_t SessionId; // the session ID in its SDP
     uint64_t SessionVersion; // the session version in its SDP, raised on each change
     uint64_t LeadNs;  // how long before a scheduled activation its callback is called
@@ -130,7 +130,9 @@ struct DtNmosNode
     bool NodeWasRegistered; // the registry has some version, which closing must delete
     bool Closing; // the node is closing: it deletes what it registered and adds nothing
     uint64_t NextHeartbeatMs; // when the next heartbeat is due, in NmosOs_MonotonicMs()
-    bool Wake; // an activation was scheduled, which the next poll may have to apply
+    // An activation was scheduled, which the next poll may have to apply, or the program
+    // made a sender active or inactive, which the next poll registers
+    bool Wake;
     DtNmosRegistryFailedFunc RegistryFailed; // chooses another registry, or null
     void* RegistryFailedUser;                // the argument to RegistryFailed
     uint32_t FailuresBeforeSwitch; // failed polls in a row before it switches registry
@@ -217,6 +219,13 @@ void NmosNode_AnswerJson(DtNmosHttpResponse* Response, NmosBuffer* b);
 // lock itself.
 DtNmosResult NmosConnection_InitSender(NmosNodeSender* Sender);
 void NmosConnection_ClearSender(NmosNodeSender* Sender);
+// Makes a sender active or inactive as the program decides, under the lock the caller
+// holds: master_enable of its active parameters, and of its staged ones unless an
+// activation is scheduled; Sender->MasterEnable and its receiver follow, as after an
+// activation. Sets *Changed to whether master_enable changed. Returns DTNMOS_OK, or
+// DTNMOS_E_STATE while the sender's callback applies an activation.
+DtNmosResult NmosConnection_SetSenderActive(NmosNodeSender* Sender, bool Active,
+                                            bool* Changed);
 DtNmosResult NmosConnection_InitReceiver(NmosNodeReceiver* Receiver,
                                          const DtNmosReceiverConfig* Config);
 void NmosConnection_ClearReceiver(NmosNodeReceiver* Receiver);

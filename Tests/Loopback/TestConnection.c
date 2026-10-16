@@ -47,8 +47,13 @@ typedef struct NmosActivations
     void (*During)(struct NmosActivations* Seen);
     DtNmosNode* Node;
     int DuringStatus;
-    uint64_t CalledNs; // of the early sender: when its callback was called, in TAI
-    uint64_t AtNs;     // and the time its activation takes place
+    uint64_t CalledNs;   // of the early sender: when its callback was called, in TAI
+    uint64_t AtNs;       // and the time its activation takes place
+    bool SenderInactive; // MakeNode adds the sender inactive
+    // Called from within the sender's callback when it is not null, as the program
+    // changing the sender while an activation is applied.
+    void (*DuringSender)(struct NmosActivations* Seen);
+    DtNmosResult DuringResult;
 } NmosActivations;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ActivateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -64,6 +69,10 @@ static DtNmosResult ActivateSender(void* User, const DtNmosId* Sender,
              Activation->DestinationIp);
     Seen->DestinationPort = Activation->DestinationPort;
     snprintf(Seen->Source, sizeof(Seen->Source), "%s", Activation->SourceIp);
+    if (Seen->DuringSender != NULL)
+    {
+        Seen->DuringSender(Seen);
+    }
     if (Seen->Answer != DTNMOS_OK)
     {
         return DtNmos_SetLastError(Seen->Answer, "the card refused it");
@@ -164,8 +173,9 @@ static DtNmosNode* MakeNode(NmosActivations* Seen)
     Flow.Format.Video.RateDenominator = 1;
     Flow.Format.Video.Depth = 10;
     Flow.Format.Video.Sampling = DTNMOS_SAMPLING_YCBCR_422;
-    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID},   {DEVICE_ID}, "camera", "",
-                                 &Flow,          "192.168.1.5", 0,           NULL};
+    DtNmosSenderConfig Sender = {
+        sizeof(Sender), {SENDER_ID},   {DEVICE_ID}, "camera", "",
+        &Flow,          "192.168.1.5", 0,           NULL,     Seen->SenderInactive};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, ActivateSender, Seen) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {sizeof(Receiver),
                                      {RECEIVER_ID},
@@ -819,8 +829,9 @@ NMOS_TEST(ConnectionCallsItsLeadEarly)
     Flow.Format.Audio.SampleRate = 48000;
     Flow.Format.Audio.Channels = 2;
     Flow.Format.Audio.PacketTimeNs = 1000000;
-    DtNmosSenderConfig Early = {sizeof(Early), {EARLY_ID},    {DEVICE_ID}, "early", "",
-                                &Flow,         "192.168.1.5", 150,         NULL};
+    DtNmosSenderConfig Early = {
+        sizeof(Early), {EARLY_ID},    {DEVICE_ID}, "early", "",
+        &Flow,         "192.168.1.5", 150,         NULL,    false};
     NMOS_ASSERT(DtNmosNode_AddSender(Node, &Early, ActivateEarly, &Seen) == DTNMOS_OK);
 
     NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" EARLY_ID "/staged",
@@ -1413,6 +1424,192 @@ NMOS_TEST(ConnectionReleasesBeforeItsTime)
     NmosOs_MutexFree(b.Mutex);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SenderEnabled -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Returns whether master_enable is true in the sender's "active" or "staged" parameters.
+//
+static bool SenderEnabled(DtNmosNode* Node, const char* Leaf)
+{
+    char Path[160];
+    snprintf(Path, sizeof(Path), CONNECTION "senders/" SENDER_ID "/%s", Leaf);
+    NmosJson* Json = NULL;
+    NMOS_EXPECT(Ask(Node, "GET", Path, NULL, &Json) == 200);
+    const NmosJson* Enable = Json != NULL ? NmosJson_Member(Json, "master_enable") : NULL;
+    const bool Enabled = Enable != NULL && Enable->Type == DTNMOS_JSON_TRUE;
+    NmosJson_Free(Json);
+    return Enabled;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SenderSubscription -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Returns whether IS-04's subscription.active of the sender is true, and gives its
+// receiver_id in Receiver, "" for null.
+//
+static bool SenderSubscription(DtNmosNode* Node, char* Receiver, size_t Size)
+{
+    NmosJson* Json = NULL;
+    NMOS_EXPECT(Ask(Node, "GET", "/x-nmos/node/v1.3/senders/" SENDER_ID, NULL, &Json) ==
+                200);
+    const NmosJson* Subscription =
+        Json != NULL ? NmosJson_Member(Json, "subscription") : NULL;
+    const NmosJson* Active = NmosJson_Member(Subscription, "active");
+    const char* Id = NmosJson_MemberText(Subscription, "receiver_id");
+    snprintf(Receiver, Size, "%s", Id != NULL ? Id : "");
+    const bool Subscribed = Active != NULL && Active->Type == DTNMOS_JSON_TRUE;
+    NmosJson_Free(Json);
+    return Subscribed;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- ConnectionStartsAnInactiveSender -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A sender added Inactive has master_enable false, active and staged, and is not active
+// in IS-04, until the program makes it active, which calls no callback.
+NMOS_TEST(ConnectionStartsAnInactiveSender)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    Seen.SenderInactive = true;
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    char Receiver[37];
+    NMOS_ASSERT(!SenderEnabled(Node, "active"));
+    NMOS_ASSERT(!SenderEnabled(Node, "staged"));
+    NMOS_ASSERT(!SenderSubscription(Node, Receiver, sizeof(Receiver)));
+
+    const DtNmosId Sender = {SENDER_ID};
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, true) == DTNMOS_OK);
+    NMOS_ASSERT(SenderEnabled(Node, "active"));
+    NMOS_ASSERT(SenderEnabled(Node, "staged"));
+    NMOS_ASSERT(SenderSubscription(Node, Receiver, sizeof(Receiver)));
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 0);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.- ConnectionLetsTheProgramParkASender -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The program makes a connected sender inactive and active again: master_enable follows,
+// active and staged, IS-04 drops its receiver and gives it back, the callback is not
+// called, the activation in /active stays the controller's, and the next poll registers
+// the new version. The same state again registers nothing; an unknown sender is refused.
+NMOS_TEST(ConnectionLetsTheProgramParkASender)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"receiver_id\": \"" PEER_ID "\", "
+                       "\"activation\": {\"mode\": \"activate_immediate\"}}",
+                       NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    const int Registrations = Seen.Registrations;
+
+    const DtNmosId Sender = {SENDER_ID};
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, false) == DTNMOS_OK);
+    char Receiver[37];
+    NMOS_ASSERT(!SenderEnabled(Node, "active"));
+    NMOS_ASSERT(!SenderEnabled(Node, "staged"));
+    NMOS_ASSERT(!SenderSubscription(Node, Receiver, sizeof(Receiver)));
+    NMOS_ASSERT_STR(Receiver, "");
+    char Mode[64];
+    ActivationMode(Node, "active", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "activate_immediate");
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(!DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(Seen.Registrations > Registrations);
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+
+    const int Parked = Seen.Registrations;
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, false) == DTNMOS_OK);
+    NMOS_ASSERT(DtNmosNode_IsRegistered(Node));
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.Registrations, Parked);
+
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, true) == DTNMOS_OK);
+    NMOS_ASSERT(SenderEnabled(Node, "active"));
+    NMOS_ASSERT(SenderSubscription(Node, Receiver, sizeof(Receiver)));
+    NMOS_ASSERT_STR(Receiver, PEER_ID);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+
+    const DtNmosId Unknown = {FIXED_ID};
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Unknown, false) == DTNMOS_E_NOT_FOUND);
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, NULL, false) ==
+                DTNMOS_E_INVALID_ARGUMENT);
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ParkWhileApplied -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// The program makes the sender inactive while its callback applies an activation; it is
+// asked once.
+//
+static void ParkWhileApplied(NmosActivations* Seen)
+{
+    Seen->DuringSender = NULL;
+    const DtNmosId Sender = {SENDER_ID};
+    Seen->DuringResult = DtNmosNode_SetSenderActive(Seen->Node, &Sender, false);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.- ConnectionRefusesTheProgramWhileApplying -.-.-.-.-.-.-.-.-.-.-.-
+//
+// While the callback of a sender applies an activation, the program cannot change the
+// sender, as what the callback applies would undo it; afterwards it can.
+NMOS_TEST(ConnectionRefusesTheProgramWhileApplying)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    Seen.Node = Node;
+    Seen.DuringSender = ParkWhileApplied;
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"activation\": {\"mode\": \"activate_immediate\"}}", NULL),
+                   200);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(Seen.DuringResult == DTNMOS_E_STATE);
+    NMOS_ASSERT(SenderEnabled(Node, "active"));
+
+    const DtNmosId Sender = {SENDER_ID};
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, false) == DTNMOS_OK);
+    NMOS_ASSERT(!SenderEnabled(Node, "active"));
+    DtNmosNode_Free(Node);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.- ConnectionKeepsAScheduledActivation -.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// With an activation scheduled, the program changes only the active parameters: the
+// staged ones keep what the controller asked, which applies at its time.
+NMOS_TEST(ConnectionKeepsAScheduledActivation)
+{
+    NmosActivations Seen;
+    memset(&Seen, 0, sizeof(Seen));
+    DtNmosNode* Node = MakeNode(&Seen);
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT_EQ(Ask(Node, "PATCH", CONNECTION "senders/" SENDER_ID "/staged",
+                       "{\"master_enable\": true, "
+                       "\"activation\": {\"mode\": \"activate_scheduled_relative\", "
+                       "\"requested_time\": \"0:200000000\"}}",
+                       NULL),
+                   202);
+    const DtNmosId Sender = {SENDER_ID};
+    NMOS_ASSERT(DtNmosNode_SetSenderActive(Node, &Sender, false) == DTNMOS_OK);
+    NMOS_ASSERT(!SenderEnabled(Node, "active"));
+    NMOS_ASSERT(SenderEnabled(Node, "staged"));
+    char Mode[64];
+    ActivationMode(Node, "staged", Mode, sizeof(Mode));
+    NMOS_ASSERT_STR(Mode, "activate_scheduled_relative");
+
+    NmosOs_SleepMs(250);
+    NMOS_ASSERT(DtNmosNode_Poll(Node, NULL) == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Seen.SenderCalls, 1);
+    NMOS_ASSERT(Seen.SenderEnabled);
+    NMOS_ASSERT(SenderEnabled(Node, "active"));
+    DtNmosNode_Free(Node);
+}
+
 NMOS_TEST_MAIN(
     "Connection", NMOS_RUN(ConnectionAnswersItsParameters),
     NMOS_RUN(ConnectionConnectsAReceiver), NMOS_RUN(ConnectionMovesASender),
@@ -1424,4 +1621,7 @@ NMOS_TEST_MAIN(
     NMOS_RUN(ConnectionStartsWithTheTransport), NMOS_RUN(ConnectionReleasesAtRemove),
     NMOS_RUN(ConnectionReleasesAfterTheCall), NMOS_RUN(ConnectionReleasesAfterItsOwnCall),
     NMOS_RUN(ConnectionReleasesWithItsDevice), NMOS_RUN(ConnectionReleasesWhatWasAdded),
-    NMOS_RUN(ConnectionReleasesBeforeItsTime))
+    NMOS_RUN(ConnectionReleasesBeforeItsTime), NMOS_RUN(ConnectionStartsAnInactiveSender),
+    NMOS_RUN(ConnectionLetsTheProgramParkASender),
+    NMOS_RUN(ConnectionRefusesTheProgramWhileApplying),
+    NMOS_RUN(ConnectionKeepsAScheduledActivation))

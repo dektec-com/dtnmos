@@ -129,8 +129,9 @@ static DtNmosNode* MakeNode(NmosFakeRegistration* Registry, const char* Host,
     Flow.Format.Video.Depth = 10;
     Flow.Format.Video.Sampling = DTNMOS_SAMPLING_YCBCR_422;
     // The sender and the receiver are on the address of the APIs.
-    DtNmosSenderConfig Sender = {sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "",
-                                 &Flow,          Host,        0,           NULL};
+    DtNmosSenderConfig Sender = {
+        sizeof(Sender), {SENDER_ID}, {DEVICE_ID}, "camera", "",
+        &Flow,          Host,        0,           NULL,     false};
     NMOS_EXPECT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
     DtNmosReceiverConfig Receiver = {sizeof(Receiver),
                                      {RECEIVER_ID},
@@ -220,7 +221,8 @@ NMOS_TEST(NodeRegistersParentsBeforeChildren)
                                      &Bare,
                                      NULL,
                                      0,
-                                     NULL};
+                                     NULL,
+                                     false};
     NMOS_ASSERT(DtNmosNode_AddSender(Node, &Sourceless, NULL, NULL) ==
                 DTNMOS_E_INVALID_ARGUMENT);
     DtNmosNode_Free(Node);
@@ -362,6 +364,38 @@ NMOS_TEST(NodeChecksTheSizeOfAConfig)
     DtNmosDeviceConfig Device = {0, {DEVICE_ID}, "a card", ""};
     NMOS_ASSERT(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_E_INVALID_ARGUMENT);
     NMOS_ASSERT(strstr(DtNmos_GetLastError(), "DtNmosDeviceConfig") != NULL);
+
+    // A sender of 0.5.3's size, which ends before Inactive, starts active, whatever lies
+    // beyond its Size; one that says Inactive starts inactive.
+    Device.Size = sizeof(Device);
+    NMOS_ASSERT(DtNmosNode_AddDevice(Node, &Device) == DTNMOS_OK);
+    DtNmosFlow Flow = {0};
+    Flow.Size = sizeof(Flow);
+    Flow.Media = DTNMOS_MEDIA_AUDIO;
+    snprintf(Flow.DestinationIp, sizeof(Flow.DestinationIp), "%s", "239.0.0.2");
+    Flow.DestinationPort = 5004;
+    Flow.PayloadType = 97;
+    Flow.ClockRate = 48000;
+    Flow.Format.Audio.Encoding = DTNMOS_AUDIO_ENCODING_L24;
+    Flow.Format.Audio.SampleRate = 48000;
+    Flow.Format.Audio.Channels = 2;
+    Flow.Format.Audio.PacketTimeNs = 1000000;
+    DtNmosSenderConfig Sender;
+    memset(&Sender, 0, sizeof(Sender));
+    Sender.Size = offsetof(DtNmosSenderConfig, Inactive);
+    Sender.Id = (DtNmosId){SENDER_ID};
+    Sender.DeviceId = (DtNmosId){DEVICE_ID};
+    Sender.Label = "microphone";
+    Sender.Description = "";
+    Sender.Flow = &Flow;
+    Sender.SourceIp = "192.168.1.5";
+    Sender.Inactive = true;
+    NMOS_ASSERT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(NmosNode_FindSender(Node, &Sender.Id)->MasterEnable);
+    Sender.Size = sizeof(Sender);
+    Sender.Id = (DtNmosId){"aaaaaaaa-0000-4000-8000-000000000005"};
+    NMOS_ASSERT(DtNmosNode_AddSender(Node, &Sender, NULL, NULL) == DTNMOS_OK);
+    NMOS_ASSERT(!NmosNode_FindSender(Node, &Sender.Id)->MasterEnable);
     DtNmosNode_Free(Node);
 }
 

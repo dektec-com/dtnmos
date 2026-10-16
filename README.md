@@ -421,6 +421,15 @@ receiver given a transport file takes the group, source and port of its flow. Un
 controller connects it, a receiver's active parameters are the `SourceIp`,
 `MulticastIp` and `DestinationPort` of its config: what the program has it receive.
 
+A sender starts active, or inactive when its config says `Inactive`, and the program
+makes it active or inactive with `DtNmosNode_SetSenderActive()`, e.g. when it pauses,
+stops or switches a stream off: master_enable of the Connection API follows, active and
+staged, and so does IS-04's `subscription.active`, without a call of the function, and
+the node registers the new version at once. The program's change comes after a
+controller's: while the function applies an activation, `SetSenderActive()` fails with
+`DTNMOS_E_STATE`, and the program tries again; a scheduled activation keeps what it asked
+and applies it at its time. Setting the state the sender has changes nothing.
+
 The AMWA NMOS Testing Tool passes the node in IS-04-01, IS-05-01 and IS-05-02 without a
 failure; the interop tests (`DTNMOS_INTEROP_TESTS`, run with `ctest -L interop`) run
 them against it.

@@ -530,6 +530,46 @@ NMOS_TEST(CppNodeChangesItsClockAndFlow)
     NMOS_ASSERT(!Node->UpdateSender(IdOf(SENDER_ID), Audio).has_value());
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeMakesASenderActive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A sender added Inactive has master_enable false in the Connection API; SetSenderActive
+// makes it active without calling its function, and inactive again. An unknown sender is
+// refused with Result::NotFound.
+//
+NMOS_TEST(CppNodeMakesASenderActive)
+{
+    FakeRegistry Registry;
+    auto Node = OpenNode(Registry);
+    NMOS_ASSERT(Node.has_value());
+    DtNmos::SenderConfig Sender = SenderOf();
+    Sender.Inactive = true;
+    int Calls = 0;
+    NMOS_ASSERT(
+        Node->AddSender(Sender,
+                        [&Calls](const DtNmos::Id&, const DtNmos::SenderActivation&)
+                        {
+                            ++Calls;
+                            return DtNmos::Status();
+                        })
+            .has_value());
+    const auto Enabled = [&Node]
+    {
+        const auto Answer =
+            Node->Handle({"GET", CONNECTION "senders/" SENDER_ID "/active", "", "", 0});
+        return Answer.has_value() &&
+               Answer->Body.find("\"master_enable\": true") != std::string::npos;
+    };
+    NMOS_ASSERT(!Enabled());
+    NMOS_ASSERT(Node->SetSenderActive(IdOf(SENDER_ID), true).has_value());
+    NMOS_ASSERT(Enabled());
+    NMOS_ASSERT(Node->SetSenderActive(IdOf(SENDER_ID), false).has_value());
+    NMOS_ASSERT(!Enabled());
+    NMOS_ASSERT_EQ(Calls, 0);
+    const auto Refused = Node->SetSenderActive(IdOf(RECEIVER_ID), true);
+    NMOS_ASSERT(!Refused.has_value());
+    NMOS_ASSERT(Refused.error().Code == DtNmos::Result::NotFound);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.- CppNodeIsDestroyedWhileActivated -.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // A node that serves is destroyed while a controller's request activates its sender.
@@ -584,4 +624,5 @@ NMOS_TEST_MAIN("CppNode", NMOS_RUN(CppNodeOpens), NMOS_RUN(CppNodeActivates),
                NMOS_RUN(CppNodeRemovesWhileActivated), NMOS_RUN(CppNodeMoves),
                NMOS_RUN(CppNodeUsesASearch), NMOS_RUN(CppNodeMovesToAnotherRegistry),
                NMOS_RUN(CppNodeChangesItsClockAndFlow),
+               NMOS_RUN(CppNodeMakesASenderActive),
                NMOS_RUN(CppNodeIsDestroyedWhileActivated))

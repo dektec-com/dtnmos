@@ -136,6 +136,10 @@ struct SenderConfig
     // the function of a scheduled activation this much early. With 0, it calls it at the
     // time of the activation.
     uint32_t ActivationLeadMs = 0;
+    // The sender starts inactive: master_enable false in the Connection API and
+    // subscription.active false in IS-04, until Node::SetSenderActive() or a
+    // controller's activation makes it active.
+    bool Inactive = false;
 };
 
 // How a receiver is added.
@@ -366,6 +370,15 @@ class Node
     // Result::InvalidArgument when its Kind is not Internal or Ptp, or when the
     // Grandmaster of a Ptp clock is not an EUI-64.
     [[nodiscard]] Status SetClock(const Clock& NodeClock);
+
+    // Makes a sender active or inactive, as the program decides, e.g. when it stops or
+    // pauses: master_enable of the Connection API, active and staged unless an
+    // activation is scheduled, and subscription.active of IS-04 follow, without calling
+    // its function. The node registers the new version at once. Setting the state the
+    // sender has changes nothing. Fails with Result::NotFound when the node has no such
+    // sender, and with Result::State while its function applies an activation; then try
+    // again later.
+    [[nodiscard]] Status SetSenderActive(const Id& Sender, bool Active);
 
     // Replaces the flow of a sender, e.g. after its format changed. The sender's SDP
     // changes with it, and the next poll registers the new version. Fails with
@@ -670,7 +683,7 @@ inline Status Node::AddReceiver(const ReceiverConfig& Receiver, ReceiverActivate
 //
 inline Status Node::AddSender(const SenderConfig& Sender, SenderActivate Activate)
 {
-    DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderConfig, ReleaseUser);
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosSenderConfig, Inactive);
     const Status Open = CheckOpen();
     if (!Open)
     {
@@ -691,6 +704,7 @@ inline Status Node::AddSender(const SenderConfig& Sender, SenderActivate Activat
     Config.Flow = &Flow.Get();
     Config.SourceIp = Sender.SourceIp.c_str();
     Config.ActivationLeadMs = Sender.ActivationLeadMs;
+    Config.Inactive = Sender.Inactive;
     auto Entry = std::make_unique<Detail::ActivateEntry>();
     Entry->Sender = std::move(Activate);
     Config.ReleaseUser = Detail::ReleaseEntry;
@@ -879,6 +893,19 @@ inline Status Node::SetClock(const Clock& NodeClock)
         return DtNmos::Unexpected(Converted.error());
     }
     return Detail::Check(DtNmosNode_SetClock(Native.get(), &*Converted));
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::SetSenderActive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+inline Status Node::SetSenderActive(const Id& Sender, bool Active)
+{
+    const Status Open = CheckOpen();
+    if (!Open)
+    {
+        return Open;
+    }
+    const DtNmosId NativeId = Detail::Access::ToNative(Sender);
+    return Detail::Check(DtNmosNode_SetSenderActive(Native.get(), &NativeId, Active));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::UpdateSender -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

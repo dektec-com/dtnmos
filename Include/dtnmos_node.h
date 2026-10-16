@@ -163,6 +163,10 @@ typedef struct DtNmosSenderConfig
     // NULL: no call; a program that frees User itself must first make sure that no call
     // of the callback still runs.
     DtNmosReleaseFunc ReleaseUser;
+    // The sender starts inactive: master_enable false in the Connection API, active and
+    // staged, and subscription.active false in IS-04, until DtNmosNode_SetSenderActive()
+    // or a controller's activation makes it active. False: it starts active.
+    bool Inactive;
 } DtNmosSenderConfig;
 
 // How a receiver is added. Strings are copied.
@@ -364,6 +368,23 @@ DTNMOS_API DtNmosResult DtNmosNode_Serve(DtNmosNode* Node);
 //                              an EUI-64
 //   DTNMOS_E_STATE             the node is not open
 DTNMOS_API DtNmosResult DtNmosNode_SetClock(DtNmosNode* Node, const DtNmosClock* Clock);
+
+// Makes sender Id active or inactive, as the program decides, e.g. when it stops or
+// pauses: sets master_enable of the Connection API's active parameters, and of its staged
+// ones unless an activation is scheduled, which then applies at its time with what it
+// asked. IS-04's subscription.active follows, and a sender made inactive is subscribed to
+// no receiver. The callback is not called: a controller's activation does the same
+// through it. The activation in the active parameters stays that of the last activation.
+// The node registers the new version of the sender at once. Setting the state the sender
+// has changes nothing.
+//
+// Returns DTNMOS_OK, or:
+//   DTNMOS_E_NOT_FOUND         the node has no sender Id
+//   DTNMOS_E_INVALID_ARGUMENT  Id is NULL
+//   DTNMOS_E_STATE             the node is not open, or the sender's callback is applying
+//                              an activation (as a PATCH gets 423); try again later
+DTNMOS_API DtNmosResult DtNmosNode_SetSenderActive(DtNmosNode* Node, const DtNmosId* Id,
+                                                   bool Active);
 
 // Replaces the flow of sender Id, e.g. after its format changed. Its SDP changes with it,
 // and the next poll registers the new version.
