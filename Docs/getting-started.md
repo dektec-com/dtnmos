@@ -78,7 +78,7 @@ asks for C++23 itself gets the C++ API on `std::expected`.
     include(FetchContent)
     FetchContent_Declare(dtnmos
         GIT_REPOSITORY https://github.com/dektec-com/dtnmos.git
-        GIT_TAG v0.5.3)
+        GIT_TAG v0.5.4)
     set(DTNMOS_WITH_CURL ON)
     FetchContent_MakeAvailable(dtnmos)
     target_link_libraries(myapp PRIVATE dtnmos::dtnmos)
