@@ -113,7 +113,12 @@ struct DtNmosNode
     char* Label;
     char* Description;
     char* Hostname;
-    char* ApiHost;    // the address of the node's own APIs
+    // The address of the node's own APIs. For a node whose APIs follow its registry, the
+    // poll thread changes it, holding the lock.
+    char* ApiHost;
+    // The node takes its registry from a search and was given no ApiHost, so ApiHost is
+    // the address on the route to its registry, and its server listens on every address.
+    bool ApiHostFollows;
     uint16_t ApiPort; // the port of the node's own APIs
     // The base URL of the registry's Registration API, ending in /. Null while the node
     // is looking for a registry. The poll thread changes it, holding the lock.

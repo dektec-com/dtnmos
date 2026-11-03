@@ -259,6 +259,14 @@ Each registry tells which search found it (`FoundBy`); of equal priority, those 
 server come first. `Searches`, `DnsServer` and `DnsDomain` of the config choose the
 searches and give a server and domain of their own. IPv4 only, and DNS over UDP only.
 
+Multicast DNS is of one link, and by default the query goes out on the interface of the
+default route. A host of more networks, as one of SMPTE 2110 is, may have its registry on
+another: `Interfaces = DTNMOS_INTERFACES_ALL` sends the query from every IPv4 interface,
+and `DTNMOS_INTERFACES_LISTED` from the `InterfaceAddresses` the program gives, for
+instance the ones its user chose from `DtNmos_Interfaces()`. The answers of all come back
+in the same time, a registry found on two is listed once, and `LocalAddress` tells this
+host's address on the route to it.
+
 ```c
 
 DtNmosDiscoveryConfig config = {0};
@@ -363,6 +371,13 @@ on the poll thread after `FailuresBeforeSwitch` polls in a row failed (3 when 0)
 returns the URL of the next registry, which the node then registers with from the
 start. A registry that answers a first registration with 200 holds an old node of the
 same ID, which the node deletes before it registers again.
+
+The node registers the address of its APIs, `ApiHost` of its config, in its `href` and
+those of its devices and senders. Without one, it is this host's address on the route to
+the registry; a node with a `Search` takes it anew from each registry it moves to, and
+registers everything again when it changed, so that a registry on another network than
+the default route's reaches it. Such a node listens on every address.
+`DtNmosNode_RegistryUrl()` tells the registry the node uses now.
 
 ## Being connected
 

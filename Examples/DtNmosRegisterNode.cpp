@@ -48,6 +48,9 @@ static const ExampleOption Options[] = {
     {"--inactive", false,
      "The sender starts inactive, and the program makes it active once the node is "
      "registered"},
+    {"--all-interfaces", false,
+     "Without --registry: the search asks on every interface, not only on the one of the "
+     "default route"},
 };
 
 // The namespace of the node IDs. It is the one of DtNmosRegisterNode.c, so that both
@@ -380,8 +383,15 @@ int main(int Argc, char** Argv)
     }
     else
     {
+        // A host of more networks finds a registry that is not on the default route's.
+        std::optional<DtNmos::DiscoveryConfig> Discovery;
+        if (Example_HasFlag(Argc, Argv, "--all-interfaces"))
+        {
+            Discovery = DtNmos::DiscoveryConfig{};
+            Discovery->Interfaces = DtNmos::Interfaces::All;
+        }
         auto Opened = DtNmos::RegistrySearch::Open(
-            {.Finds = DtNmos::Finds::Registration, .Discovery = {}, .Fed = false});
+            {.Finds = DtNmos::Finds::Registration, .Discovery = Discovery, .Fed = false});
         if (!Opened)
         {
             return Failed("RegistrySearch::Open", Opened.error());

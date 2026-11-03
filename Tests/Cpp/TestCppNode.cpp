@@ -198,6 +198,7 @@ NMOS_TEST(CppNodeOpens)
     NMOS_ASSERT(Node->GetId() == IdOf(NODE_ID));
     NMOS_ASSERT_EQ(Node->ApiPort(), 8080);
     NMOS_ASSERT(Node->ApiUrl().value_or("") == "http://192.168.1.5:8080");
+    NMOS_ASSERT(Node->RegistryUrl().value_or("") == "http://registry.test");
     NMOS_ASSERT(Node->AddSender(SenderOf(), {}).has_value());
     NMOS_ASSERT(Node->AddReceiver(ReceiverOf(), {}).has_value());
     NMOS_ASSERT(!Node->AddDevice({.Id = IdOf(DEVICE_ID), .Label = "", .Description = ""})

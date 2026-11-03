@@ -979,6 +979,7 @@ typedef struct NmosFakeRegistries
     int Requests[2];
     int Registrations[2]; // POSTs of a resource
     bool Down[2];
+    char Node[2][4096]; // the last node that was registered
 } NmosFakeRegistries;
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -1000,6 +1001,15 @@ static DtNmosResult FakeRegistry(void* User, const DtNmosHttpRequest* Request,
             {
                 return DtNmos_SetLastError(DTNMOS_E_HTTP,
                                            "The registry does not answer.");
+            }
+            if (Request->Body != NULL &&
+                strstr(Request->Body, "\"type\": \"node\"") != NULL)
+            {
+                const size_t Length = Request->BodyLength < sizeof(f->Node[i]) - 1
+                                          ? Request->BodyLength
+                                          : sizeof(f->Node[i]) - 1;
+                memcpy(f->Node[i], Request->Body, Length);
+                f->Node[i][Length] = '\0';
             }
         }
     }
@@ -1116,6 +1126,100 @@ NMOS_TEST(NodeSearchesForItsRegistry)
     DtNmosNode_Free(Node);
     DtNmosRegistrySearch_Free(Search);
     StopResponder(&r);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NodeApisFollowTheRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A node with a search and no ApiHost registers the address on the route to its
+// registry, and, when it moves to one on another network, registers everything again
+// with that one's address.
+//
+NMOS_TEST(NodeApisFollowTheRegistry)
+{
+    DtNmosInterfaceList* Interfaces = NULL;
+    NMOS_ASSERT(DtNmos_Interfaces(&Interfaces) == DTNMOS_OK);
+    char Other[64] = "";
+    if (DtNmosInterfaceList_Count(Interfaces) > 0)
+    {
+        snprintf(Other, sizeof(Other), "%s",
+                 DtNmosInterfaceList_At(Interfaces, 0)->Address);
+    }
+    DtNmosInterfaceList_Free(Interfaces);
+    if (Other[0] == '\0')
+    {
+        printf("    (this host has no interface but loopback; nothing to test)\n");
+        return;
+    }
+    char OtherRegistry[128];
+    snprintf(OtherRegistry, sizeof(OtherRegistry), "http://%s:8082", Other);
+    char OtherBase[128];
+    snprintf(OtherBase, sizeof(OtherBase), "%s/", OtherRegistry);
+    NmosFakeRegistries Fake;
+    memset(&Fake, 0, sizeof(Fake));
+    Fake.Urls[0] = "http://127.0.0.1:8081/";
+    Fake.Urls[1] = OtherBase;
+    DtNmosRegistrySearchConfig SearchConfig;
+    memset(&SearchConfig, 0, sizeof(SearchConfig));
+    SearchConfig.Size = sizeof(SearchConfig);
+    SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+    SearchConfig.Fed = true;
+    DtNmosRegistrySearch* Search = DtNmosRegistrySearch_Alloc();
+    NMOS_ASSERT(Search != NULL);
+    NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &SearchConfig) == DTNMOS_OK);
+    const char* const Urls[] = {"http://127.0.0.1:8081", OtherRegistry};
+    NMOS_ASSERT(DtNmosRegistrySearch_Feed(Search, DTNMOS_SERVICE_REGISTRATION, Urls, 2) ==
+                DTNMOS_OK);
+    DtNmosNodeConfig Config;
+    memset(&Config, 0, sizeof(Config));
+    Config.Size = sizeof(Config);
+    Config.Id = (DtNmosId){"cccccccc-0000-4000-8000-000000000002"};
+    Config.Label = "following node";
+    Config.Description = "";
+    Config.Hostname = "following-node";
+    Config.ApiPort = 8080;
+    Config.Http = FakeRegistry;
+    Config.HttpUser = &Fake;
+    Config.HeartbeatMs = 1;
+    Config.Search = Search;
+    DtNmosNode* Node = DtNmosNode_Alloc();
+    NMOS_ASSERT(Node != NULL);
+    NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
+    char Url[256];
+    size_t Size = sizeof(Url);
+    NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Url, ""); // none taken yet
+
+    // The first registry is on loopback, and so are the node's APIs.
+    NMOS_ASSERT(PollUntil(Node, &Fake.Registrations[0], 0));
+    NMOS_ASSERT(strstr(Fake.Node[0], "\"href\": \"http://127.0.0.1:8080/\"") != NULL);
+    Size = sizeof(Url);
+    NMOS_ASSERT(DtNmosNode_ApiUrl(Node, Url, &Size) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Url, "http://127.0.0.1:8080");
+    Size = sizeof(Url);
+    NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Url, "http://127.0.0.1:8081");
+
+    // When it fails, the node moves to the other, whose route is another interface, and
+    // registers anew with its address there.
+    Fake.Down[0] = true;
+    NMOS_ASSERT(PollUntil(Node, &Fake.Registrations[1], 0));
+    char Href[128];
+    snprintf(Href, sizeof(Href), "\"href\": \"http://%s:8080/\"", Other);
+    NMOS_ASSERT(strstr(Fake.Node[1], Href) != NULL);
+    Size = sizeof(Url);
+    NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Url, OtherRegistry);
+    char ApiUrl[128];
+    snprintf(ApiUrl, sizeof(ApiUrl), "http://%s:8080", Other);
+    Size = sizeof(Url);
+    NMOS_ASSERT(DtNmosNode_ApiUrl(Node, Url, &Size) == DTNMOS_OK);
+    NMOS_ASSERT_STR(Url, ApiUrl);
+    // A buffer too small says what it needs.
+    Size = 4;
+    NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_E_BUFFER_TOO_SMALL);
+    NMOS_ASSERT_EQ(Size, strlen(OtherRegistry) + 1);
+    DtNmosNode_Free(Node);
+    DtNmosRegistrySearch_Free(Search);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearchIsFed -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -1290,5 +1394,5 @@ NMOS_TEST_MAIN(
     NMOS_RUN(DiscoveryTakesAConfigOfOldSize), NMOS_RUN(DiscoveryListsTheInterfaces),
     NMOS_RUN(DnsReadsResolvConf), NMOS_RUN(DiscoveryAsksADnsServerToo),
     NMOS_RUN(DiscoveryTakesOnlyTheDnsServer), NMOS_RUN(NodeSearchesForItsRegistry),
-    NMOS_RUN(RegistrySearchIsFed), NMOS_RUN(RegistrySearchSearches),
-    NMOS_RUN(RegistrySearchKeepsItsInterfaces))
+    NMOS_RUN(NodeApisFollowTheRegistry), NMOS_RUN(RegistrySearchIsFed),
+    NMOS_RUN(RegistrySearchSearches), NMOS_RUN(RegistrySearchKeepsItsInterfaces))

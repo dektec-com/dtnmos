@@ -167,13 +167,19 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* Node)
     {
         return NmosError_Fail(DTNMOS_E_STATE, "The node serves already.");
     }
+    // A node whose APIs follow its registry listens on every address, so that they
+    // answer at whichever it registers; the poll thread may change that one meanwhile.
+    char Listen[256];
+    NmosNode_Lock(Node);
+    snprintf(Listen, sizeof(Listen), "%s",
+             Node->ApiHostFollows ? "0.0.0.0" : Node->ApiHost);
+    NmosNode_Unlock(Node);
     if (Node->ApiPort == 0)
     {
-        Node->ApiPort = NmosOs_FreePort(Node->ApiHost);
+        Node->ApiPort = NmosOs_FreePort(Listen);
         if (Node->ApiPort == 0)
         {
-            return NmosError_Fail(DTNMOS_E_HTTP, "No TCP port is free on %s.",
-                                  Node->ApiHost);
+            return NmosError_Fail(DTNMOS_E_HTTP, "No TCP port is free on %s.", Listen);
         }
     }
     NmosServer* s = calloc(1, sizeof(*s));
@@ -183,9 +189,9 @@ DtNmosResult DtNmosNode_Serve(DtNmosNode* Node)
         return NmosError_FailMemory();
     }
     char Ports[300];
-    const int Ipv6 = strchr(Node->ApiHost, ':') != NULL;
-    snprintf(Ports, sizeof(Ports), "%s%s%s:%u", Ipv6 ? "[" : "", Node->ApiHost,
-             Ipv6 ? "]" : "", (unsigned)Node->ApiPort);
+    const int Ipv6 = strchr(Listen, ':') != NULL;
+    snprintf(Ports, sizeof(Ports), "%s%s%s:%u", Ipv6 ? "[" : "", Listen, Ipv6 ? "]" : "",
+             (unsigned)Node->ApiPort);
     // civetweb answers a browser's preflight itself, before the node sees it, and by
     // default allows only the method that was asked for. The node allows all of them.
     const char* Options[] = {"listening_ports",

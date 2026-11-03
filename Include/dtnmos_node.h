@@ -79,7 +79,9 @@ typedef struct DtNmosNodeConfig
     const char* Description;
     const char* Hostname;
     // The address at which controllers reach the node's APIs. NULL: the address of this
-    // host on the route to the registry, or, with Search, on the default route.
+    // host on the route to the registry. With Search, the route to the registry the node
+    // takes, which changes when it moves to one on another network, and the default
+    // route's until it has one; DtNmosNode_Serve() then listens on every address.
     const char* ApiHost;
     uint16_t ApiPort; // The port of the APIs; 0 lets DtNmosNode_Serve() pick a free one
     // The base URL of the registry, e.g. "http://registry.local". NULL: use Search.
@@ -339,6 +341,14 @@ DTNMOS_API DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig
 // again.
 DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 
+// Writes the base URL of the registry the node registers with now, e.g.
+// "http://192.168.1.10:8010", with its null, into Buffer of *Size bytes, and sets *Size
+// to its length; "" while a node with a search has found none yet.
+//
+// Returns DTNMOS_OK, or DTNMOS_E_BUFFER_TOO_SMALL; *Size is then the size needed.
+DTNMOS_API DtNmosResult DtNmosNode_RegistryUrl(const DtNmosNode* Node, char* Buffer,
+                                               size_t* Size);
+
 // Removes a device, sender or receiver from Node; removing a device also removes its
 // senders and receivers. The next poll unregisters them.
 //
@@ -350,8 +360,9 @@ DTNMOS_API DtNmosResult DtNmosNode_Poll(DtNmosNode* Node, uint32_t* NextMs);
 // Returns DTNMOS_OK, or DTNMOS_E_NOT_FOUND when the node has no such ID.
 DTNMOS_API DtNmosResult DtNmosNode_Remove(DtNmosNode* Node, const DtNmosId* Id);
 
-// Serves the Node API and the Connection API at ApiHost and ApiPort, and polls the node
-// on a thread of its own, until DtNmosNode_Close().
+// Serves the Node API and the Connection API at ApiHost and ApiPort, or on every address
+// for a node with a Search and no ApiHost, and polls the node on a thread of its own,
+// until DtNmosNode_Close().
 //
 // Returns DTNMOS_OK, or:
 //   DTNMOS_E_STATE  the library was built without the server (see DtNmos_HasServer())

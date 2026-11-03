@@ -128,6 +128,9 @@ static bool HostOfUrl(const char* Url, char* Host, size_t Size)
     return true;
 }
 
+// The path of the Registration API under the URL of a registry.
+static const char RegistrationPath[] = "/x-nmos/registration/v1.3/";
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrationBase -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Returns the base of the Registration API of the registry at url, which the caller
@@ -143,7 +146,7 @@ static char* RegistrationBase(const char* Url)
     NmosBuffer Base;
     memset(&Base, 0, sizeof(Base));
     NmosBuffer_Append(&Base, Url, Length);
-    DTNMOS_APPEND_LITERAL(&Base, "/x-nmos/registration/v1.3/");
+    NmosBuffer_Append(&Base, RegistrationPath, sizeof(RegistrationPath) - 1);
     if (Base.Failed)
     {
         NmosBuffer_Free(&Base);
@@ -308,7 +311,8 @@ DtNmosResult DtNmosNode_Open(DtNmosNode* Node, const DtNmosNodeConfig* Config)
     {
         // The address on the way to the registry, or, for a node that takes its registry
         // from a search, on the way to the group of multicast DNS: that of the default
-        // route.
+        // route, until it takes a registry, as FollowRegistry() has it.
+        Result->ApiHostFollows = Searches;
         char Registry[256] = "224.0.0.251";
         if ((!Searches &&
              !HostOfUrl(Config->RegistrationUrl, Registry, sizeof(Registry))) ||
@@ -1798,6 +1802,56 @@ bool DtNmosNode_IsRegistered(const DtNmosNode* Node)
     return All;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FollowRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Gives a node whose APIs follow its registry the address of this host on the route to
+// the registry at Url, so that the registry's clients reach the APIs. When the address
+// changes, the node and the devices and senders that name it get a new version, and the
+// node registers everything anew. On the poll thread.
+//
+static void FollowRegistry(DtNmosNode* Node, const char* Url)
+{
+    if (!Node->ApiHostFollows)
+    {
+        return;
+    }
+    char Host[256];
+    char Address[64];
+    if (!HostOfUrl(Url, Host, sizeof(Host)) ||
+        !NmosOs_AddressToward(Host, Address, sizeof(Address)))
+    {
+        NodeLog(Node, DTNMOS_LOG_WARNING,
+                "No route to %s was found; the node's APIs stay at %s.", Url,
+                Node->ApiHost);
+        return;
+    }
+    NmosNode_Lock(Node);
+    bool Moved = false;
+    char* Copy = strcmp(Node->ApiHost, Address) != 0 ? CopyText(Address) : NULL;
+    if (Copy != NULL)
+    {
+        free(Node->ApiHost);
+        Node->ApiHost = Copy;
+        NewVersion(Node, Node->Version, sizeof(Node->Version));
+        for (size_t i = 0; i < Node->DeviceCount; ++i)
+        {
+            NewVersion(Node, Node->Devices[i].Version, sizeof(Node->Devices[i].Version));
+        }
+        for (size_t i = 0; i < Node->SenderCount; ++i)
+        {
+            NewVersion(Node, Node->Senders[i].Version, sizeof(Node->Senders[i].Version));
+        }
+        ForgetRegistration(Node);
+        Moved = true;
+    }
+    NmosNode_Unlock(Node);
+    if (Moved)
+    {
+        NodeLog(Node, DTNMOS_LOG_INFO, "The node's APIs are at %s, on the route to %s.",
+                Address, Url);
+    }
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- TakeRegistry -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 // Moves the node to the registry at Url, which the caller of the node chose, and with
@@ -1817,6 +1871,7 @@ static bool TakeRegistry(DtNmosNode* Node, const char* Url)
     ForgetRegistration(Node);
     NmosNode_Unlock(Node);
     Node->Failures = 0;
+    FollowRegistry(Node, Url);
     return true;
 }
 
@@ -1933,6 +1988,7 @@ static bool TakeFound(DtNmosNode* Node)
             Node->Failures = 0;
             NodeLog(Node, DTNMOS_LOG_INFO, "The node registers with %s, of its search.",
                     Url);
+            FollowRegistry(Node, Url);
             Taken = true;
         }
         else if (AnyFailed)
@@ -2227,12 +2283,46 @@ DtNmosResult DtNmosNode_ApiUrl(const DtNmosNode* Node, char* Buffer, size_t* Siz
     }
     NmosBuffer b;
     memset(&b, 0, sizeof(b));
+    // The poll thread changes the address of a node that follows its registry.
+    NmosNode_Lock((DtNmosNode*)Node);
     NmosNode_WriteBaseUrl(Node, &b);
+    NmosNode_Unlock((DtNmosNode*)Node);
     const DtNmosResult Result = b.Failed
                                     ? NmosError_FailMemory()
                                     : NmosText_CopyText(Buffer, Size, b.Data, b.Length);
     NmosBuffer_Free(&b);
     return Result;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosNode_RegistryUrl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+DtNmosResult DtNmosNode_RegistryUrl(const DtNmosNode* Node, char* Buffer, size_t* Size)
+{
+    const DtNmosResult Open = NmosNode_CheckOpen(Node, "DtNmosNode_RegistryUrl");
+    if (Open != DTNMOS_OK)
+    {
+        return Open;
+    }
+    if (Size == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmosNode_RegistryUrl() needs a size.");
+    }
+    char Url[DTNMOS_MAX_URL_SIZE] = "";
+    NmosNode_Lock((DtNmosNode*)Node);
+    if (Node->Registration != NULL)
+    {
+        snprintf(Url, sizeof(Url), "%s", Node->Registration);
+    }
+    NmosNode_Unlock((DtNmosNode*)Node);
+    // The base of the Registration API is the registry's URL and RegistrationPath.
+    const size_t PathLength = sizeof(RegistrationPath) - 1;
+    size_t Length = strlen(Url);
+    if (Length >= PathLength && strcmp(Url + Length - PathLength, RegistrationPath) == 0)
+    {
+        Length -= PathLength;
+    }
+    return NmosText_CopyText(Buffer, Size, Url, Length);
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosNode_AnswerError -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

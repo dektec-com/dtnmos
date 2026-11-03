@@ -347,6 +347,10 @@ class Node
     // and the next poll tries again.
     [[nodiscard]] Expected<std::chrono::milliseconds> Poll();
 
+    // Returns the base URL of the registry the node registers with now, e.g.
+    // "http://192.168.1.10:8010"; "" while a node with a search has found none yet.
+    [[nodiscard]] Expected<std::string> RegistryUrl() const;
+
     // Removes a device, sender or receiver. Removing a device also removes its senders
     // and receivers. The next poll unregisters them.
     //
@@ -849,6 +853,39 @@ inline Expected<std::chrono::milliseconds> Node::Poll()
         return DtNmos::Unexpected(Polled.error());
     }
     return std::chrono::milliseconds(NextMs);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::RegistryUrl -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The C function first tells the size it needs, and then writes into a buffer of that
+// size. The node may move to another registry in between, so it asks again when the
+// buffer turned out too small.
+//
+inline Expected<std::string> Node::RegistryUrl() const
+{
+    const Status Open = CheckOpen();
+    if (!Open)
+    {
+        return DtNmos::Unexpected(Open.error());
+    }
+    std::string Url;
+    for (int Attempt = 0; Attempt < 3; ++Attempt)
+    {
+        std::size_t Size = Url.size();
+        const DtNmosResult Written = DtNmosNode_RegistryUrl(
+            Native.get(), Url.empty() ? nullptr : Url.data(), &Size);
+        if (Written == DTNMOS_OK)
+        {
+            Url.resize(Size);
+            return Url;
+        }
+        if (Written != DTNMOS_E_BUFFER_TOO_SMALL)
+        {
+            return DtNmos::Unexpected(Detail::LastError(Written));
+        }
+        Url.assign(Size, '\0');
+    }
+    return DtNmos::Unexpected(Detail::LastError(DTNMOS_E_BUFFER_TOO_SMALL));
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Node::Remove -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-

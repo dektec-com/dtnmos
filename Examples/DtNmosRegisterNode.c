@@ -59,6 +59,9 @@ static const ExampleOption Options[] = {
     {"--inactive", false,
      "The sender starts inactive, and the program makes it active once the node is "
      "registered"},
+    {"--all-interfaces", false,
+     "Without --registry: the search asks on every interface, not only on the one of the "
+     "default route"},
 };
 
 // The namespace of this example's node IDs, a version 4 UUID of its own.
@@ -353,6 +356,15 @@ int main(int Argc, char** Argv)
         memset(&SearchConfig, 0, sizeof(SearchConfig));
         SearchConfig.Size = sizeof(SearchConfig);
         SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+        // A host of more networks finds a registry that is not on the default route's.
+        DtNmosDiscoveryConfig Discovery;
+        memset(&Discovery, 0, sizeof(Discovery));
+        Discovery.Size = sizeof(Discovery);
+        Discovery.Interfaces = DTNMOS_INTERFACES_ALL;
+        if (Example_HasFlag(Argc, Argv, "--all-interfaces"))
+        {
+            SearchConfig.Discovery = &Discovery;
+        }
         Search = DtNmosRegistrySearch_Alloc();
         const DtNmosResult Opened =
             Search == NULL ? DTNMOS_E_NO_MEMORY
