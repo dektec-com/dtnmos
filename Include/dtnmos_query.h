@@ -360,13 +360,21 @@ typedef enum DtNmosSearch
     DTNMOS_SEARCH_UNICAST = 2,   // The network's DNS server, in the host's domain
 } DtNmosSearch;
 
+// Which network interfaces multicast DNS is asked on.
+typedef enum DtNmosInterfaces
+{
+    DTNMOS_INTERFACES_ONE = 0, // InterfaceAddress, or the one of the default route
+    DTNMOS_INTERFACES_ALL,     // Every IPv4 interface that is up, but loopback
+    DTNMOS_INTERFACES_LISTED,  // The InterfaceCount addresses of InterfaceAddresses
+} DtNmosInterfaces;
+
 // How DtNmos_Discover() searches.
 typedef struct DtNmosDiscoveryConfig
 {
     size_t Size;           // sizeof(DtNmosDiscoveryConfig)
     DtNmosService Service; // Which API to look for
-    // The IPv4 address of the network interface to search on; NULL for the one of the
-    // default route.
+    // The IPv4 address of the network interface to search on, with DTNMOS_INTERFACES_ONE;
+    // NULL for the one of the default route.
     const char* InterfaceAddress;
     // Where to send multicast DNS queries, "<IPv4 address>:<port>"; NULL for
     // "224.0.0.251:5353". A test may give a responder of its own.
@@ -382,6 +390,13 @@ typedef struct DtNmosDiscoveryConfig
     // The domain to search through the DNS server, e.g. "example.com"; NULL for the
     // host's own. Without a DNS server or a domain, only multicast DNS is searched.
     const char* DnsDomain;
+    // Which interfaces to ask multicast DNS on; 0 asks on one, as before 0.5.5. On
+    // several, the query goes out on each, and the answers of all are gathered in the
+    // same time; an interface it cannot be sent on is logged and left out.
+    DtNmosInterfaces Interfaces;
+    // The IPv4 addresses of the interfaces to ask on, with DTNMOS_INTERFACES_LISTED.
+    const char* const* InterfaceAddresses;
+    size_t InterfaceCount; // How many InterfaceAddresses has
 } DtNmosDiscoveryConfig;
 
 // One API of a registry that was found. Its pointer strings belong to the list it is
@@ -402,6 +417,9 @@ typedef struct DtNmosRegistryInfo
     bool Auth;    // The API asks for authorization (IS-10)
     bool Usable;  // dtnmos can use it: v1.3, over http or https, without authorization
     DtNmosSearch FoundBy; // The search that found it
+    // This host's IPv4 address on the route to the registry, through which multicast DNS
+    // found it; "" for one the DNS server or a program gave.
+    char LocalAddress[DTNMOS_MAX_ADDRESS_SIZE];
 } DtNmosRegistryInfo;
 
 // A list of registries that were found. It owns them and their strings. The order is:
@@ -415,10 +433,12 @@ typedef struct DtNmosRegistryList DtNmosRegistryList;
 // Finding none is not a failure: the list is then empty.
 //
 // Returns DTNMOS_OK, or:
-//   DTNMOS_E_INVALID_ARGUMENT  an address or domain in Config is malformed
+//   DTNMOS_E_INVALID_ARGUMENT  an address or domain in Config is malformed, or
+//                              DTNMOS_INTERFACES_LISTED comes without addresses
 //   DTNMOS_E_NETWORK           the socket could not be opened, or the multicast query
-//                              could not be sent
-// A DNS server that cannot be reached is only logged.
+//                              could be sent on no interface
+// A DNS server that cannot be reached, and an interface the query cannot be sent on, are
+// only logged.
 DTNMOS_API DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
                                         DtNmosRegistryList** List);
 
@@ -431,6 +451,41 @@ DTNMOS_API size_t DtNmosRegistryList_Count(const DtNmosRegistryList* List);
 
 // Frees List and its registries. NULL does nothing.
 DTNMOS_API void DtNmosRegistryList_Free(DtNmosRegistryList* List);
+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+= The interfaces of the host +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+//
+// The IPv4 network interfaces a search can ask on, for a program that lets its user
+// choose them (DTNMOS_INTERFACES_LISTED). A DekTec card's network port is among them.
+//
+
+// One IPv4 address of a network interface of this host.
+typedef struct DtNmosInterfaceInfo
+{
+    char Name[DTNMOS_MAX_ADDRESS_SIZE];    // Its name in the system, e.g. "Ethernet 2"
+    char Address[DTNMOS_MAX_ADDRESS_SIZE]; // The IPv4 address, e.g. "192.168.1.10"
+    // Its MAC address as IS-04 writes it, e.g. "00-14-f4-01-02-03";
+    // "00-00-00-00-00-00" when it has none
+    char PortId[DTNMOS_MAX_EUI48_SIZE];
+} DtNmosInterfaceInfo;
+
+// The interfaces of this host, in the order of the system. It owns them.
+typedef struct DtNmosInterfaceList DtNmosInterfaceList;
+
+// Sets *List to this host's IPv4 interfaces that are up, but loopback, one entry per
+// address, for the program to free. Having none is not a failure: the list is then empty.
+//
+// Returns DTNMOS_OK, or DTNMOS_E_INVALID_ARGUMENT when List is NULL.
+DTNMOS_API DtNmosResult DtNmos_Interfaces(DtNmosInterfaceList** List);
+
+// Returns interface Index (from 0) of List, or NULL past the end.
+DTNMOS_API const DtNmosInterfaceInfo*
+DtNmosInterfaceList_At(const DtNmosInterfaceList* List, size_t Index);
+
+// Returns how many interfaces List has; 0 for NULL.
+DTNMOS_API size_t DtNmosInterfaceList_Count(const DtNmosInterfaceList* List);
+
+// Frees List. NULL does nothing.
+DTNMOS_API void DtNmosInterfaceList_Free(DtNmosInterfaceList* List);
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+= One search of an application +=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //

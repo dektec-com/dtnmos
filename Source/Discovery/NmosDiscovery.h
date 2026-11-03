@@ -10,6 +10,12 @@
 
 #include "dtnmos_query.h"
 
+#include <stddef.h>
+
+// The size of DtNmosDiscoveryConfig up to 0.5.4, which ends before Interfaces: the
+// smallest the library takes.
+#define NMOS_DISCOVERY_CONFIG_SIZE_0_5_4 offsetof(DtNmosDiscoveryConfig, Interfaces)
+
 // Copies a list of registries, with its own copies of the strings. A null From gives an
 // empty list.
 DtNmosResult NmosRegistryList_Copy(const DtNmosRegistryList* From,

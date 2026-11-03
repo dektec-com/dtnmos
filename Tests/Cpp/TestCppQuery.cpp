@@ -97,6 +97,38 @@ NMOS_TEST(CppQueryDiscovers)
     NMOS_ASSERT(Logged >= 0);
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- CppQueryDiscoversOnInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// The host's interfaces are IPv4 and no loopback, and a search on listed interfaces
+// takes their addresses, and refuses a list without any.
+//
+NMOS_TEST(CppQueryDiscoversOnInterfaces)
+{
+    const auto Interfaces = DtNmos::ListInterfaces();
+    NMOS_ASSERT(Interfaces.has_value());
+    for (const DtNmos::InterfaceInfo& Interface : *Interfaces)
+    {
+        NMOS_ASSERT(Interface.Address.find('.') != std::string::npos);
+        NMOS_ASSERT(Interface.Address.rfind("127.", 0) != 0);
+        NMOS_ASSERT(Interface.PortId.size() == 17);
+    }
+
+    DtNmos::DiscoveryConfig Config;
+    Config.Service = DtNmos::Service::Registration;
+    Config.Destination = "127.0.0.1:9";
+    Config.TimeoutMs = 100;
+    Config.Searches = DtNmos::Search::Multicast;
+    Config.Interfaces = DtNmos::Interfaces::Listed;
+    Config.InterfaceAddresses = {"127.0.0.1"};
+    const auto Found = DtNmos::Discover(Config);
+    NMOS_ASSERT(Found.has_value());
+    NMOS_ASSERT(Found->empty());
+    Config.InterfaceAddresses.clear();
+    const auto Refused = DtNmos::Discover(Config);
+    NMOS_ASSERT(!Refused.has_value());
+    NMOS_ASSERT(Refused.error().Code == DtNmos::Result::InvalidArgument);
+}
+
 #define BASE "http://registry.test/x-nmos/query/v1.3/"
 #define WS_HREF "ws://registry.test/x-nmos/query/v1.3/subscriptions/1/ws"
 #define CAMERA_ID "11111111-1111-4111-8111-111111111111"
@@ -372,6 +404,6 @@ NMOS_TEST(CppQuerySubscribes)
 }
 
 NMOS_TEST_MAIN("CppQuery", NMOS_RUN(CppQueryFedSearch), NMOS_RUN(CppQueryRefusesASearch),
-               NMOS_RUN(CppQueryDiscovers), NMOS_RUN(CppQueryAsksTheRegistry),
-               NMOS_RUN(CppQueryConnects), NMOS_RUN(CppQueryParsesASender),
-               NMOS_RUN(CppQuerySubscribes))
+               NMOS_RUN(CppQueryDiscovers), NMOS_RUN(CppQueryDiscoversOnInterfaces),
+               NMOS_RUN(CppQueryAsksTheRegistry), NMOS_RUN(CppQueryConnects),
+               NMOS_RUN(CppQueryParsesASender), NMOS_RUN(CppQuerySubscribes))

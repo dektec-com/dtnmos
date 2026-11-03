@@ -300,12 +300,20 @@ enum class Search : unsigned
     Both = DTNMOS_SEARCH_MULTICAST | DTNMOS_SEARCH_UNICAST
 };
 
+// Which network interfaces multicast DNS is asked on.
+enum class Interfaces
+{
+    One = DTNMOS_INTERFACES_ONE,      // InterfaceAddress, or the one of the default route
+    All = DTNMOS_INTERFACES_ALL,      // Every IPv4 interface that is up, but loopback
+    Listed = DTNMOS_INTERFACES_LISTED // The addresses of InterfaceAddresses
+};
+
 // How Discover() searches.
 struct DiscoveryConfig
 {
     DtNmos::Service Service = DtNmos::Service::None; // Which API to look for
-    // The IPv4 address of the network interface to search on; "" for the interface of
-    // the default route.
+    // The IPv4 address of the network interface to search on, with Interfaces::One; ""
+    // for the interface of the default route.
     std::string InterfaceAddress;
     // Where to send the multicast DNS queries, as "<IPv4 address>:<port>"; "" for
     // "224.0.0.251:5353". A test may give a responder of its own.
@@ -319,6 +327,12 @@ struct DiscoveryConfig
     // The domain to search through the DNS server, e.g. "example.com"; "" for the domain
     // of the host. Without a DNS server or a domain, Discover() asks multicast DNS only.
     std::string DnsDomain;
+    // Which interfaces to ask multicast DNS on. On several, the query goes out on each,
+    // and the answers of all are gathered in the same time; an interface that it cannot
+    // be sent on is logged and left out.
+    DtNmos::Interfaces Interfaces = DtNmos::Interfaces::One;
+    // The IPv4 addresses of the interfaces to ask on, with Interfaces::Listed.
+    std::vector<std::string> InterfaceAddresses;
 };
 
 // One API of a registry that was found. A string that the registry does not announce is
@@ -339,6 +353,9 @@ struct RegistryInfo
     bool Auth = false; // The API asks for authorization (IS-10)
     bool Usable = false; // dtnmos can use it: v1.3, over http or https, without auth
     DtNmos::Search FoundBy = DtNmos::Search::Multicast; // The search that found it
+    // This host's IPv4 address on the route to the registry, through which multicast DNS
+    // found it; "" for one that the DNS server or the program gave.
+    std::string LocalAddress;
 
     friend bool operator==(const RegistryInfo&, const RegistryInfo&) = default;
 };
@@ -351,10 +368,31 @@ struct RegistryInfo
 // those without a priority last; then the ones that the DNS server announced before the
 // ones that multicast DNS did; then by name. IS-04 asks a client to pick at random among
 // registries of the same priority; that is up to the program. Fails with:
-//   Result::InvalidArgument  an address or domain in Config is malformed
+//   Result::InvalidArgument  an address or domain in Config is malformed, or
+//                            Interfaces::Listed comes without addresses
 //   Result::Network          the socket could not be opened, or the multicast query
-//                            could not be sent
+//                            could be sent on no interface
 [[nodiscard]] Expected<std::vector<RegistryInfo>> Discover(const DiscoveryConfig& Config);
+
+// +=+=+=+=+=+=+=+=+=+=+=+=+=+= The interfaces of the host +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+//
+
+// One IPv4 address of a network interface of this host.
+struct InterfaceInfo
+{
+    std::string Name;    // Its name in the system, e.g. "Ethernet 2"
+    std::string Address; // The IPv4 address, e.g. "192.168.1.10"
+    // Its MAC address as IS-04 writes it, e.g. "00-14-f4-01-02-03"; "00-00-00-00-00-00"
+    // when it has none
+    std::string PortId;
+
+    friend bool operator==(const InterfaceInfo&, const InterfaceInfo&) = default;
+};
+
+// Returns this host's IPv4 interfaces that are up, but loopback, one entry per address,
+// in the order of the system: those that DiscoveryConfig can list. Having none is not a
+// failure.
+[[nodiscard]] Expected<std::vector<InterfaceInfo>> ListInterfaces();
 
 // +=+=+=+=+=+=+=+=+=+=+=+=+=+= One search of an application +=+=+=+=+=+=+=+=+=+=+=+=+=+=+
 //
@@ -482,7 +520,7 @@ inline DtNmosService ToNative(Service Value)
 // Converts a registry that the C API found to a RegistryInfo.
 inline RegistryInfo FromNative(const DtNmosRegistryInfo& Native)
 {
-    DTNMOS_DETAIL_LAST_FIELD(DtNmosRegistryInfo, FoundBy);
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosRegistryInfo, LocalAddress);
     RegistryInfo Value;
     Value.Service = FromNative(Native.Service);
     Value.Instance = FromNative(Native.Instance);
@@ -496,6 +534,7 @@ inline RegistryInfo FromNative(const DtNmosRegistryInfo& Native)
     Value.Auth = Native.Auth;
     Value.Usable = Native.Usable;
     Value.FoundBy = FromNative(Native.FoundBy);
+    Value.LocalAddress = FromArray(Native.LocalAddress);
     return Value;
 }
 
@@ -519,13 +558,15 @@ inline std::vector<RegistryInfo> TakeList(DtNmosRegistryList* Native)
 
 // Returns Value as the C API takes it. An empty text becomes NULL.
 //
-// The result points into Value and into Log, so both must outlive it. Log is the
-// LogFunction that the C API calls. It is the Log of Value, or a copy of it that lives
-// longer than Value.
+// The result points into Value, into Log and into Addresses, so all three must outlive
+// it. Log is the LogFunction that the C API calls. It is the Log of Value, or a copy of
+// it that lives longer than Value. Addresses holds the pointers to Value's
+// InterfaceAddresses.
 inline DtNmosDiscoveryConfig ToNative(const DiscoveryConfig& Value,
-                                      const LogFunction& Log)
+                                      const LogFunction& Log,
+                                      std::vector<const char*>& Addresses)
 {
-    DTNMOS_DETAIL_LAST_FIELD(DtNmosDiscoveryConfig, DnsDomain);
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosDiscoveryConfig, InterfaceCount);
     DtNmosDiscoveryConfig Native{};
     Native.Size = sizeof(Native);
     Native.Service = ToNative(Value.Service);
@@ -538,8 +579,22 @@ inline DtNmosDiscoveryConfig ToNative(const DiscoveryConfig& Value,
     Native.Searches = static_cast<unsigned>(Value.Searches);
     Native.DnsServer = Value.DnsServer.empty() ? nullptr : Value.DnsServer.c_str();
     Native.DnsDomain = Value.DnsDomain.empty() ? nullptr : Value.DnsDomain.c_str();
+    Native.Interfaces = static_cast<DtNmosInterfaces>(Value.Interfaces);
+    Addresses.clear();
+    for (const std::string& Address : Value.InterfaceAddresses)
+    {
+        Addresses.push_back(Address.c_str());
+    }
+    Native.InterfaceAddresses = Addresses.empty() ? nullptr : Addresses.data();
+    Native.InterfaceCount = Addresses.size();
     return Native;
 }
+
+// Frees a DtNmosInterfaceList; the deleter of a std::unique_ptr.
+struct InterfaceListFree
+{
+    void operator()(DtNmosInterfaceList* List) const { DtNmosInterfaceList_Free(List); }
+};
 
 // Frees a DtNmosRegistrySearch; the deleter of a std::unique_ptr.
 struct RegistrySearchFree
@@ -809,7 +864,8 @@ struct SubscriptionState
 //
 inline Expected<std::vector<RegistryInfo>> Discover(const DiscoveryConfig& Config)
 {
-    const DtNmosDiscoveryConfig Native = Detail::ToNative(Config, Config.Log);
+    std::vector<const char*> Addresses;
+    const DtNmosDiscoveryConfig Native = Detail::ToNative(Config, Config.Log, Addresses);
     DtNmosRegistryList* List = nullptr;
     const Status Found = Detail::Check(DtNmos_Discover(&Native, &List));
     if (!Found)
@@ -817,6 +873,29 @@ inline Expected<std::vector<RegistryInfo>> Discover(const DiscoveryConfig& Confi
         return DtNmos::Unexpected(Found.error());
     }
     return Detail::TakeList(List);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ListInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+inline Expected<std::vector<InterfaceInfo>> ListInterfaces()
+{
+    DTNMOS_DETAIL_LAST_FIELD(DtNmosInterfaceInfo, PortId);
+    DtNmosInterfaceList* Native = nullptr;
+    const Status Listed = Detail::Check(DtNmos_Interfaces(&Native));
+    if (!Listed)
+    {
+        return DtNmos::Unexpected(Listed.error());
+    }
+    const std::unique_ptr<DtNmosInterfaceList, Detail::InterfaceListFree> Owned(Native);
+    std::vector<InterfaceInfo> Value;
+    for (std::size_t i = 0; i < DtNmosInterfaceList_Count(Native); ++i)
+    {
+        const DtNmosInterfaceInfo* Info = DtNmosInterfaceList_At(Native, i);
+        Value.push_back(InterfaceInfo{Detail::FromArray(Info->Name),
+                                      Detail::FromArray(Info->Address),
+                                      Detail::FromArray(Info->PortId)});
+    }
+    return Value;
 }
 
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearch::Open -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
@@ -835,11 +914,13 @@ inline Expected<RegistrySearch> RegistrySearch::Open(const RegistrySearchConfig&
     Native.Size = sizeof(Native);
     Native.Finds = static_cast<unsigned>(Config.Finds);
     Native.Fed = Config.Fed;
+    // The search copies the config, so the addresses need to live only until it opened.
     DtNmosDiscoveryConfig Discovery{};
+    std::vector<const char*> Addresses;
     if (Config.Discovery.has_value())
     {
         Made.State->Log = Config.Discovery->Log;
-        Discovery = Detail::ToNative(*Config.Discovery, Made.State->Log);
+        Discovery = Detail::ToNative(*Config.Discovery, Made.State->Log, Addresses);
         Native.Discovery = &Discovery;
     }
     const Status Opened =

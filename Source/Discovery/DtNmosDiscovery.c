@@ -8,6 +8,7 @@
 
 #include "dtnmos_query.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,8 +22,9 @@ enum
 {
     NMOS_MAX_INSTANCES = 64,
     NMOS_MAX_HOSTS = 64,
-    NMOS_MAX_MESSAGE = 9000, // the largest answer multicast DNS allows
-    NMOS_SENDS = 3,          // of the first query, spread over the timeout
+    NMOS_MAX_INTERFACES = 32, // that multicast DNS is asked on
+    NMOS_MAX_MESSAGE = 9000,  // the largest answer multicast DNS allows
+    NMOS_SENDS = 3,           // of the first query, spread over the timeout
     NMOS_DEFAULT_TIMEOUT_MS = 1000,
     NMOS_MDNS_PORT = 5353,
     NMOS_DNS_PORT = 53
@@ -74,6 +76,15 @@ typedef struct NmosSearch
     char Service[DTNMOS_DNS_NAME_SIZE]; // e.g. "_nmos-query._tcp.local"
     NmosGathered Found;
 } NmosSearch;
+
+// The interfaces multicast DNS is asked on. One without an address is that of the
+// default route, which the socket sends from as it is.
+typedef struct NmosInterfaceSet
+{
+    char Addresses[NMOS_MAX_INTERFACES][64];
+    bool Live[NMOS_MAX_INTERFACES]; // false once a query could not be sent from it
+    size_t Count;
+} NmosInterfaceSet;
 
 // A list owns the strings of its registries that are no arrays in its store.
 struct DtNmosRegistryList
@@ -440,13 +451,49 @@ static void Collect(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
     }
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- SendMulticast -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Sends a query of multicast DNS from each live interface of set; one it cannot be sent
+// from is logged and left out of the queries that follow. Returns whether it went out.
+//
+static bool SendMulticast(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
+                          NmosInterfaceSet* Set, const NmosSearch* One, const void* Query,
+                          size_t Length)
+{
+    bool Sent = false;
+    for (size_t i = 0; i < Set->Count; ++i)
+    {
+        if (!Set->Live[i])
+        {
+            continue;
+        }
+        const char* Interface = Set->Addresses[i];
+        if ((Interface[0] == '\0' || NmosOs_UdpSetInterface(Udp, Interface)) &&
+            NmosOs_UdpSend(Udp, One->Address, One->Port, Query, Length))
+        {
+            Sent = true;
+            continue;
+        }
+        if (Interface[0] != '\0')
+        {
+            LogMessage(Config, DTNMOS_LOG_WARNING,
+                       "The query for %s could not be sent from %s; that interface is "
+                       "left out.",
+                       One->Service, Interface);
+            Set->Live[i] = false;
+        }
+    }
+    return Sent;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AskMissing -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
-// Asks one search for the records its answers left out: multicast DNS in one query, and
-// the DNS server one question per query, as it answers no more. Returns whether it asked.
+// Asks one search for the records its answers left out: multicast DNS in one query, from
+// each interface, and the DNS server one question per query, as it answers no more.
+// Returns whether it asked.
 //
 static bool AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
-                       const NmosSearch* One, uint16_t Id)
+                       NmosInterfaceSet* Set, const NmosSearch* One, uint16_t Id)
 {
     const NmosGathered* Found = &One->Found;
     NmosDnsQuestion Missing[2 * NMOS_MAX_INSTANCES];
@@ -483,8 +530,13 @@ static bool AskMissing(const DtNmosDiscoveryConfig* Config, NmosUdp* Udp,
     {
         const size_t Length = NmosDns_WriteQuery(Query, NMOS_MAX_MESSAGE, Id, One->Flags,
                                                  Missing + First, PerQuery);
-        Asked |=
-            Length > 0 && NmosOs_UdpSend(Udp, One->Address, One->Port, Query, Length);
+        if (Length == 0)
+        {
+            continue;
+        }
+        Asked |= One->Kind == DTNMOS_SEARCH_MULTICAST
+                     ? SendMulticast(Config, Udp, Set, One, Query, Length)
+                     : NmosOs_UdpSend(Udp, One->Address, One->Port, Query, Length);
     }
     free(Query);
     return Asked;
@@ -760,6 +812,122 @@ static DtNmosResult ListRegistries(const DtNmosDiscoveryConfig* Config,
     return DTNMOS_OK;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- AddAskedOn -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Adds an address to set unless it has it already, or is full, which is logged.
+//
+static void AddAskedOn(const DtNmosDiscoveryConfig* Config, NmosInterfaceSet* Set,
+                       const char* Address)
+{
+    for (size_t i = 0; i < Set->Count; ++i)
+    {
+        if (strcmp(Set->Addresses[i], Address) == 0)
+        {
+            return;
+        }
+    }
+    if (Set->Count == NMOS_MAX_INTERFACES)
+    {
+        LogMessage(Config, DTNMOS_LOG_WARNING,
+                   "Multicast DNS is asked on %d interfaces at most; %s is left out.",
+                   (int)NMOS_MAX_INTERFACES, Address);
+        return;
+    }
+    snprintf(Set->Addresses[Set->Count], sizeof(Set->Addresses[0]), "%s", Address);
+    Set->Live[Set->Count++] = true;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- ChooseInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Fills set with the interfaces the config asks multicast DNS on. A config of 0.5.4,
+// which ends before Interfaces, asks on one. Fails for a malformed address or choice.
+//
+static DtNmosResult ChooseInterfaces(const DtNmosDiscoveryConfig* Config,
+                                     NmosInterfaceSet* Set)
+{
+    memset(Set, 0, sizeof(*Set));
+    const bool HasChoice =
+        Config->Size >=
+        offsetof(DtNmosDiscoveryConfig, InterfaceCount) + sizeof(Config->InterfaceCount);
+    const DtNmosInterfaces Which = HasChoice ? Config->Interfaces : DTNMOS_INTERFACES_ONE;
+    if (Which == DTNMOS_INTERFACES_ONE)
+    {
+        if (Config->InterfaceAddress != NULL && !IsIpv4(Config->InterfaceAddress))
+        {
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "The interface address %s is no IPv4 address.",
+                                  Config->InterfaceAddress);
+        }
+        AddAskedOn(Config, Set,
+                   Config->InterfaceAddress != NULL ? Config->InterfaceAddress : "");
+        return DTNMOS_OK;
+    }
+    if (Which == DTNMOS_INTERFACES_LISTED)
+    {
+        if (Config->InterfaceAddresses == NULL || Config->InterfaceCount == 0)
+        {
+            return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                  "DTNMOS_INTERFACES_LISTED needs InterfaceAddresses.");
+        }
+        for (size_t i = 0; i < Config->InterfaceCount; ++i)
+        {
+            const char* Address = Config->InterfaceAddresses[i];
+            if (Address == NULL || !IsIpv4(Address))
+            {
+                return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                                      "The interface address %s is no IPv4 address.",
+                                      Address != NULL ? Address : "(null)");
+            }
+            AddAskedOn(Config, Set, Address);
+        }
+        return DTNMOS_OK;
+    }
+    if (Which != DTNMOS_INTERFACES_ALL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "Interfaces is no DTNMOS_INTERFACES_* value.");
+    }
+    size_t Count = 0;
+    NmosInterface* Interfaces = NmosOs_Interfaces(&Count);
+    for (size_t i = 0; i < Count; ++i)
+    {
+        const char* Address = Interfaces[i].Address;
+        if (IsIpv4(Address) && strncmp(Address, "127.", 4) != 0)
+        {
+            AddAskedOn(Config, Set, Address);
+        }
+    }
+    free(Interfaces);
+    if (Set->Count == 0)
+    {
+        // Without an interface of its own, the default route is all there is to try.
+        LogMessage(Config, DTNMOS_LOG_DEBUG,
+                   "The host has no IPv4 interface; the default route is asked.");
+        AddAskedOn(Config, Set, "");
+    }
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NoteLocalAddresses -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// Writes into each registry that multicast DNS found with an address this host's address
+// on the route to it.
+//
+static void NoteLocalAddresses(DtNmosRegistryList* List)
+{
+    for (size_t i = 0; i < List->Count; ++i)
+    {
+        DtNmosRegistryInfo* Registry = &List->Registries[i];
+        if (Registry->FoundBy != DTNMOS_SEARCH_MULTICAST ||
+            Registry->Address[0] == '\0' ||
+            !NmosOs_AddressToward(Registry->Address, Registry->LocalAddress,
+                                  sizeof(Registry->LocalAddress)))
+        {
+            Registry->LocalAddress[0] = '\0';
+        }
+    }
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_Discover -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
@@ -774,8 +942,8 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmos_Discover() needs a config and a list.");
     }
-    const DtNmosResult Sized =
-        DTNMOS_CHECK_SIZE(Config, DtNmosDiscoveryConfig, sizeof(DtNmosDiscoveryConfig));
+    const DtNmosResult Sized = DTNMOS_CHECK_SIZE(Config, DtNmosDiscoveryConfig,
+                                                 NMOS_DISCOVERY_CONFIG_SIZE_0_5_4);
     if (Sized != DTNMOS_OK)
     {
         return Sized;
@@ -786,19 +954,23 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
         return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
                               "DtNmos_Discover() needs a config of a known service.");
     }
-    if (Config->InterfaceAddress != NULL && !IsIpv4(Config->InterfaceAddress))
-    {
-        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
-                              "The interface address %s is no IPv4 address.",
-                              Config->InterfaceAddress);
-    }
     NmosSearch* Searches = calloc(2, sizeof(*Searches));
     uint8_t* Buffer = malloc(NMOS_MAX_MESSAGE);
-    if (Searches == NULL || Buffer == NULL)
+    NmosInterfaceSet* Set = malloc(sizeof(*Set));
+    if (Searches == NULL || Buffer == NULL || Set == NULL)
     {
         free(Searches);
         free(Buffer);
+        free(Set);
         return NmosError_FailMemory();
+    }
+    const DtNmosResult Chosen = ChooseInterfaces(Config, Set);
+    if (Chosen != DTNMOS_OK)
+    {
+        free(Searches);
+        free(Buffer);
+        free(Set);
+        return Chosen;
     }
     const char* ServiceType = Config->Service == DTNMOS_SERVICE_QUERY
                                   ? "_nmos-query._tcp"
@@ -826,14 +998,21 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
     {
         Result = PrepareUnicast(Config, ServiceType, &Searches[1]);
     }
+    // One socket for every interface: each query sets the interface it goes out from,
+    // and the answers to all come back to its port. With one interface, it opens on it.
+    const char* OpenOn =
+        Set->Count == 1 && Set->Addresses[0][0] != '\0' ? Set->Addresses[0] : NULL;
     NmosUdp* Udp = NULL;
-    if (Result == DTNMOS_OK &&
-        (Udp = NmosOs_UdpOpen(NULL, Config->InterfaceAddress)) == NULL)
+    if (Result == DTNMOS_OK && (Udp = NmosOs_UdpOpen(NULL, OpenOn)) == NULL)
     {
         Result = NmosError_Fail(
             DTNMOS_E_NETWORK, "No socket for multicast DNS could be opened%s%s.",
-            Config->InterfaceAddress != NULL ? " on " : "",
-            Config->InterfaceAddress != NULL ? Config->InterfaceAddress : "");
+            OpenOn != NULL ? " on " : "", OpenOn != NULL ? OpenOn : "");
+    }
+    if (Result == DTNMOS_OK && Set->Count > 1)
+    {
+        LogMessage(Config, DTNMOS_LOG_DEBUG, "Asking multicast DNS on %zu interfaces.",
+                   Set->Count);
     }
     const uint32_t Timeout =
         Config->TimeoutMs != 0 ? Config->TimeoutMs : NMOS_DEFAULT_TIMEOUT_MS;
@@ -854,7 +1033,11 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
             const NmosDnsQuestion Question = {One->Service, DTNMOS_DNS_TYPE_PTR};
             const size_t Length =
                 NmosDns_WriteQuery(Query, sizeof(Query), Id, One->Flags, &Question, 1);
-            if (NmosOs_UdpSend(Udp, One->Address, One->Port, Query, Length) || Send > 0)
+            const bool Sent =
+                One->Kind == DTNMOS_SEARCH_MULTICAST
+                    ? SendMulticast(Config, Udp, Set, One, Query, Length)
+                    : NmosOs_UdpSend(Udp, One->Address, One->Port, Query, Length);
+            if (Sent || Send > 0)
             {
                 continue;
             }
@@ -885,7 +1068,7 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
         {
             if (Searches[s].Active)
             {
-                Asked |= AskMissing(Config, Udp, &Searches[s], Id);
+                Asked |= AskMissing(Config, Udp, Set, &Searches[s], Id);
             }
         }
         if (Asked)
@@ -902,10 +1085,82 @@ DtNmosResult DtNmos_Discover(const DtNmosDiscoveryConfig* Config,
     }
     if (Result == DTNMOS_OK)
     {
+        NoteLocalAddresses(*List);
         LogMessage(Config, DTNMOS_LOG_INFO, "Found %zu instances of %s.",
                    DtNmosRegistryList_Count(*List), ServiceType);
     }
     free(Searches);
     free(Buffer);
+    free(Set);
     return Result;
+}
+
+// A list of interfaces owns its entries.
+struct DtNmosInterfaceList
+{
+    DtNmosInterfaceInfo* Interfaces;
+    size_t Count;
+};
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmos_Interfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+DtNmosResult DtNmos_Interfaces(DtNmosInterfaceList** List)
+{
+    if (List == NULL)
+    {
+        return NmosError_Fail(DTNMOS_E_INVALID_ARGUMENT,
+                              "DtNmos_Interfaces() needs a list.");
+    }
+    *List = NULL;
+    size_t Count = 0;
+    NmosInterface* Found = NmosOs_Interfaces(&Count);
+    DtNmosInterfaceList* Result = calloc(1, sizeof(*Result));
+    if (Result == NULL ||
+        (Count > 0 &&
+         (Result->Interfaces = calloc(Count, sizeof(*Result->Interfaces))) == NULL))
+    {
+        free(Found);
+        free(Result);
+        return NmosError_FailMemory();
+    }
+    for (size_t i = 0; i < Count; ++i)
+    {
+        if (!IsIpv4(Found[i].Address) || strncmp(Found[i].Address, "127.", 4) == 0)
+        {
+            continue;
+        }
+        DtNmosInterfaceInfo* Info = &Result->Interfaces[Result->Count++];
+        snprintf(Info->Name, sizeof(Info->Name), "%s", Found[i].Name);
+        snprintf(Info->Address, sizeof(Info->Address), "%s", Found[i].Address);
+        snprintf(Info->PortId, sizeof(Info->PortId), "%s", Found[i].PortId);
+    }
+    free(Found);
+    *List = Result;
+    return DTNMOS_OK;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosInterfaceList_At -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+const DtNmosInterfaceInfo* DtNmosInterfaceList_At(const DtNmosInterfaceList* List,
+                                                  size_t Index)
+{
+    return List == NULL || Index >= List->Count ? NULL : &List->Interfaces[Index];
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosInterfaceList_Count -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+size_t DtNmosInterfaceList_Count(const DtNmosInterfaceList* List)
+{
+    return List == NULL ? 0 : List->Count;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DtNmosInterfaceList_Free -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+void DtNmosInterfaceList_Free(DtNmosInterfaceList* List)
+{
+    if (List != NULL)
+    {
+        free(List->Interfaces);
+        free(List);
+    }
 }

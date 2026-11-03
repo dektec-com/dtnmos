@@ -88,6 +88,11 @@ uint16_t NmosOs_UdpPort(const NmosUdp* Udp);
 bool NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void* Data,
                     size_t Length);
 
+// Makes the socket send multicast from the interface of InterfaceAddress, an IPv4 address
+// of this computer, from now on. Returns false when the address is malformed or not this
+// computer's.
+bool NmosOs_UdpSetInterface(NmosUdp* Udp, const char* InterfaceAddress);
+
 // Waits up to TimeoutMs for a datagram and copies it into Buffer. Returns its length, 0
 // when none came in time, or -1 on failure. FromAddress, when not null, gets the
 // sender's address as text, and *FromPort, when not null, its port.

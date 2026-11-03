@@ -94,6 +94,47 @@ static char* CopyOptional(const char* Text, bool* Failed)
     return Copy;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- CopyTexts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Copies Count texts and the array that holds them, leaving a null array or text null;
+// sets *Failed when the memory ran out.
+//
+static const char* const* CopyTexts(const char* const* Texts, size_t Count, bool* Failed)
+{
+    if (Texts == NULL || Count == 0)
+    {
+        return NULL;
+    }
+    char** Copy = calloc(Count, sizeof(*Copy));
+    if (Copy == NULL)
+    {
+        *Failed = true;
+        return NULL;
+    }
+    for (size_t i = 0; i < Count; ++i)
+    {
+        Copy[i] = CopyOptional(Texts[i], Failed);
+    }
+    return (const char* const*)Copy;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- FreeTexts -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// Frees what CopyTexts() made.
+//
+static void FreeTexts(const char* const* Texts, size_t Count)
+{
+    if (Texts == NULL)
+    {
+        return;
+    }
+    for (size_t i = 0; i < Count; ++i)
+    {
+        free((char*)Texts[i]);
+    }
+    free((void*)Texts);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- Stops -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 // Waits up to WaitMs, in steps, and returns whether the search is to stop. A wait that
@@ -192,6 +233,7 @@ static void Release(DtNmosRegistrySearch* Search)
     free((char*)Search->Discovery.Destination);
     free((char*)Search->Discovery.DnsServer);
     free((char*)Search->Discovery.DnsDomain);
+    FreeTexts(Search->Discovery.InterfaceAddresses, Search->Discovery.InterfaceCount);
     NmosOs_MutexFree(Search->Mutex);
     memset(Search, 0, sizeof(*Search));
 }
@@ -334,12 +376,14 @@ DtNmosResult DtNmosRegistrySearch_Open(DtNmosRegistrySearch* Search,
     if (Config->Discovery != NULL)
     {
         const DtNmosResult DiscoverySized = DTNMOS_CHECK_SIZE(
-            Config->Discovery, DtNmosDiscoveryConfig, sizeof(DtNmosDiscoveryConfig));
+            Config->Discovery, DtNmosDiscoveryConfig, NMOS_DISCOVERY_CONFIG_SIZE_0_5_4);
         if (DiscoverySized != DTNMOS_OK)
         {
             return DiscoverySized;
         }
-        Search->Discovery = *Config->Discovery;
+        // The fields past the program's Size keep their defaults, zero.
+        memset(&Search->Discovery, 0, sizeof(Search->Discovery));
+        memcpy(&Search->Discovery, Config->Discovery, Config->Discovery->Size);
     }
     Search->Discovery.Size = sizeof(Search->Discovery);
     bool Failed = false;
@@ -348,6 +392,8 @@ DtNmosResult DtNmosRegistrySearch_Open(DtNmosRegistrySearch* Search,
     Search->Discovery.Destination = CopyOptional(Search->Discovery.Destination, &Failed);
     Search->Discovery.DnsServer = CopyOptional(Search->Discovery.DnsServer, &Failed);
     Search->Discovery.DnsDomain = CopyOptional(Search->Discovery.DnsDomain, &Failed);
+    Search->Discovery.InterfaceAddresses = CopyTexts(
+        Search->Discovery.InterfaceAddresses, Search->Discovery.InterfaceCount, &Failed);
     Search->Finds = Config->Finds;
     Search->Fed = Config->Fed;
     Search->Mutex = NmosOs_MutexCreate();

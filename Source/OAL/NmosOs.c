@@ -690,6 +690,17 @@ bool NmosOs_UdpSend(NmosUdp* Udp, const char* Address, uint16_t Port, const void
                           (struct sockaddr*)&To, sizeof(To)) == Length;
 }
 
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpSetInterface -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+bool NmosOs_UdpSetInterface(NmosUdp* Udp, const char* InterfaceAddress)
+{
+    struct in_addr Interface;
+    memset(&Interface, 0, sizeof(Interface));
+    return inet_pton(AF_INET, InterfaceAddress, &Interface) == 1 &&
+           setsockopt(Udp->Socket, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&Interface,
+                      sizeof(Interface)) == 0;
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- NmosOs_UdpReceive -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 //
 int NmosOs_UdpReceive(NmosUdp* Udp, void* Buffer, size_t Size, uint32_t TimeoutMs,

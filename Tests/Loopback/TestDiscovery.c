@@ -8,6 +8,7 @@
 
 #include "dtnmos_query.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -632,6 +633,190 @@ NMOS_TEST(DiscoveryFindsNothingInSilence)
     NMOS_ASSERT(DtNmos_Discover(&Config, NULL) == DTNMOS_E_INVALID_ARGUMENT);
 }
 
+// The warnings a discovery logged.
+typedef struct NmosWarnings
+{
+    int Count;
+    char Last[512];
+} NmosWarnings;
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- KeepWarning -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+static void KeepWarning(void* User, DtNmosLogLevel Level, const char* Message)
+{
+    NmosWarnings* Kept = User;
+    if (Level == DTNMOS_LOG_WARNING)
+    {
+        ++Kept->Count;
+        snprintf(Kept->Last, sizeof(Kept->Last), "%s", Message);
+    }
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- QueriesOf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+static int QueriesOf(NmosResponder* r)
+{
+    NmosOs_MutexLock(r->Mutex);
+    const int Queries = r->Queries;
+    NmosOs_MutexUnlock(r->Mutex);
+    return Queries;
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- DiscoveryAsksOnListedInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+// A listed interface is asked once, however often it is listed; one that is not this
+// host's is logged and left out; the registry tells this host's address toward it.
+//
+NMOS_TEST(DiscoveryAsksOnListedInterfaces)
+{
+    NmosResponder r;
+    NMOS_ASSERT(StartResponder(&r, &RegistryB, 1, 1));
+    DtNmosDiscoveryConfig Config = ConfigFor(&r, 300);
+    const char* const Addresses[] = {"127.0.0.1", "192.0.2.1", "127.0.0.1"};
+    NmosWarnings Warnings;
+    memset(&Warnings, 0, sizeof(Warnings));
+    Config.Log = KeepWarning;
+    Config.LogUser = &Warnings;
+    Config.Interfaces = DTNMOS_INTERFACES_LISTED;
+    Config.InterfaceAddresses = Addresses;
+    Config.InterfaceCount = 3;
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    const int Queries = QueriesOf(&r);
+    StopResponder(&r);
+    NMOS_ASSERT(Result == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Queries, 3); // the three sends of the first query, from 127.0.0.1
+    NMOS_ASSERT_EQ(Warnings.Count, 1);
+    NMOS_ASSERT(strstr(Warnings.Last, "192.0.2.1") != NULL);
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 1);
+    const DtNmosRegistryInfo* Found = DtNmosRegistryList_At(List, 0);
+    NMOS_ASSERT_STR(Found->Url, "http://127.0.0.2:8080");
+    NMOS_ASSERT_EQ(Found->FoundBy, DTNMOS_SEARCH_MULTICAST);
+    NMOS_ASSERT(strncmp(Found->LocalAddress, "127.", 4) == 0);
+    DtNmosRegistryList_Free(List);
+
+    // What it refuses: no addresses, a malformed one, a choice it does not know; and no
+    // interface that can send.
+    DtNmosDiscoveryConfig Wrong = Config;
+    Wrong.InterfaceCount = 0;
+    NMOS_ASSERT(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    Wrong.InterfaceCount = 3;
+    Wrong.InterfaceAddresses = NULL;
+    NMOS_ASSERT(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    const char* const Malformed[] = {"127.0.0.1", "10.0.0"};
+    Wrong.InterfaceAddresses = Malformed;
+    Wrong.InterfaceCount = 2;
+    NMOS_ASSERT(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    Wrong = Config;
+    Wrong.Interfaces = (DtNmosInterfaces)7;
+    NMOS_ASSERT(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_INVALID_ARGUMENT);
+    const char* const Foreign[] = {"192.0.2.1"};
+    Wrong = Config;
+    Wrong.InterfaceAddresses = Foreign;
+    Wrong.InterfaceCount = 1;
+    NMOS_ASSERT(DtNmos_Discover(&Wrong, &List) == DTNMOS_E_NETWORK);
+    NMOS_ASSERT(List == NULL);
+}
+
+// .-.-.-.-.-.-.-.-.-.- DiscoveryCountsARegistryOnTwoInterfacesOnce -.-.-.-.-.-.-.-.-.-.-.
+//
+// The query goes out on each interface, and a registry that answers on both is one.
+//
+NMOS_TEST(DiscoveryCountsARegistryOnTwoInterfacesOnce)
+{
+    DtNmosInterfaceList* Interfaces = NULL;
+    NMOS_ASSERT(DtNmos_Interfaces(&Interfaces) == DTNMOS_OK);
+    char Other[DTNMOS_MAX_ADDRESS_SIZE] = "";
+    if (DtNmosInterfaceList_Count(Interfaces) > 0)
+    {
+        snprintf(Other, sizeof(Other), "%s",
+                 DtNmosInterfaceList_At(Interfaces, 0)->Address);
+    }
+    DtNmosInterfaceList_Free(Interfaces);
+    if (Other[0] == '\0')
+    {
+        printf("    (this host has no interface but loopback; nothing to test)\n");
+        return;
+    }
+    NmosResponder r;
+    NMOS_ASSERT(StartResponder(&r, &RegistryB, 1, 1));
+    DtNmosDiscoveryConfig Config = ConfigFor(&r, 300);
+    const char* const Addresses[] = {"127.0.0.1", Other};
+    Config.Interfaces = DTNMOS_INTERFACES_LISTED;
+    Config.InterfaceAddresses = Addresses;
+    Config.InterfaceCount = 2;
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    const int Queries = QueriesOf(&r);
+    StopResponder(&r);
+    NMOS_ASSERT(Result == DTNMOS_OK);
+    NMOS_ASSERT_EQ(Queries, 6); // three sends, each from both interfaces
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 1);
+    DtNmosRegistryList_Free(List);
+
+    // All the interfaces of the host, which loopback is not among, reach the responder
+    // too.
+    NMOS_ASSERT(StartResponder(&r, &RegistryB, 1, 1));
+    Config = ConfigFor(&r, 300);
+    Config.Interfaces = DTNMOS_INTERFACES_ALL;
+    const DtNmosResult AllResult = DtNmos_Discover(&Config, &List);
+    const int AllQueries = QueriesOf(&r);
+    StopResponder(&r);
+    NMOS_ASSERT(AllResult == DTNMOS_OK);
+    NMOS_ASSERT(AllQueries >= 3);
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 1);
+    DtNmosRegistryList_Free(List);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.- DiscoveryTakesAConfigOfOldSize -.-.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A config of 0.5.4, which ends before Interfaces, asks on one interface, whatever is in
+// the memory after it.
+//
+NMOS_TEST(DiscoveryTakesAConfigOfOldSize)
+{
+    NmosResponder r;
+    NMOS_ASSERT(StartResponder(&r, &RegistryB, 1, 1));
+    DtNmosDiscoveryConfig Config = ConfigFor(&r, 300);
+    Config.Size = offsetof(DtNmosDiscoveryConfig, Interfaces);
+    Config.Interfaces = DTNMOS_INTERFACES_LISTED; // past Size: not read
+    DtNmosRegistryList* List = NULL;
+    const DtNmosResult Result = DtNmos_Discover(&Config, &List);
+    StopResponder(&r);
+    NMOS_ASSERT(Result == DTNMOS_OK);
+    NMOS_ASSERT_EQ(DtNmosRegistryList_Count(List), 1);
+    DtNmosRegistryList_Free(List);
+    Config.Size = offsetof(DtNmosDiscoveryConfig, Interfaces) - 1;
+    NMOS_ASSERT(DtNmos_Discover(&Config, &List) == DTNMOS_E_INVALID_ARGUMENT);
+}
+
+// .-.-.-.-.-.-.-.-.-.-.-.-.-.- DiscoveryListsTheInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+//
+NMOS_TEST(DiscoveryListsTheInterfaces)
+{
+    DtNmosInterfaceList* List = NULL;
+    NMOS_ASSERT(DtNmos_Interfaces(&List) == DTNMOS_OK);
+    NMOS_ASSERT(List != NULL);
+    const size_t Count = DtNmosInterfaceList_Count(List);
+    for (size_t i = 0; i < Count; ++i)
+    {
+        const DtNmosInterfaceInfo* Info = DtNmosInterfaceList_At(List, i);
+        NMOS_ASSERT(Info != NULL);
+        // IPv4 and no loopback.
+        NMOS_ASSERT(strchr(Info->Address, ':') == NULL);
+        NMOS_ASSERT(strchr(Info->Address, '.') != NULL);
+        NMOS_ASSERT(strncmp(Info->Address, "127.", 4) != 0);
+        NMOS_ASSERT_EQ(strlen(Info->PortId), 17);
+        NMOS_ASSERT(Info->Name[0] != '\0');
+    }
+    NMOS_ASSERT(DtNmosInterfaceList_At(List, Count) == NULL);
+    DtNmosInterfaceList_Free(List);
+    NMOS_ASSERT(DtNmos_Interfaces(NULL) == DTNMOS_E_INVALID_ARGUMENT);
+    NMOS_ASSERT_EQ(DtNmosInterfaceList_Count(NULL), 0);
+    NMOS_ASSERT(DtNmosInterfaceList_At(NULL, 0) == NULL);
+    DtNmosInterfaceList_Free(NULL);
+}
+
 // .-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.- DnsReadsResolvConf -.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-
 //
 NMOS_TEST(DnsReadsResolvConf)
@@ -1046,14 +1231,64 @@ NMOS_TEST(RegistrySearchSearches)
     NMOS_ASSERT(Fed == DTNMOS_E_STATE);
 }
 
-NMOS_TEST_MAIN("Discovery", NMOS_RUN(DnsWritesAQuery),
-               NMOS_RUN(DnsReadsRecordsAndCompression),
-               NMOS_RUN(DnsEscapesDotsWithinLabels),
-               NMOS_RUN(DnsRefusesMalformedMessages),
-               NMOS_RUN(DiscoveryFindsRegistriesByPriority),
-               NMOS_RUN(DiscoveryAsksAgainForWhatIsMissing),
-               NMOS_RUN(DiscoveryFindsNothingInSilence), NMOS_RUN(DnsReadsResolvConf),
-               NMOS_RUN(DiscoveryAsksADnsServerToo),
-               NMOS_RUN(DiscoveryTakesOnlyTheDnsServer),
-               NMOS_RUN(NodeSearchesForItsRegistry), NMOS_RUN(RegistrySearchIsFed),
-               NMOS_RUN(RegistrySearchSearches))
+// .-.-.-.-.-.-.-.-.-.-.-.-.- RegistrySearchKeepsItsInterfaces -.-.-.-.-.-.-.-.-.-.-.-.-.-
+//
+// A search copies the addresses it is to ask on, so the program's may go once it opened;
+// and it takes a discovery config of 0.5.4's size.
+//
+NMOS_TEST(RegistrySearchKeepsItsInterfaces)
+{
+    NmosResponder r;
+    NMOS_ASSERT(
+        StartResponderAs(&r, &RegistryB, 1, 1, "_nmos-register._tcp.local", false));
+    for (int Old = 0; Old < 2; ++Old)
+    {
+        DtNmosDiscoveryConfig Discovery = ConfigFor(&r, 200);
+        char Loopback[16] = "127.0.0.1";
+        const char* Addresses[] = {Loopback};
+        Discovery.Interfaces = DTNMOS_INTERFACES_LISTED;
+        Discovery.InterfaceAddresses = Addresses;
+        Discovery.InterfaceCount = 1;
+        if (Old)
+        {
+            Discovery.Size = offsetof(DtNmosDiscoveryConfig, Interfaces);
+        }
+        DtNmosRegistrySearchConfig Config;
+        memset(&Config, 0, sizeof(Config));
+        Config.Size = sizeof(Config);
+        Config.Finds = DTNMOS_FINDS_REGISTRATION;
+        Config.Discovery = &Discovery;
+        DtNmosRegistrySearch* Search = DtNmosRegistrySearch_Alloc();
+        NMOS_ASSERT(Search != NULL);
+        NMOS_ASSERT(DtNmosRegistrySearch_Open(Search, &Config) == DTNMOS_OK);
+        // What the program gave is gone.
+        snprintf(Loopback, sizeof(Loopback), "%s", "10.0.0");
+        Addresses[0] = NULL;
+        size_t Count = 0;
+        for (int Wait = 0; Wait < 100 && Count < 1; ++Wait)
+        {
+            DtNmosRegistryList* List = NULL;
+            NMOS_EXPECT(DtNmosRegistrySearch_List(Search, DTNMOS_SERVICE_REGISTRATION,
+                                                  &List) == DTNMOS_OK);
+            Count = DtNmosRegistryList_Count(List);
+            DtNmosRegistryList_Free(List);
+            NmosOs_SleepMs(20);
+        }
+        DtNmosRegistrySearch_Free(Search);
+        NMOS_ASSERT_EQ(Count, 1);
+    }
+    StopResponder(&r);
+}
+
+NMOS_TEST_MAIN(
+    "Discovery", NMOS_RUN(DnsWritesAQuery), NMOS_RUN(DnsReadsRecordsAndCompression),
+    NMOS_RUN(DnsEscapesDotsWithinLabels), NMOS_RUN(DnsRefusesMalformedMessages),
+    NMOS_RUN(DiscoveryFindsRegistriesByPriority),
+    NMOS_RUN(DiscoveryAsksAgainForWhatIsMissing),
+    NMOS_RUN(DiscoveryFindsNothingInSilence), NMOS_RUN(DiscoveryAsksOnListedInterfaces),
+    NMOS_RUN(DiscoveryCountsARegistryOnTwoInterfacesOnce),
+    NMOS_RUN(DiscoveryTakesAConfigOfOldSize), NMOS_RUN(DiscoveryListsTheInterfaces),
+    NMOS_RUN(DnsReadsResolvConf), NMOS_RUN(DiscoveryAsksADnsServerToo),
+    NMOS_RUN(DiscoveryTakesOnlyTheDnsServer), NMOS_RUN(NodeSearchesForItsRegistry),
+    NMOS_RUN(RegistrySearchIsFed), NMOS_RUN(RegistrySearchSearches),
+    NMOS_RUN(RegistrySearchKeepsItsInterfaces))
