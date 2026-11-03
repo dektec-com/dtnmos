@@ -1138,7 +1138,7 @@ NMOS_TEST(NodeApisFollowTheRegistry)
 {
     DtNmosInterfaceList* Interfaces = NULL;
     NMOS_ASSERT(DtNmos_Interfaces(&Interfaces) == DTNMOS_OK);
-    char Other[64] = "";
+    char Other[DTNMOS_MAX_ADDRESS_SIZE] = "";
     if (DtNmosInterfaceList_Count(Interfaces) > 0)
     {
         snprintf(Other, sizeof(Other), "%s",
@@ -1150,9 +1150,9 @@ NMOS_TEST(NodeApisFollowTheRegistry)
         printf("    (this host has no interface but loopback; nothing to test)\n");
         return;
     }
-    char OtherRegistry[128];
+    char OtherRegistry[DTNMOS_MAX_ADDRESS_SIZE + 32];
     snprintf(OtherRegistry, sizeof(OtherRegistry), "http://%s:8082", Other);
-    char OtherBase[128];
+    char OtherBase[sizeof(OtherRegistry) + 1];
     snprintf(OtherBase, sizeof(OtherBase), "%s/", OtherRegistry);
     NmosFakeRegistries Fake;
     memset(&Fake, 0, sizeof(Fake));
@@ -1184,7 +1184,7 @@ NMOS_TEST(NodeApisFollowTheRegistry)
     DtNmosNode* Node = DtNmosNode_Alloc();
     NMOS_ASSERT(Node != NULL);
     NMOS_ASSERT(DtNmosNode_Open(Node, &Config) == DTNMOS_OK);
-    char Url[256];
+    char Url[DTNMOS_MAX_URL_SIZE];
     size_t Size = sizeof(Url);
     NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_OK);
     NMOS_ASSERT_STR(Url, ""); // none taken yet
@@ -1203,13 +1203,13 @@ NMOS_TEST(NodeApisFollowTheRegistry)
     // registers anew with its address there.
     Fake.Down[0] = true;
     NMOS_ASSERT(PollUntil(Node, &Fake.Registrations[1], 0));
-    char Href[128];
+    char Href[DTNMOS_MAX_ADDRESS_SIZE + 64];
     snprintf(Href, sizeof(Href), "\"href\": \"http://%s:8080/\"", Other);
     NMOS_ASSERT(strstr(Fake.Node[1], Href) != NULL);
     Size = sizeof(Url);
     NMOS_ASSERT(DtNmosNode_RegistryUrl(Node, Url, &Size) == DTNMOS_OK);
     NMOS_ASSERT_STR(Url, OtherRegistry);
-    char ApiUrl[128];
+    char ApiUrl[DTNMOS_MAX_ADDRESS_SIZE + 32];
     snprintf(ApiUrl, sizeof(ApiUrl), "http://%s:8080", Other);
     Size = sizeof(Url);
     NMOS_ASSERT(DtNmosNode_ApiUrl(Node, Url, &Size) == DTNMOS_OK);
