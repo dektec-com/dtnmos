@@ -104,7 +104,8 @@ static void StopNode(void* Context)
 //
 // Starts a node with a device, a video sender and a video receiver, registered with the
 // registry of DTNMOS_TEST_REGISTRY, and waits until the registry holds it; or, when it
-// Searches, one that searches for its registry with DNS-SD, which it does not wait for.
+// Searches, one that searches for its registry with DNS-SD on every interface, which it
+// does not wait for.
 // The sender sends from the address the node serves at, so that its SDP has a source
 // filter.
 //
@@ -127,6 +128,12 @@ static void StartNode(NmosInteropNode* Interop, bool Searches)
         memset(&SearchConfig, 0, sizeof(SearchConfig));
         SearchConfig.Size = sizeof(SearchConfig);
         SearchConfig.Finds = DTNMOS_FINDS_REGISTRATION;
+        // On every interface, as a host of SMPTE 2110 with more networks searches.
+        DtNmosDiscoveryConfig Discovery;
+        memset(&Discovery, 0, sizeof(Discovery));
+        Discovery.Size = sizeof(Discovery);
+        Discovery.Interfaces = DTNMOS_INTERFACES_ALL;
+        SearchConfig.Discovery = &Discovery;
         Interop->Search = DtNmosRegistrySearch_Alloc();
         NMOS_ASSERT(Interop->Search != NULL);
         NmosTest_SetCleanup(StopNode, Interop);
