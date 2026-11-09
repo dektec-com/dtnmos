@@ -8,8 +8,8 @@ NMOS node that registers senders and receivers with a registry (IS-04) and serve
 Node API, and a controller that connects the receivers of a registry to its senders
 (IS-05). It follows a registry through the subscriptions of its Query API.
 
-It is the NMOS support of DekTec's GStreamer plugins, and is meant to be used by other
-projects as well, such as CDTAPI and FFmpeg.
+It is the NMOS support of DekTec's software, and of any program that sends or receives
+ST 2110 flows and has to find, announce or connect them; ffmpeg-dektec, for one, uses it.
 
 - C11, built with MSVC, GCC and Clang; the headers compile as C and as C++.
 - A C++ API over it, header only, in `dtnmos.hpp` and `dtnmos_*.hpp`, for C++20 and
