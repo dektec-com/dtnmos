@@ -22,21 +22,26 @@
 #                       stop and resume the registry's answers to DNS-SD, which stays
 #                       reachable at its URL: no other registry may be found while
 #                       the Testing Tool runs IS-04-01
+#   nmos-testbed follow-address
+#                       give the registry the address its interface has now; the
+#                       registry does so itself each time it starts
 #
 # Without a service name, a command applies to both. The registry's settings are in
-# ~/nmos/registry.json; restart it after changing them. Needs podman 4.4 or later.
+# ~/nmos/registry.json; restart it after changing them. Its address follows the one DHCP
+# gives its interface, named in ~/nmos/interface. Needs podman 4.4 or later.
 
 set -euo pipefail
 
 NMOS_DIR="$HOME/nmos"
 UNITS_DIR="$HOME/.config/containers/systemd"
 PARKED_DIR="$NMOS_DIR/parked"
+INTERFACE_FILE="$NMOS_DIR/interface"
 REGISTRY_IMAGE=docker.io/rhastie/nmos-cpp:latest
 TESTING_IMAGE=docker.io/amwa/nmos-testing:latest
 
 usage()
 {
-    sed -n '8,27p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '8,31p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 }
 
@@ -116,7 +121,7 @@ EOF
 
 write_unit()
 {
-    local name="$1" description="$2" image="$3" volume="$4"
+    local name="$1" description="$2" image="$3" volume="$4" service="${5:-}"
     cat > "$UNITS_DIR/$name.container" <<EOF
 [Unit]
 Description=$description
@@ -131,7 +136,7 @@ Network=host
 RunInit=true
 $volume
 [Service]
-Restart=always
+${service}Restart=always
 # A container stopped by SIGTERM exits with 143, or 137 if it had to be killed; both
 # are a stop, not a failure.
 SuccessExitStatus=143 137
@@ -141,10 +146,11 @@ WantedBy=default.target
 EOF
 }
 
-# The machine's one IPv4 address that is not on a DekTec card. A DekTec network port
-# (MAC prefix 00:14:f4) can hold the default route on a test machine, and the registry
-# belongs on the machine's own interface. With more than one candidate, --address decides.
-choose_address()
+# The machine's one IPv4 interface that is not on a DekTec card, as "interface address".
+# A DekTec network port (MAC prefix 00:14:f4) can hold the default route on a test
+# machine, and the registry belongs on the machine's own interface. With more than one
+# candidate, --address decides.
+choose_interface()
 {
     local candidates=() itf addr
     while read -r itf addr; do
@@ -159,7 +165,52 @@ choose_address()
         ip -4 -o addr show scope global | awk '{print "  " $4 " (" $2 ")"}' >&2
         exit 1
     fi
-    echo "${candidates[0]#* }"
+    echo "${candidates[0]}"
+}
+
+# The IPv4 address interface $1 has now, or nothing.
+address_of()
+{
+    ip -4 -o addr show dev "$1" scope global 2>/dev/null |
+        awk '{ split($4, a, "/"); print a[1]; exit }'
+}
+
+# Sets the registry's address in registry.json to the one its interface has now, so that
+# the registry serves and announces on mDNS the address DHCP gave, not one the machine no
+# longer has: its mDNS daemon claims the machine's host name for that address. The
+# registry's unit runs this before each start, and at boot the interface may get its
+# address only later, so it waits for one for some seconds. An installation older than
+# ~/nmos/interface gets the interface install would choose.
+follow_address()
+{
+    local itf address old chosen
+    [ -f "$NMOS_DIR/registry.json" ] || die "there is no $NMOS_DIR/registry.json"
+    if [ -f "$INTERFACE_FILE" ]; then
+        itf="$(cat "$INTERFACE_FILE")"
+    else
+        chosen="$(choose_interface)"
+        itf="${chosen% *}"
+        echo "$itf" > "$INTERFACE_FILE"
+    fi
+
+    local tries=30
+    address="$(address_of "$itf")"
+    while [ -z "$address" ] && [ $tries -gt 0 ]; do
+        sleep 1
+        tries=$((tries - 1))
+        address="$(address_of "$itf")"
+    done
+    old="$(registry_address)"
+    if [ -z "$address" ]; then
+        echo "nmos-testbed: $itf has no IPv4 address; the registry keeps $old" >&2
+        return 0
+    fi
+    [ "$address" != "$old" ] || return 0
+
+    sed -i -e "s/\"host_address\": *\"[^\"]*\"/\"host_address\": \"$address\"/" \
+        -e "s/\"host_addresses\": *\[[^]]*\]/\"host_addresses\": [\"$address\"]/" \
+        "$NMOS_DIR/registry.json"
+    echo "nmos-testbed: the registry's address is now $address, that of $itf (was $old)"
 }
 
 install()
@@ -180,10 +231,20 @@ install()
     [ "$(printf '%s\n4.4\n' "$version" | sort -V | head -1)" = 4.4 ] ||
         die "podman $version has no quadlets; 4.4 or later is needed"
 
-    [ -n "$address" ] || address="$(choose_address)"
-    echo "Address: $address, priority $priority"
+    local itf chosen
+    if [ -n "$address" ]; then
+        itf="$(ip -4 -o addr show scope global |
+            awk -v want="$address" '{ split($4, a, "/"); if (a[1] == want) print $2 }')"
+        [ -n "$itf" ] || die "no interface of this machine has the address $address"
+    else
+        chosen="$(choose_interface)"
+        itf="${chosen% *}"
+        address="${chosen#* }"
+    fi
+    echo "Address: $address of $itf, priority $priority"
 
     mkdir -p "$NMOS_DIR" "$UNITS_DIR" "$PARKED_DIR"
+    echo "$itf" > "$INTERFACE_FILE"
     if [ -f "$NMOS_DIR/registry.json" ]; then
         echo "Keeping the existing $NMOS_DIR/registry.json"
     else
@@ -192,6 +253,8 @@ install()
     rm -f "$PARKED_DIR"/nmos-*.container
     write_unit nmos-registry "NMOS registry and controller (nmos-cpp, nmos-js)" \
         "$REGISTRY_IMAGE" "Volume=%h/nmos/registry.json:/home/registry.json:ro,Z
+" "# Its address follows the one DHCP gives its interface; a failure does not stop it.
+ExecStartPre=-%h/.local/bin/nmos-testbed follow-address
 "
     write_unit nmos-testing "AMWA NMOS Testing Tool" "$TESTING_IMAGE" ""
 
@@ -289,6 +352,10 @@ case "$command" in
         ;;
     resume)
         pause_registry CONT
+        ;;
+    follow-address)
+        check_installed
+        follow_address
         ;;
     start|stop|restart)
         check_installed
