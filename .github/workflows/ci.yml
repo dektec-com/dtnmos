@@ -69,9 +69,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Ninja comes from PyPI rather than apt, so that a build does not stop when the
+      # runner cannot reach Ubuntu's mirror.
       - name: Install Ninja
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: pipx install ninja
 
       - name: Use the runner's vcpkg
         if: matrix.vcpkg
@@ -133,7 +135,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install Ninja
-        run: sudo apt-get update && sudo apt-get install -y ninja-build ${{ matrix.packages }}
+        run: pipx install ninja
+
+      - name: Install libc++
+        if: matrix.packages
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
 
       - name: Show the tools
         run: cmake --version && ${{ matrix.cxx }} --version

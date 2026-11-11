@@ -81,9 +81,10 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.tag }}
 
+      # Ninja comes from PyPI rather than apt, as in CI.
       - name: Install Ninja
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
+        run: pipx install ninja
 
       - name: Use the runner's vcpkg
         if: matrix.vcpkg
